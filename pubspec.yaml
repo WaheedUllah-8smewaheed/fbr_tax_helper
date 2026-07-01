@@ -96,10 +96,23 @@ flutter:
   # see https://flutter.dev/to/font-from-package
 
 flutter_launcher_icons:
-  android: "launcher_icon"
+  android: true
   ios: true
   image_path: "assets/tax.png"
+  remove_alpha_ios: true
   min_sdk_android: 21 # Your app's minimum Android SDK version
+  web:
+    generate: true
+    image_path: "assets/tax.png"
+    background_color: "#0F6B57"
+    theme_color: "#0F6B57"
+  windows:
+    generate: true
+    image_path: "assets/tax.png"
+    icon_size: 256
+  macos:
+    generate: true
+    image_path: "assets/tax.png"
 
 flutter_native_splash:
   # This package generates native code to customize Flutter's default white splash screen

@@ -2,7 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:fbr_tax_helper/main.dart';
+import 'package:fbr_tax_helper/features/tax_calculator/data/datasources/tax_local_data_source.dart';
+import 'package:fbr_tax_helper/features/tax_calculator/data/models/tax_profile_model.dart';
+import 'package:fbr_tax_helper/features/tax_calculator/data/repositories/tax_repository_impl.dart';
+import 'package:fbr_tax_helper/features/tax_calculator/domain/usecases/calculate_tax_liability.dart';
+import 'package:fbr_tax_helper/features/tax_calculator/presentation/bloc/tax_calculator_bloc.dart';
 import 'package:fbr_tax_helper/features/tax_calculator/presentation/screens/splash_screen.dart';
+import 'package:fbr_tax_helper/features/tax_calculator/presentation/screens/tax_calculator_screen.dart';
+
+class FakeLocalDataSource implements TaxLocalDataSource {
+  TaxProfileModel? cachedProfile;
+
+  @override
+  Future<void> cacheTaxProfile(TaxProfileModel profileToCache) async {
+    cachedProfile = profileToCache;
+  }
+
+  @override
+  Future<TaxProfileModel?> getLastTaxProfile() async => cachedProfile;
+
+  @override
+  Future<void> clearTaxProfile() async {
+    cachedProfile = null;
+  }
+}
 
 void main() {
   testWidgets('launches from splash, then shows a blank calculator', (
@@ -38,8 +61,13 @@ void main() {
   });
 
   testWidgets('refresh clears fields and estimate results', (tester) async {
-    await tester.pumpWidget(const MyApp());
-    await _pumpPastSplash(tester);
+    final bloc = TaxCalculatorBloc(
+      calculateTaxUseCase: const CalculateTaxLiability(),
+      repository: TaxRepositoryImpl(localDataSource: FakeLocalDataSource()),
+    );
+    addTearDown(bloc.close);
+
+    await tester.pumpWidget(MaterialApp(home: TaxCalculatorScreen(bloc: bloc)));
 
     await tester.enterText(find.byType(TextField), '150000');
     await tester.tap(find.text('Calculate'));
