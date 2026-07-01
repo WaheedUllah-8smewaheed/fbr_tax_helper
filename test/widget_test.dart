@@ -53,6 +53,16 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('builds on extra narrow phone screens', (tester) async {
+    await _pumpAppAtSize(tester, const Size(320, 640));
+
+    expect(find.text('FBR Tax Helper'), findsOneWidget);
+    expect(find.text('Salaried'), findsOneWidget);
+    expect(find.text('Register'), findsOneWidget);
+    expect(find.text('Other'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('builds on tablet width screens', (tester) async {
     await _pumpAppAtSize(tester, const Size(900, 700));
 

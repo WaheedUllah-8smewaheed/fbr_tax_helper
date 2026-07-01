@@ -417,33 +417,11 @@ class _CalculatorForm extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SegmentedButton<TaxProfileType>(
-                segments: [
-                  ButtonSegment(
-                    value: TaxProfileType.salaried,
-                    icon: const Icon(Icons.badge_outlined),
-                    label: const Text('Salaried'),
-                  ),
-                  ButtonSegment(
-                    value: TaxProfileType.registeredFreelancer,
-                    icon: const Icon(Icons.workspace_premium_outlined),
-                    label: Text(
-                      metrics.isNarrow ? 'Registered' : 'Registered freelancer',
-                    ),
-                  ),
-                  ButtonSegment(
-                    value: TaxProfileType.unregisteredExporter,
-                    icon: const Icon(Icons.public_outlined),
-                    label: const Text('Exporter'),
-                  ),
-                ],
-                selected: {selectedType},
-                onSelectionChanged: isLoading
-                    ? null
-                    : (selection) => onTypeChanged(selection.first),
-              ),
+            _ProfileTypeSelector(
+              metrics: metrics,
+              selectedType: selectedType,
+              isLoading: isLoading,
+              onTypeChanged: onTypeChanged,
             ),
             const SizedBox(height: 16),
             _IncomeInputRow(
@@ -458,6 +436,96 @@ class _CalculatorForm extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ProfileTypeSelector extends StatelessWidget {
+  final _AdaptiveMetrics metrics;
+  final TaxProfileType selectedType;
+  final bool isLoading;
+  final ValueChanged<TaxProfileType> onTypeChanged;
+
+  const _ProfileTypeSelector({
+    required this.metrics,
+    required this.selectedType,
+    required this.isLoading,
+    required this.onTypeChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth;
+        final isTight = availableWidth < 360;
+        final showIcons = availableWidth >= 390;
+        final labelStyle = theme.textTheme.labelLarge?.copyWith(
+          fontSize: isTight ? 12 : null,
+          fontWeight: FontWeight.w600,
+        );
+
+        return SegmentedButton<TaxProfileType>(
+          expandedInsets: EdgeInsets.zero,
+          showSelectedIcon: false,
+          style: ButtonStyle(
+            padding: WidgetStatePropertyAll(
+              EdgeInsets.symmetric(
+                horizontal: isTight ? 4 : 8,
+                vertical: metrics.isNarrow ? 10 : 12,
+              ),
+            ),
+            textStyle: WidgetStatePropertyAll(labelStyle),
+            visualDensity: isTight
+                ? VisualDensity.compact
+                : VisualDensity.standard,
+          ),
+          segments: [
+            ButtonSegment(
+              value: TaxProfileType.salaried,
+              icon: showIcons ? const Icon(Icons.badge_outlined) : null,
+              label: const _SegmentLabel('Salaried'),
+            ),
+            ButtonSegment(
+              value: TaxProfileType.registeredFreelancer,
+              icon: showIcons
+                  ? const Icon(Icons.workspace_premium_outlined)
+                  : null,
+              label: _SegmentLabel(isTight ? 'Register' : 'Registered'),
+            ),
+            ButtonSegment(
+              value: TaxProfileType.unregisteredExporter,
+              icon: showIcons ? const Icon(Icons.public_outlined) : null,
+              label: const _SegmentLabel('Other'),
+            ),
+          ],
+          selected: {selectedType},
+          onSelectionChanged: isLoading
+              ? null
+              : (selection) => onTypeChanged(selection.first),
+        );
+      },
+    );
+  }
+}
+
+class _SegmentLabel extends StatelessWidget {
+  final String text;
+
+  const _SegmentLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.visible,
+        softWrap: false,
       ),
     );
   }
