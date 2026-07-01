@@ -30,6 +30,11 @@ class CalculateTaxLiability {
       annualTax *= 1.09;
     }
 
+    annualTax = (annualTax - profile.totalAnnualDeductions).clamp(
+      0.0,
+      double.infinity,
+    );
+
     final double monthlyTax = annualTax / 12;
     final double monthlyTakeHome = profile.monthlyGrossIncome - monthlyTax;
     final double effectiveRate = annualGross > 0
@@ -45,7 +50,10 @@ class CalculateTaxLiability {
     );
   }
 
-  double _computeSalariedProgressiveTax(double annualGross, String taxYearString) {
+  double _computeSalariedProgressiveTax(
+    double annualGross,
+    String taxYearString,
+  ) {
     // Fiscal year '2025-26' corresponds to tax year 2026.
     final year = int.tryParse(taxYearString.split('-').first) ?? 0;
     final taxYear = year + 1;
@@ -145,7 +153,12 @@ const _salariedSlabs2026 = [
 
 const _salariedSlabs2025 = [
   _TaxSlab(upperLimit: 600000, fixedTax: 0, excessOver: 0, rate: 0),
-  _TaxSlab(upperLimit: 1200000, fixedTax: 15000, excessOver: 600000, rate: 0.025),
+  _TaxSlab(
+    upperLimit: 1200000,
+    fixedTax: 15000,
+    excessOver: 600000,
+    rate: 0.025,
+  ),
   _TaxSlab(
     upperLimit: 2400000,
     fixedTax: 165000,

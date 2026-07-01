@@ -35,9 +35,18 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   bloc: ^9.2.1
-  flutter_secure_storage: ^10.3.1
-  pdf: ^3.12.0
-  printing: ^5.13.0
+  flutter_bloc: ^9.1.1
+  equatable: ^2.0.7
+  flutter_secure_storage: ^10.3.1 # For secure storage, might be useful later
+  pdf: ^3.12.0 # For creating PDFs, might be useful for exporting tax summary
+  printing: ^5.13.0 # For printing PDFs
+
+  # Phase 1: Deductions & Adjustments Module
+  image_picker: ^1.2.2 # For picking images from gallery or camera
+  google_mlkit_text_recognition: ^0.15.1 # For on-device OCR
+  file_picker: ^11.0.2 # For picking files like PDFs
+  syncfusion_flutter_pdf: 33.2.13 # For extracting text from PDFs
+  permission_handler: ^12.0.3 # To handle runtime permissions
 
 dev_dependencies:
   flutter_test:

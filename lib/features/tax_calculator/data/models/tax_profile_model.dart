@@ -5,6 +5,10 @@ class TaxProfileModel extends TaxProfile {
     required super.type,
     required super.monthlyGrossIncome,
     super.taxYear,
+    super.advanceTaxOnMobile,
+    super.taxOnElectricityBill,
+    super.taxOnInternetBill,
+    super.vehicleTokenTax,
   });
 
   /// Factory constructor to map structured string records into our app domain values
@@ -21,6 +25,10 @@ class TaxProfileModel extends TaxProfile {
       ),
       monthlyGrossIncome: (map['monthlyGrossIncome'] as num).toDouble(),
       taxYear: parsedTaxYear.isEmpty ? currentTaxYear : parsedTaxYear,
+      advanceTaxOnMobile: _readDouble(map['advanceTaxOnMobile']),
+      taxOnElectricityBill: _readDouble(map['taxOnElectricityBill']),
+      taxOnInternetBill: _readDouble(map['taxOnInternetBill']),
+      vehicleTokenTax: _readDouble(map['vehicleTokenTax']),
     );
   }
 
@@ -30,6 +38,16 @@ class TaxProfileModel extends TaxProfile {
       'type': type.name,
       'monthlyGrossIncome': monthlyGrossIncome,
       'taxYear': taxYear,
+      'advanceTaxOnMobile': advanceTaxOnMobile,
+      'taxOnElectricityBill': taxOnElectricityBill,
+      'taxOnInternetBill': taxOnInternetBill,
+      'vehicleTokenTax': vehicleTokenTax,
     };
+  }
+
+  static double _readDouble(Object? value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
   }
 }
