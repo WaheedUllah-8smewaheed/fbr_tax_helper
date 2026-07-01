@@ -15,6 +15,7 @@ import '../../domain/usecases/calculate_tax_liability.dart';
 import '../bloc/tax_calculator_bloc.dart';
 import '../bloc/tax_calculator_event.dart';
 import '../bloc/tax_calculator_state.dart';
+import '../../../deductions/presentation/pages/deductions_page.dart';
 
 class TaxCalculatorScreen extends StatefulWidget {
   final TaxCalculatorBloc? bloc;
@@ -135,6 +136,16 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
             icon: const Icon(Icons.refresh_rounded),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => const DeductionsPage(),
+            ),
+          );
+        },
+        child: const Icon(Icons.receipt_long_outlined),
       ),
       body: SafeArea(
         child: SingleChildScrollView(

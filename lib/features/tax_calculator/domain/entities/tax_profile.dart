@@ -1,26 +1,16 @@
-const String currentTaxYear = '2026-27';
-const int earliestSupportedTaxYear = 2017;
-const List<String> supportedTaxYears = [
-  '2026-27',
-  '2025-26',
-  '2024-25',
-  '2023-24',
-  '2022-23',
-  '2021-22',
-  '2020-21',
-  '2019-20',
-  '2018-19',
-  '2017-18',
-];
+const String currentTaxYear = '2023-24';
+const List<String> supportedTaxYears = ['2023-24', '2022-23'];
 
-enum TaxProfileType { salaried, registeredFreelancer, unregisteredExporter }
+enum TaxProfileType {
+  salaried,
+  registeredFreelancer,
+  unregisteredExporter,
+}
 
 class TaxProfile {
   final TaxProfileType type;
   final double monthlyGrossIncome;
   final String taxYear;
-
-  // Deductions & Adjustments
   final double advanceTaxOnMobile;
   final double taxOnElectricityBill;
   final double taxOnInternetBill;
@@ -36,10 +26,22 @@ class TaxProfile {
     this.vehicleTokenTax = 0.0,
   });
 
-  double get annualGrossIncome => monthlyGrossIncome * 12;
   double get totalAnnualDeductions =>
       advanceTaxOnMobile +
       taxOnElectricityBill +
       taxOnInternetBill +
       vehicleTokenTax;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TaxProfile &&
+          runtimeType == other.runtimeType &&
+          type == other.type &&
+          monthlyGrossIncome == other.monthlyGrossIncome &&
+          taxYear == other.taxYear;
+
+  @override
+  int get hashCode =>
+      type.hashCode ^ monthlyGrossIncome.hashCode ^ taxYear.hashCode;
 }
