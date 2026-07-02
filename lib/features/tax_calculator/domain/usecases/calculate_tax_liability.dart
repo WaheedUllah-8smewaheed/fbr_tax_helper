@@ -6,19 +6,19 @@ class CalculateTaxLiability {
 
   TaxAssessment execute(TaxProfile profile) {
     final double annualGross = profile.monthlyGrossIncome * 12;
-    double annualTax = 0.0;
+    double annualTaxBeforeAdjustments = 0.0;
 
     switch (profile.type) {
       case TaxProfileType.registeredFreelancer:
         // Concessionary tax status for PSEB registered entities: 0.25% flat rate
-        annualTax = annualGross * 0.0025;
+        annualTaxBeforeAdjustments = annualGross * 0.0025;
         break;
       case TaxProfileType.unregisteredExporter:
         // Unregistered IT exporters fixed withholding tier rate: 1.0% flat rate
-        annualTax = annualGross * 0.01;
+        annualTaxBeforeAdjustments = annualGross * 0.01;
         break;
       case TaxProfileType.salaried:
-        annualTax = _computeSalariedProgressiveTax(
+        annualTaxBeforeAdjustments = _computeSalariedProgressiveTax(
           annualGross,
           profile.taxYear,
         );
@@ -27,13 +27,15 @@ class CalculateTaxLiability {
 
     // Apply surcharge for high income earners
     if (annualGross > 10000000) {
-      annualTax *= 1.09;
+      annualTaxBeforeAdjustments *= 1.09;
     }
 
-    annualTax = (annualTax - profile.totalAnnualDeductions).clamp(
-      0.0,
-      double.infinity,
-    );
+    final annualAdjustableTaxPaid = profile.totalAnnualDeductions < 0
+        ? 0.0
+        : profile.totalAnnualDeductions;
+    final annualTax = (annualTaxBeforeAdjustments - annualAdjustableTaxPaid)
+        .clamp(0.0, double.infinity)
+        .toDouble();
 
     final double monthlyTax = annualTax / 12;
     final double monthlyTakeHome = profile.monthlyGrossIncome - monthlyTax;
@@ -43,6 +45,8 @@ class CalculateTaxLiability {
 
     return TaxAssessment(
       annualGrossIncome: annualGross,
+      annualTaxBeforeAdjustments: annualTaxBeforeAdjustments,
+      annualAdjustableTaxPaid: annualAdjustableTaxPaid,
       annualTaxLiability: annualTax,
       monthlyTaxLiability: monthlyTax,
       monthlyTakeHomePay: monthlyTakeHome,
@@ -55,7 +59,8 @@ class CalculateTaxLiability {
     String taxYearString,
   ) {
     // Fiscal year '2025-26' corresponds to tax year 2026.
-    final year = int.tryParse(taxYearString.split('-').first) ?? 0;
+    final match = RegExp(r'\d{4}').firstMatch(taxYearString);
+    final year = int.tryParse(match?.group(0) ?? '') ?? 0;
     final taxYear = year + 1;
 
     final slabs =
@@ -200,6 +205,18 @@ const _salariedSlabs2024 = [
     excessOver: 3600000,
     rate: 0.25,
   ),
+  _TaxSlab(
+    upperLimit: 12000000,
+    fixedTax: 1005000,
+    excessOver: 6000000,
+    rate: 0.325,
+  ),
+  _TaxSlab(
+    upperLimit: _infinity,
+    fixedTax: 2955000,
+    excessOver: 12000000,
+    rate: 0.35,
+  ),
 ];
 
 const _salariedSlabs2023 = [
@@ -222,6 +239,12 @@ const _salariedSlabs2023 = [
     fixedTax: 405000,
     excessOver: 3600000,
     rate: 0.25, // This was correct
+  ),
+  _TaxSlab(
+    upperLimit: 12000000,
+    fixedTax: 1005000,
+    excessOver: 6000000,
+    rate: 0.325,
   ),
   _TaxSlab(
     upperLimit: _infinity,
@@ -464,6 +487,8 @@ const _salariedSlabs2017 = [
   ),
 ];
 
+const _salariedSlabs2016 = _salariedSlabs2017;
+
 const _salariedSlabsByTaxYear = {
   2027: _salariedSlabs2027,
   2026: _salariedSlabs2026,
@@ -476,4 +501,5 @@ const _salariedSlabsByTaxYear = {
   2019: _salariedSlabs2019,
   2018: _salariedSlabs2018,
   2017: _salariedSlabs2017,
+  2016: _salariedSlabs2016,
 };

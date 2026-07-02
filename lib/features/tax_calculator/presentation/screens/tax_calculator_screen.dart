@@ -12,6 +12,7 @@ import '../../data/repositories/tax_repository_impl.dart';
 import '../../domain/entities/tax_assessment.dart';
 import '../../domain/entities/tax_profile.dart';
 import '../../domain/usecases/calculate_tax_liability.dart';
+import '../../../deductions/domain/entities/deduction_values.dart';
 import '../bloc/tax_calculator_bloc.dart';
 import '../bloc/tax_calculator_event.dart';
 import '../bloc/tax_calculator_state.dart';
@@ -37,6 +38,7 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
 
   TaxProfileType _selectedType = TaxProfileType.salaried;
   String _selectedTaxYear = currentTaxYear;
+  DeductionValues _deductionValues = DeductionValues.zero;
   TaxCalculatorState _state = TaxCalculatorInitial();
   String? _incomeErrorText;
 
@@ -67,6 +69,12 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
       if (state is TaxCalculatorCalculated) {
         _selectedType = state.selectedType;
         _selectedTaxYear = state.taxYear;
+        _deductionValues = DeductionValues(
+          mobileTax: state.advanceTaxOnMobile,
+          electricityTax: state.taxOnElectricityBill,
+          internetTax: state.taxOnInternetBill,
+          vehicleTax: state.vehicleTokenTax,
+        );
         final incomeText = _formatInputAmount(state.inputSalary);
         if (_monthlyIncomeController.text != incomeText) {
           _monthlyIncomeController.text = incomeText;
@@ -74,6 +82,7 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
       } else if (state is TaxCalculatorInitial) {
         _selectedType = TaxProfileType.salaried;
         _selectedTaxYear = currentTaxYear;
+        _deductionValues = DeductionValues.zero;
         _incomeErrorText = null;
         _monthlyIncomeController.clear();
       }
@@ -112,8 +121,40 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
         profileType: _selectedType,
         monthlySalary: income,
         taxYear: _selectedTaxYear,
+        advanceTaxOnMobile: _deductionValues.mobileTax,
+        taxOnElectricityBill: _deductionValues.electricityTax,
+        taxOnInternetBill: _deductionValues.internetTax,
+        vehicleTokenTax: _deductionValues.vehicleTax,
       ),
     );
+  }
+
+  Future<void> _openDeductionsPage() async {
+    final values = await Navigator.of(context).push<DeductionValues>(
+      MaterialPageRoute(
+        builder: (context) => DeductionsPage(initialValues: _deductionValues),
+      ),
+    );
+
+    if (!mounted || values == null) return;
+
+    setState(() {
+      _deductionValues = values;
+    });
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            'Annual adjustable tax applied: ${_formatMoney(values.total)}',
+          ),
+        ),
+      );
+
+    if (_state is TaxCalculatorCalculated) {
+      _calculateTax();
+    }
   }
 
   @override
@@ -138,13 +179,7 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => const DeductionsPage(),
-            ),
-          );
-        },
+        onPressed: _openDeductionsPage,
         child: const Icon(Icons.receipt_long_outlined),
       ),
       body: SafeArea(
@@ -174,6 +209,7 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
                     focusNode: _monthlyIncomeFocusNode,
                     selectedType: _selectedType,
                     selectedTaxYear: _selectedTaxYear,
+                    deductionValues: _deductionValues,
                     incomeErrorText: _incomeErrorText,
                     isLoading: _state is TaxCalculatorLoading,
                     onTypeChanged: (type) {
@@ -222,6 +258,12 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
             profileType: state.selectedType,
             monthlyIncome: state.inputSalary,
             taxYear: state.taxYear,
+            deductionValues: DeductionValues(
+              mobileTax: state.advanceTaxOnMobile,
+              electricityTax: state.taxOnElectricityBill,
+              internetTax: state.taxOnInternetBill,
+              vehicleTax: state.vehicleTokenTax,
+            ),
             assessment: state.assessment,
           ),
         ],
@@ -387,6 +429,7 @@ class _CalculatorForm extends StatelessWidget {
   final FocusNode focusNode;
   final TaxProfileType selectedType;
   final String selectedTaxYear;
+  final DeductionValues deductionValues;
   final String? incomeErrorText;
   final bool isLoading;
   final ValueChanged<TaxProfileType> onTypeChanged;
@@ -399,6 +442,7 @@ class _CalculatorForm extends StatelessWidget {
     required this.focusNode,
     required this.selectedType,
     required this.selectedTaxYear,
+    required this.deductionValues,
     required this.incomeErrorText,
     required this.isLoading,
     required this.onTypeChanged,
@@ -435,6 +479,8 @@ class _CalculatorForm extends StatelessWidget {
               onTypeChanged: onTypeChanged,
             ),
             const SizedBox(height: 16),
+            _DeductionSummary(values: deductionValues),
+            const SizedBox(height: 16),
             _IncomeInputRow(
               metrics: metrics,
               controller: controller,
@@ -448,6 +494,40 @@ class _CalculatorForm extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DeductionSummary extends StatelessWidget {
+  const _DeductionSummary({required this.values});
+
+  final DeductionValues values;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final text = values.hasAnyValue
+        ? 'Adjustable tax paid: ${_formatMoney(values.total)}'
+        : 'Adjustable tax paid: PKR 0';
+
+    return Row(
+      children: [
+        const Icon(
+          Icons.receipt_long_outlined,
+          size: 18,
+          color: Color(0xFF65716C),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: const Color(0xFF65716C),
+              fontWeight: values.hasAnyValue ? FontWeight.w700 : null,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -479,46 +559,117 @@ class _ProfileTypeSelector extends StatelessWidget {
           fontWeight: FontWeight.w600,
         );
 
-        return SegmentedButton<TaxProfileType>(
-          expandedInsets: EdgeInsets.zero,
-          showSelectedIcon: false,
-          style: ButtonStyle(
-            padding: WidgetStatePropertyAll(
-              EdgeInsets.symmetric(
-                horizontal: isTight ? 4 : 8,
-                vertical: metrics.isNarrow ? 10 : 12,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SegmentedButton<TaxProfileType>(
+              expandedInsets: EdgeInsets.zero,
+              showSelectedIcon: false,
+              style: ButtonStyle(
+                padding: WidgetStatePropertyAll(
+                  EdgeInsets.symmetric(
+                    horizontal: isTight ? 4 : 8,
+                    vertical: metrics.isNarrow ? 10 : 12,
+                  ),
+                ),
+                textStyle: WidgetStatePropertyAll(labelStyle),
+                visualDensity: isTight
+                    ? VisualDensity.compact
+                    : VisualDensity.standard,
               ),
+              segments: [
+                ButtonSegment(
+                  value: TaxProfileType.salaried,
+                  icon: showIcons ? const Icon(Icons.badge_outlined) : null,
+                  label: const _SegmentLabel('Salaried'),
+                ),
+                ButtonSegment(
+                  value: TaxProfileType.registeredFreelancer,
+                  icon: showIcons
+                      ? const Icon(Icons.workspace_premium_outlined)
+                      : null,
+                  label: const _SegmentLabel('Registered'),
+                ),
+                ButtonSegment(
+                  value: TaxProfileType.unregisteredExporter,
+                  icon: showIcons ? const Icon(Icons.public_outlined) : null,
+                  label: const _SegmentLabel('Other'),
+                ),
+              ],
+              selected: {selectedType},
+              onSelectionChanged: isLoading
+                  ? null
+                  : (selection) => onTypeChanged(selection.first),
             ),
-            textStyle: WidgetStatePropertyAll(labelStyle),
-            visualDensity: isTight
-                ? VisualDensity.compact
-                : VisualDensity.standard,
-          ),
-          segments: [
-            ButtonSegment(
-              value: TaxProfileType.salaried,
-              icon: showIcons ? const Icon(Icons.badge_outlined) : null,
-              label: const _SegmentLabel('Salaried'),
-            ),
-            ButtonSegment(
-              value: TaxProfileType.registeredFreelancer,
-              icon: showIcons
-                  ? const Icon(Icons.workspace_premium_outlined)
-                  : null,
-              label: _SegmentLabel(isTight ? 'Register' : 'Registered'),
-            ),
-            ButtonSegment(
-              value: TaxProfileType.unregisteredExporter,
-              icon: showIcons ? const Icon(Icons.public_outlined) : null,
-              label: const _SegmentLabel('Other'),
-            ),
+            const SizedBox(height: 8),
+            _ProfileNotes(selectedType: selectedType),
           ],
-          selected: {selectedType},
-          onSelectionChanged: isLoading
-              ? null
-              : (selection) => onTypeChanged(selection.first),
         );
       },
+    );
+  }
+}
+
+class _ProfileNotes extends StatelessWidget {
+  const _ProfileNotes({required this.selectedType});
+
+  final TaxProfileType selectedType;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 6,
+      children: [
+        _ProfileNote(
+          label: 'Salaried',
+          note: 'progressive slabs',
+          isSelected: selectedType == TaxProfileType.salaried,
+        ),
+        _ProfileNote(
+          label: 'Registered',
+          note: 'PSEB export 0.25%',
+          isSelected: selectedType == TaxProfileType.registeredFreelancer,
+        ),
+        _ProfileNote(
+          label: 'Other',
+          note: 'export WHT 1%',
+          isSelected: selectedType == TaxProfileType.unregisteredExporter,
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfileNote extends StatelessWidget {
+  const _ProfileNote({
+    required this.label,
+    required this.note,
+    required this.isSelected,
+  });
+
+  final String label;
+  final String note;
+  final bool isSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = isSelected
+        ? Theme.of(context).colorScheme.primary
+        : const Color(0xFF65716C);
+
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(
+            text: '$label: ',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          TextSpan(text: note),
+        ],
+      ),
+      style: theme.textTheme.bodySmall?.copyWith(color: color),
     );
   }
 }
@@ -665,12 +816,17 @@ class _ResultsGrid extends StatelessWidget {
         ),
         _MetricTile(
           icon: Icons.receipt_long_outlined,
-          label: 'Annual tax',
+          label: 'Net annual tax',
           value: _formatMoney(assessment.annualTaxLiability),
         ),
         _MetricTile(
+          icon: Icons.fact_check_outlined,
+          label: 'Adjustable tax paid',
+          value: _formatMoney(assessment.annualAdjustableTaxPaid),
+        ),
+        _MetricTile(
           icon: Icons.calendar_month_outlined,
-          label: 'Monthly tax',
+          label: 'Monthly tax payable',
           value: _formatMoney(assessment.monthlyTaxLiability),
         ),
         _MetricTile(
@@ -769,12 +925,14 @@ class _FilingReceipt extends StatelessWidget {
   final TaxProfileType profileType;
   final double monthlyIncome;
   final String taxYear;
+  final DeductionValues deductionValues;
   final TaxAssessment assessment;
 
   const _FilingReceipt({
     required this.profileType,
     required this.monthlyIncome,
     required this.taxYear,
+    required this.deductionValues,
     required this.assessment,
   });
 
@@ -820,7 +978,43 @@ class _FilingReceipt extends StatelessWidget {
                 _formatMoney(assessment.annualGrossIncome),
               ),
               buildPdfRow(
-                'Annual Tax Deduction',
+                'Annual Tax Before Adjustments',
+                _formatMoney(assessment.annualTaxBeforeAdjustments),
+              ),
+              if (deductionValues.hasAnyValue) ...[
+                pw.SizedBox(height: 8),
+                pw.Text(
+                  'Deductions Applied',
+                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                ),
+                if (deductionValues.mobileTax > 0)
+                  buildPdfRow(
+                    'Mobile Tax Paid',
+                    _formatMoney(deductionValues.mobileTax),
+                  ),
+                if (deductionValues.electricityTax > 0)
+                  buildPdfRow(
+                    'Electricity Tax Paid',
+                    _formatMoney(deductionValues.electricityTax),
+                  ),
+                if (deductionValues.internetTax > 0)
+                  buildPdfRow(
+                    'Internet Tax Paid',
+                    _formatMoney(deductionValues.internetTax),
+                  ),
+                if (deductionValues.vehicleTax > 0)
+                  buildPdfRow(
+                    'Vehicle Tax Paid',
+                    _formatMoney(deductionValues.vehicleTax),
+                  ),
+                buildPdfRow(
+                  'Total Adjustable Tax Paid',
+                  _formatMoney(assessment.annualAdjustableTaxPaid),
+                ),
+                pw.SizedBox(height: 8),
+              ],
+              buildPdfRow(
+                'Net Annual Tax Payable',
                 _formatMoney(assessment.annualTaxLiability),
               ),
               buildPdfRow(
@@ -832,7 +1026,7 @@ class _FilingReceipt extends StatelessWidget {
               pw.Divider(height: 24),
               buildPdfRow('Monthly Gross Income', _formatMoney(monthlyIncome)),
               buildPdfRow(
-                'Monthly Tax Deduction',
+                'Monthly Tax Payable',
                 _formatMoney(assessment.monthlyTaxLiability),
               ),
               buildPdfRow(
@@ -897,7 +1091,45 @@ class _FilingReceipt extends StatelessWidget {
               value: _formatMoney(assessment.annualGrossIncome),
             ),
             _SnapshotRow(
-              label: 'Annual Tax Deduction',
+              label: 'Annual Tax Before Adjustments',
+              value: _formatMoney(assessment.annualTaxBeforeAdjustments),
+            ),
+            if (deductionValues.hasAnyValue) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Deductions Applied',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: const Color(0xFF8A6100),
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              if (deductionValues.mobileTax > 0)
+                _SnapshotRow(
+                  label: 'Mobile Tax Paid',
+                  value: _formatMoney(deductionValues.mobileTax),
+                ),
+              if (deductionValues.electricityTax > 0)
+                _SnapshotRow(
+                  label: 'Electricity Tax Paid',
+                  value: _formatMoney(deductionValues.electricityTax),
+                ),
+              if (deductionValues.internetTax > 0)
+                _SnapshotRow(
+                  label: 'Internet Tax Paid',
+                  value: _formatMoney(deductionValues.internetTax),
+                ),
+              if (deductionValues.vehicleTax > 0)
+                _SnapshotRow(
+                  label: 'Vehicle Tax Paid',
+                  value: _formatMoney(deductionValues.vehicleTax),
+                ),
+              _SnapshotRow(
+                label: 'Total Adjustable Tax Paid',
+                value: _formatMoney(assessment.annualAdjustableTaxPaid),
+              ),
+            ],
+            _SnapshotRow(
+              label: 'Net Annual Tax Payable',
               value: _formatMoney(assessment.annualTaxLiability),
             ),
             _SnapshotRow(
@@ -912,7 +1144,7 @@ class _FilingReceipt extends StatelessWidget {
               value: _formatMoney(monthlyIncome),
             ),
             _SnapshotRow(
-              label: 'Monthly Tax Deduction',
+              label: 'Monthly Tax Payable',
               value: _formatMoney(assessment.monthlyTaxLiability),
             ),
             _SnapshotRow(

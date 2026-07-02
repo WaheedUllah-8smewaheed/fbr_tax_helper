@@ -28,7 +28,7 @@ class FakeLocalDataSource implements TaxLocalDataSource {
 }
 
 void main() {
-  testWidgets('launches from splash, then shows a blank calculator', (
+  testWidgets('launches from animated splash, then shows a blank calculator', (
     tester,
   ) async {
     await tester.pumpWidget(const MyApp());
@@ -37,6 +37,7 @@ void main() {
 
     await _pumpPastSplash(tester);
 
+    expect(find.byType(TaxCalculatorScreen), findsOneWidget);
     expect(find.text('FBR Tax Helper'), findsOneWidget);
     expect(find.text('Tax Year 2026-27'), findsWidgets);
     expect(find.text('Monthly gross income'), findsOneWidget);
@@ -58,7 +59,7 @@ void main() {
 
     expect(find.text('FBR Tax Helper'), findsOneWidget);
     expect(find.text('Salaried'), findsOneWidget);
-    expect(find.text('Register'), findsOneWidget);
+    expect(find.text('Registered'), findsOneWidget);
     expect(find.text('Other'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

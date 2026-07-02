@@ -33,6 +33,10 @@ class TaxCalculatorBloc extends Bloc<TaxCalculatorEvent, TaxCalculatorState> {
             selectedType: savedProfile.type,
             inputSalary: savedProfile.monthlyGrossIncome,
             taxYear: savedProfile.taxYear, // This is now a string
+            advanceTaxOnMobile: savedProfile.advanceTaxOnMobile,
+            taxOnElectricityBill: savedProfile.taxOnElectricityBill,
+            taxOnInternetBill: savedProfile.taxOnInternetBill,
+            vehicleTokenTax: savedProfile.vehicleTokenTax,
           ),
         );
       } else {
@@ -53,6 +57,10 @@ class TaxCalculatorBloc extends Bloc<TaxCalculatorEvent, TaxCalculatorState> {
         type: event.profileType,
         monthlyGrossIncome: event.monthlySalary,
         taxYear: event.taxYear,
+        advanceTaxOnMobile: event.advanceTaxOnMobile,
+        taxOnElectricityBill: event.taxOnElectricityBill,
+        taxOnInternetBill: event.taxOnInternetBill,
+        vehicleTokenTax: event.vehicleTokenTax,
       );
 
       // Execute Domain rule logic calculations
@@ -70,6 +78,10 @@ class TaxCalculatorBloc extends Bloc<TaxCalculatorEvent, TaxCalculatorState> {
           selectedType: event.profileType,
           inputSalary: event.monthlySalary,
           taxYear: event.taxYear,
+          advanceTaxOnMobile: event.advanceTaxOnMobile,
+          taxOnElectricityBill: event.taxOnElectricityBill,
+          taxOnInternetBill: event.taxOnInternetBill,
+          vehicleTokenTax: event.vehicleTokenTax,
         ),
       );
     } catch (_) {

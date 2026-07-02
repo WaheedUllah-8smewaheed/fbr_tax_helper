@@ -1,30 +1,30 @@
 part of 'deductions_bloc.dart';
 
-enum DeductionsStatus { initial, loading, success, failure, parsing, parsed }
+enum DeductionsStatus { initial, success, failure }
 
 class DeductionsState extends Equatable {
   const DeductionsState({
     this.status = DeductionsStatus.initial,
-    this.mobileTax = '',
+    this.values = DeductionValues.zero,
     this.message = '',
   });
 
   final DeductionsStatus status;
-  final String mobileTax;
+  final DeductionValues values;
   final String message;
 
   DeductionsState copyWith({
     DeductionsStatus? status,
-    String? mobileTax,
+    DeductionValues? values,
     String? message,
   }) {
     return DeductionsState(
       status: status ?? this.status,
-      mobileTax: mobileTax ?? this.mobileTax,
+      values: values ?? this.values,
       message: message ?? this.message,
     );
   }
 
   @override
-  List<Object> get props => [status, mobileTax, message];
+  List<Object> get props => [status, values, message];
 }

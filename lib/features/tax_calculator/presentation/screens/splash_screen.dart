@@ -5,12 +5,12 @@ import 'package:flutter/material.dart';
 import 'tax_calculator_screen.dart';
 
 class SplashScreen extends StatefulWidget {
-  final Duration duration;
-
   const SplashScreen({
     super.key,
     this.duration = const Duration(milliseconds: 1600),
   });
+
+  final Duration duration;
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();

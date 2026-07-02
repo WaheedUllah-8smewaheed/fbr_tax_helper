@@ -1,11 +1,20 @@
-const String currentTaxYear = '2023-24';
-const List<String> supportedTaxYears = ['2023-24', '2022-23'];
+const String currentTaxYear = '2026-27';
+const List<String> supportedTaxYears = [
+  '2026-27',
+  '2025-26',
+  '2024-25',
+  '2023-24',
+  '2022-23',
+  '2021-22',
+  '2020-21',
+  '2019-20',
+  '2018-19',
+  '2017-18',
+  '2016-17',
+  '2015-16',
+];
 
-enum TaxProfileType {
-  salaried,
-  registeredFreelancer,
-  unregisteredExporter,
-}
+enum TaxProfileType { salaried, registeredFreelancer, unregisteredExporter }
 
 class TaxProfile {
   final TaxProfileType type;
@@ -39,9 +48,19 @@ class TaxProfile {
           runtimeType == other.runtimeType &&
           type == other.type &&
           monthlyGrossIncome == other.monthlyGrossIncome &&
-          taxYear == other.taxYear;
+          taxYear == other.taxYear &&
+          advanceTaxOnMobile == other.advanceTaxOnMobile &&
+          taxOnElectricityBill == other.taxOnElectricityBill &&
+          taxOnInternetBill == other.taxOnInternetBill &&
+          vehicleTokenTax == other.vehicleTokenTax;
 
   @override
   int get hashCode =>
-      type.hashCode ^ monthlyGrossIncome.hashCode ^ taxYear.hashCode;
+      type.hashCode ^
+      monthlyGrossIncome.hashCode ^
+      taxYear.hashCode ^
+      advanceTaxOnMobile.hashCode ^
+      taxOnElectricityBill.hashCode ^
+      taxOnInternetBill.hashCode ^
+      vehicleTokenTax.hashCode;
 }

@@ -7,16 +7,6 @@ abstract class DeductionsEvent extends Equatable {
   List<Object> get props => [];
 }
 
-class ParseTaxCertificate extends DeductionsEvent {
-  const ParseTaxCertificate({this.imageSource, this.isPdf = false});
-
-  final ImageSource? imageSource;
-  final bool isPdf;
-
-  @override
-  List<Object> get props => [isPdf];
-}
-
 class SaveDeductions extends DeductionsEvent {
   const SaveDeductions({
     required this.mobileTax,
@@ -31,5 +21,10 @@ class SaveDeductions extends DeductionsEvent {
   final String vehicleTax;
 
   @override
-  List<Object> get props => [mobileTax, electricityTax, internetTax, vehicleTax];
+  List<Object> get props => [
+    mobileTax,
+    electricityTax,
+    internetTax,
+    vehicleTax,
+  ];
 }

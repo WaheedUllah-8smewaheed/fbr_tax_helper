@@ -12,6 +12,10 @@ class TaxRepositoryImpl {
       type: profile.type,
       monthlyGrossIncome: profile.monthlyGrossIncome,
       taxYear: profile.taxYear,
+      advanceTaxOnMobile: profile.advanceTaxOnMobile,
+      taxOnElectricityBill: profile.taxOnElectricityBill,
+      taxOnInternetBill: profile.taxOnInternetBill,
+      vehicleTokenTax: profile.vehicleTokenTax,
     );
     await localDataSource.cacheTaxProfile(model);
   }

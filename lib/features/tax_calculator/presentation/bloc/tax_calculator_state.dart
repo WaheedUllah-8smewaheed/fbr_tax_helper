@@ -14,12 +14,20 @@ class TaxCalculatorCalculated extends TaxCalculatorState {
   final TaxProfileType selectedType;
   final double inputSalary;
   final String taxYear;
+  final double advanceTaxOnMobile;
+  final double taxOnElectricityBill;
+  final double taxOnInternetBill;
+  final double vehicleTokenTax;
 
   const TaxCalculatorCalculated({
     required this.assessment,
     required this.selectedType,
     required this.inputSalary,
     this.taxYear = currentTaxYear,
+    this.advanceTaxOnMobile = 0.0,
+    this.taxOnElectricityBill = 0.0,
+    this.taxOnInternetBill = 0.0,
+    this.vehicleTokenTax = 0.0,
   });
 }
 

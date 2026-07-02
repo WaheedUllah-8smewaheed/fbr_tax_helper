@@ -123,11 +123,3 @@ flutter_launcher_icons:
     generate: true
     image_path: "assets/tax.png"
 
-flutter_native_splash:
-  # This package generates native code to customize Flutter's default white splash screen
-  # with background color and splash image.
-  color: "#0F6B57" # Matches your app's primary theme color
-  image: assets/tax.png # Using the bundled tax mark for the splash screen
-  android_12:
-    image: assets/tax.png
-    color: "#0F6B57"

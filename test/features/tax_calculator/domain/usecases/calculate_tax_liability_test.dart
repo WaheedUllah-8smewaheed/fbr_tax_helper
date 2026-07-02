@@ -9,6 +9,12 @@ void main() {
     usecase = const CalculateTaxLiability();
   });
 
+  test('should expose fiscal years from 2015-16 through 2026-27', () {
+    expect(supportedTaxYears.length, 12);
+    expect(supportedTaxYears.first, '2026-27');
+    expect(supportedTaxYears.last, '2015-16');
+  });
+
   test('should return zero tax when annual salary is below 600k PKR', () {
     const profile = TaxProfile(
       type: TaxProfileType.salaried,
@@ -66,6 +72,8 @@ void main() {
     // Then the deductions should be subtracted from the gross tax liability
     // Gross Annual Tax on 1.8M is 72,000
     // Total Deductions = 5000 + 2000 + 1000 + 4000 = 12000
+    expect(result.annualTaxBeforeAdjustments, 72000.0);
+    expect(result.annualAdjustableTaxPaid, 12000.0);
     expect(result.annualTaxLiability, 72000.0 - 12000.0);
   });
 }
