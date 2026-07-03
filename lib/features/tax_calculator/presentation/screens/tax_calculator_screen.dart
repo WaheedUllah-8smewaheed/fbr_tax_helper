@@ -17,6 +17,7 @@ import '../bloc/tax_calculator_bloc.dart';
 import '../bloc/tax_calculator_event.dart';
 import '../bloc/tax_calculator_state.dart';
 import '../../../deductions/presentation/pages/deductions_page.dart';
+import '../../../verification/presentation/pages/verification_page.dart';
 
 class TaxCalculatorScreen extends StatefulWidget {
   final TaxCalculatorBloc? bloc;
@@ -168,6 +169,17 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
         title: const Text('FBR Tax Helper'),
         centerTitle: false,
         actions: [
+          IconButton(
+            tooltip: 'Live verification',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const VerificationPage(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.verified_user_outlined),
+          ),
           IconButton(
             tooltip: 'Clear calculator',
             onPressed: () {
