@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "422412426431-bvvjq87128340qs6u31stqapgd5f75mb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.fbr_tax_helper",
+            "certificate_hash": "f9f4a102e9aab905c7e9fd1e9948c75d713844b3"
+          }
+        },
+        {
           "client_id": "422412426431-fab9m2f70363r9qeinmq0hpi1hdsdajv.apps.googleusercontent.com",
           "client_type": 3
         }

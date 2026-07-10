@@ -7,10 +7,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class AddTransactionPage extends StatefulWidget {
-  const AddTransactionPage({super.key, this.transaction, this.initialCategory});
+  const AddTransactionPage({
+    super.key,
+    this.transaction,
+    this.initialCategory,
+    this.initialIsExpense,
+  });
 
   final entity.Transaction? transaction;
   final String? initialCategory;
+  final bool? initialIsExpense;
 
   bool get isEditing => transaction != null;
 
@@ -26,7 +32,6 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   final _amountController = TextEditingController();
 
   bool _isExpense = true;
-  bool _showCategoryError = false;
   DateTime _selectedDate = DateTime.now();
   String? _selectedCategory;
 
@@ -42,8 +47,10 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       _isExpense = transaction.isExpense;
       _selectedDate = transaction.date;
       _selectedCategory = transaction.category;
-    } else if (widget.initialCategory != null) {
-      _selectedCategory = widget.initialCategory;
+    } else {
+      _isExpense = widget.initialIsExpense ?? true;
+      _selectedCategory =
+          widget.initialCategory ?? TransactionCategory.misc.name;
     }
   }
 
@@ -71,9 +78,6 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   }
 
   void _submitData() {
-    setState(() {
-      _showCategoryError = _selectedCategory == null;
-    });
     if (_selectedCategory == null || !_formKey.currentState!.validate()) {
       return;
     }
@@ -125,38 +129,15 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Category',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final category in TransactionCategory.all)
-                    ChoiceChip(
-                      label: Text(category),
-                      selected: _selectedCategory == category,
-                      onSelected: (_) {
-                        setState(() {
-                          _selectedCategory = category;
-                          _showCategoryError = false;
-                        });
-                      },
-                    ),
-                ],
-              ),
-              if (_showCategoryError) ...[
-                const SizedBox(height: 8),
+              if (_selectedCategory != null) ...[
                 Text(
-                  'Select a category first.',
-                  style: TextStyle(color: theme.colorScheme.error),
+                  'Category: $_selectedCategory',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
+                const SizedBox(height: 24),
               ],
-              const SizedBox(height: 24),
               Form(
                 key: _formKey,
                 child: Column(
@@ -224,27 +205,6 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    SegmentedButton<bool>(
-                      segments: const [
-                        ButtonSegment<bool>(
-                          value: true,
-                          label: Text('Expense'),
-                          icon: Icon(Icons.arrow_downward),
-                        ),
-                        ButtonSegment<bool>(
-                          value: false,
-                          label: Text('Income'),
-                          icon: Icon(Icons.arrow_upward),
-                        ),
-                      ],
-                      selected: {_isExpense},
-                      onSelectionChanged: (newSelection) {
-                        setState(() {
-                          _isExpense = newSelection.first;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 28),
                     FilledButton.icon(
                       onPressed: _submitData,
                       icon: Icon(widget.isEditing ? Icons.save : Icons.add),

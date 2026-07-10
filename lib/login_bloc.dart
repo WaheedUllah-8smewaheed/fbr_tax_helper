@@ -9,8 +9,8 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
   final AuthService _authService;
 
   LoginBloc({required AuthService authService})
-      : _authService = authService,
-        super(LoginInitial()) {
+    : _authService = authService,
+      super(LoginInitial()) {
     on<LoginWithEmailAndPasswordPressed>(_onLoginWithEmailAndPasswordPressed);
     on<LoginWithGooglePressed>(_onLoginWithGooglePressed);
   }
@@ -25,6 +25,12 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
       emit(LoginSuccess());
     } on AuthServiceException catch (e) {
       emit(LoginFailure(e.message));
+    } catch (_) {
+      emit(
+        const LoginFailure(
+          'Email login failed. Check Firebase Email/Password sign-in setup.',
+        ),
+      );
     }
   }
 
@@ -38,6 +44,8 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
       emit(LoginSuccess());
     } on AuthServiceException catch (e) {
       emit(LoginFailure(e.message));
+    } catch (_) {
+      emit(const LoginFailure('Google sign in failed. Please try again.'));
     }
   }
 }

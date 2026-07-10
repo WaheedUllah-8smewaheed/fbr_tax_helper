@@ -7,6 +7,7 @@ import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction
 import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction_category.dart';
 
 import 'package:fbr_tax_helper/services/auth_service.dart';
+import 'package:fbr_tax_helper/services/drive_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -66,8 +67,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-class _HomeDashboard extends StatelessWidget {
+class _HomeDashboard extends StatefulWidget {
   const _HomeDashboard();
+
+  @override
+  State<_HomeDashboard> createState() => _HomeDashboardState();
+}
+
+class _HomeDashboardState extends State<_HomeDashboard> {
+  DateTime? _selectedMonth;
 
   @override
   Widget build(BuildContext context) {
@@ -77,7 +85,9 @@ class _HomeDashboard extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Dashboard'),
         actions: [
+          const _DriveSyncButton(),
           IconButton(
+            tooltip: 'Sign out',
             icon: const Icon(Icons.logout),
             onPressed: () {
               context.read<AuthService>().signOut();
@@ -85,25 +95,11 @@ class _HomeDashboard extends StatelessWidget {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (context) => const AddTransactionPage()),
-          );
-        },
-        backgroundColor: Colors.teal,
-        child: const Icon(Icons.add),
-      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Welcome, ${user?.displayName ?? user?.email ?? 'User'}!',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 24),
             BlocBuilder<TransactionBloc, TransactionState>(
               builder: (context, state) {
                 final currentUserId = user?.uid ?? '';
@@ -111,20 +107,102 @@ class _HomeDashboard extends StatelessWidget {
                     state is TransactionLoaded && state.userId == currentUserId
                     ? state.transactions
                     : const <entity.Transaction>[];
+                final visibleTransactions = filterTransactionsByMonth(
+                  transactions,
+                  _selectedMonth,
+                );
+                final monthOptions = _buildMonthOptions(transactions);
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _SummaryCards(transactions: transactions),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final useTwoColumnHeader = constraints.maxWidth >= 640;
+
+                        if (useTwoColumnHeader) {
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Welcome, ${user?.displayName ?? user?.email ?? 'User'}!',
+                                  style: Theme.of(context).textTheme.headlineSmall,
+                                ),
+                              ),
+                              if (monthOptions.isNotEmpty) ...[
+                                const SizedBox(width: 12),
+                                SizedBox(
+                                  width: 180,
+                                  child: _MonthFilterDropdown(
+                                    selectedMonth: _selectedMonth,
+                                    monthOptions: monthOptions,
+                                    onChanged: (month) {
+                                      setState(() {
+                                        _selectedMonth = month;
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ],
+                          );
+                        }
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                'Welcome, ${user?.displayName ?? user?.email ?? 'User'}!',
+                                style: Theme.of(context).textTheme.headlineSmall,
+                              ),
+                            ),
+                            if (monthOptions.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                child: _MonthFilterDropdown(
+                                  selectedMonth: _selectedMonth,
+                                  monthOptions: monthOptions,
+                                  onChanged: (month) {
+                                    setState(() {
+                                      _selectedMonth = month;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
+                          ],
+                        );
+                      },
+                    ),
                     const SizedBox(height: 16),
-                    _IncomeExpensePiePanel(transactions: transactions),
+                    _SummaryCards(transactions: visibleTransactions),
+                    const SizedBox(height: 16),
+                    _IncomeExpensePiePanel(transactions: visibleTransactions),
                     const SizedBox(height: 24),
                     Text(
-                      'Categories',
+                      'Income Categories',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 12),
-                    _CategoryCards(transactions: transactions),
+                    _CategoryCards(
+                      transactions: visibleTransactions,
+                      isExpense: false,
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Expense Categories',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 12),
+                    _CategoryCards(
+                      transactions: visibleTransactions,
+                      isExpense: true,
+                    ),
                     const SizedBox(height: 24),
                     Text(
                       'Recent Transactions',
@@ -134,6 +212,7 @@ class _HomeDashboard extends StatelessWidget {
                     _TransactionList(
                       state: state,
                       currentUserId: currentUserId,
+                      transactions: visibleTransactions,
                     ),
                   ],
                 );
@@ -142,6 +221,80 @@ class _HomeDashboard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DriveSyncButton extends StatefulWidget {
+  const _DriveSyncButton();
+
+  @override
+  State<_DriveSyncButton> createState() => _DriveSyncButtonState();
+}
+
+class _DriveSyncButtonState extends State<_DriveSyncButton> {
+  bool _isSyncing = false;
+
+  Future<void> _sync() async {
+    if (_isSyncing) return;
+
+    setState(() {
+      _isSyncing = true;
+    });
+
+    final messenger = ScaffoldMessenger.of(context);
+    final authService = context.read<AuthService>();
+
+    try {
+      await authService.getGoogleDriveHeaders(promptIfNecessary: true);
+      final result = await DriveService().syncDatabaseToCloud();
+
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(result.message),
+            backgroundColor: result.success ? null : Colors.red.shade700,
+          ),
+        );
+    } on AuthServiceException catch (error) {
+      debugPrint('AUTH SERVICE ERROR: ${error.message}');
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (e, stackTrace) {
+      debugPrint('DRIVE SYNC ERROR: $e');
+      debugPrint('STACK TRACE: $stackTrace');
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('Google Drive connection failed: $e'),
+          ),
+        );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSyncing = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: 'Sync Google Drive',
+      onPressed: _isSyncing ? null : _sync,
+      icon: _isSyncing
+          ? const SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.cloud_sync_outlined),
     );
   }
 }
@@ -222,6 +375,29 @@ String _formatDashboardMoney(num value) {
   return 'PKR $sign${buffer.toString()}';
 }
 
+List<entity.Transaction> filterTransactionsByMonth(
+  List<entity.Transaction> transactions,
+  DateTime? selectedMonth,
+) {
+  if (selectedMonth == null) {
+    return transactions;
+  }
+
+  return transactions.where((transaction) {
+    return transaction.date.year == selectedMonth.year &&
+        transaction.date.month == selectedMonth.month;
+  }).toList();
+}
+
+List<DateTime> _buildMonthOptions(List<entity.Transaction> transactions) {
+  final months = transactions
+      .map((transaction) => DateTime(transaction.date.year, transaction.date.month))
+      .toSet()
+      .toList()
+    ..sort((a, b) => b.compareTo(a));
+  return months;
+}
+
 double _totalIncome(List<entity.Transaction> transactions) {
   return transactions
       .where((transaction) => !transaction.isExpense)
@@ -244,26 +420,37 @@ class _SummaryCards extends StatelessWidget {
     final totalIncome = _totalIncome(transactions);
     final totalExpenses = _totalExpenses(transactions);
 
-    return Row(
-      children: [
-        Expanded(
-          child: _SummaryCard(
-            title: 'Income',
-            amount: _formatDashboardMoney(totalIncome),
-            icon: Icons.arrow_upward,
-            color: Colors.green,
-          ),
-        ),
-        SizedBox(width: 16),
-        Expanded(
-          child: _SummaryCard(
-            title: 'Expenses',
-            amount: _formatDashboardMoney(totalExpenses),
-            icon: Icons.arrow_downward,
-            color: Colors.red,
-          ),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth;
+        final useTwoColumns = maxWidth >= 560;
+        final cardWidth = useTwoColumns ? (maxWidth - 16) / 2 : maxWidth;
+
+        return Wrap(
+          spacing: 16,
+          runSpacing: 12,
+          children: [
+            SizedBox(
+              width: cardWidth,
+              child: _SummaryCard(
+                title: 'Income',
+                amount: _formatDashboardMoney(totalIncome),
+                icon: Icons.arrow_upward,
+                color: Colors.green,
+              ),
+            ),
+            SizedBox(
+              width: cardWidth,
+              child: _SummaryCard(
+                title: 'Expenses',
+                amount: _formatDashboardMoney(totalExpenses),
+                icon: Icons.arrow_downward,
+                color: Colors.red,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -291,22 +478,38 @@ class _SummaryCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: Colors.grey)),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(color: Colors.grey),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
                 Icon(icon, color: color),
               ],
             ),
             const SizedBox(height: 8),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                amount,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-              ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isCompact = constraints.maxWidth < 180;
+
+                return FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    amount,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: (isCompact
+                            ? Theme.of(context).textTheme.titleMedium
+                            : Theme.of(context).textTheme.titleLarge)
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -316,38 +519,39 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _CategoryCards extends StatelessWidget {
-  const _CategoryCards({required this.transactions});
+  const _CategoryCards({required this.transactions, required this.isExpense});
 
   final List<entity.Transaction> transactions;
+  final bool isExpense;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final crossAxisCount = width >= 900
-            ? 4
-            : width >= 620
-            ? 3
-            : 2;
+        const crossAxisCount = 2;
+        final isCompact = constraints.maxWidth < 360;
+
+        final categories = TransactionCategory.all
+            .where((cat) => cat.isExpense == isExpense)
+            .toList();
 
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: TransactionCategory.all.length,
+          itemCount: categories.length,
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            mainAxisExtent: 154,
+            mainAxisExtent: isCompact ? 190 : 168,
           ),
           itemBuilder: (context, index) {
-            final category = TransactionCategory.all[index];
+            final category = categories[index];
             final categoryTransactions = transactions
-                .where((transaction) => transaction.category == category)
+                .where((transaction) => transaction.category == category.name)
                 .toList();
             return _CategoryCard(
-              category: category,
+              category: category.name,
               transactions: categoryTransactions,
             );
           },
@@ -374,88 +578,180 @@ class _CategoryCard extends StatelessWidget {
         .fold<double>(0, (total, transaction) => total + transaction.amount);
     final latestTransaction = transactions.isEmpty ? null : transactions.first;
 
-    return Card(
-      elevation: 1,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) =>
-                  AddTransactionPage(initialCategory: category),
-            ),
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: color.withValues(alpha: 0.12),
-                    foregroundColor: color,
-                    child: Icon(_getIconForCategory(category), size: 20),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 360;
+
+        return Card(
+          elevation: 1,
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => AddTransactionPage(
+                    initialCategory: category,
+                    initialIsExpense: true,
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      category,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              );
+            },
+            child: Padding(
+              padding: EdgeInsets.all(isCompact ? 10 : 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      CircleAvatar(
+                        radius: isCompact ? 15 : 18,
+                        backgroundColor: color.withValues(alpha: 0.12),
+                        foregroundColor: color,
+                        child: Icon(
+                          _getIconForCategory(category),
+                          size: isCompact ? 18 : 20,
+                        ),
+                      ),
+                      SizedBox(width: isCompact ? 8 : 10),
+                      Expanded(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            category,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: isCompact ? 13 : 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: isCompact ? 2 : 4),
+                      IconButton(
+                        tooltip: 'Add $category transaction',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => AddTransactionPage(
+                                initialCategory: category,
+                                initialIsExpense: true,
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.add_circle_outline),
+                        iconSize: isCompact ? 18 : 24,
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${transactions.length} transactions',
+                    style: Theme.of(context).textTheme.bodySmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    latestTransaction?.title ?? 'No entries yet',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  IconButton(
-                    tooltip: 'Add $category transaction',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              AddTransactionPage(initialCategory: category),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.add_circle_outline),
+                  const SizedBox(height: 8),
+                  _CategoryAmountRow(
+                    label: 'Amount',
+                    value: _formatDashboardMoney(
+                      transactions.any((transaction) => transaction.isExpense)
+                          ? expenses
+                          : income,
+                    ),
+                    color: transactions.any((transaction) => transaction.isExpense)
+                        ? Colors.red.shade700
+                        : Colors.green.shade700,
                   ),
                 ],
               ),
-              const Spacer(),
-              Text(
-                '${transactions.length} transactions',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                latestTransaction?.title ?? 'No entries yet',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              _CategoryAmountRow(
-                label: 'Income',
-                value: _formatDashboardMoney(income),
-                color: Colors.green.shade700,
-              ),
-              const SizedBox(height: 4),
-              _CategoryAmountRow(
-                label: 'Expense',
-                value: _formatDashboardMoney(expenses),
-                color: Colors.red.shade700,
-              ),
-            ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _MonthFilterDropdown extends StatelessWidget {
+  const _MonthFilterDropdown({
+    required this.selectedMonth,
+    required this.monthOptions,
+    required this.onChanged,
+  });
+
+  final DateTime? selectedMonth;
+  final List<DateTime> monthOptions;
+  final ValueChanged<DateTime?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<DateTime?>(
+      decoration: const InputDecoration(
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        border: OutlineInputBorder(),
+      ),
+      initialValue: selectedMonth,
+      hint: const Text('Select month'),
+      items: [
+        const DropdownMenuItem<DateTime?>(value: null, child: Text('All months')),
+        ...monthOptions.map(
+          (month) => DropdownMenuItem<DateTime?>(
+            value: month,
+            child: Text(_monthLabel(month)),
           ),
         ),
-      ),
+      ],
+      onChanged: onChanged,
     );
+  }
+}
+
+String _monthLabel(DateTime month) {
+  return '${_monthName(month.month)} ${month.year}';
+}
+
+String _monthName(int month) {
+  switch (month) {
+    case 1:
+      return 'Jan';
+    case 2:
+      return 'Feb';
+    case 3:
+      return 'Mar';
+    case 4:
+      return 'Apr';
+    case 5:
+      return 'May';
+    case 6:
+      return 'Jun';
+    case 7:
+      return 'Jul';
+    case 8:
+      return 'Aug';
+    case 9:
+      return 'Sep';
+    case 10:
+      return 'Oct';
+    case 11:
+      return 'Nov';
+    default:
+      return 'Dec';
   }
 }
 
@@ -477,14 +773,12 @@ class _CategoryAmountRow extends StatelessWidget {
         Text(label, style: Theme.of(context).textTheme.bodySmall),
         const SizedBox(width: 6),
         Expanded(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerRight,
-            child: Text(
-              value,
-              maxLines: 1,
-              style: TextStyle(color: color, fontWeight: FontWeight.w700),
-            ),
+          child: Text(
+            value,
+            maxLines: 2,
+            textAlign: TextAlign.right,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: color, fontWeight: FontWeight.w700),
           ),
         ),
       ],
@@ -860,10 +1154,15 @@ class _ComparisonState {
 }
 
 class _TransactionList extends StatelessWidget {
-  const _TransactionList({required this.state, required this.currentUserId});
+  const _TransactionList({
+    required this.state,
+    required this.currentUserId,
+    required this.transactions,
+  });
 
   final TransactionState state;
   final String currentUserId;
+  final List<entity.Transaction> transactions;
 
   @override
   Widget build(BuildContext context) {
@@ -875,7 +1174,6 @@ class _TransactionList extends StatelessWidget {
       if (loadedState.userId != currentUserId) {
         return const Center(child: CircularProgressIndicator());
       }
-      final transactions = loadedState.transactions;
       if (transactions.isEmpty) {
         return const Center(child: Text('No transactions yet. Add one!'));
       }

@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
@@ -104,6 +105,9 @@ class AuthService {
       email: email,
       password: password,
     );
+    if (credential.user == null) {
+      throw const AuthServiceException('Email login failed. Please try again.');
+    }
     return credential.user;
   }
 
@@ -156,32 +160,44 @@ class AuthService {
   Future<Map<String, String>> getGoogleDriveHeaders({
     bool promptIfNecessary = false,
   }) async {
-    final account =
-        _googleAccount ??
-        _googleSignIn.currentUser ??
-        await _googleSignIn.signInSilently();
+    try {
+      final account =
+          _googleAccount ??
+          _googleSignIn.currentUser ??
+          await _googleSignIn.signInSilently();
 
-    if (account == null) {
-      if (!promptIfNecessary) {
-        throw const AuthServiceException(
-          'Sign in with Google before using Drive sync.',
+      if (account == null) {
+        if (!promptIfNecessary) {
+          throw const AuthServiceException(
+            'Sign in with Google before using Drive sync.',
+          );
+        }
+
+        final promptedAccount = await _googleSignIn.signIn();
+        if (promptedAccount == null) {
+          throw const AuthServiceException('Google sign in was cancelled.');
+        }
+
+        _googleAccount = promptedAccount;
+        return _loadDriveHeaders(
+          promptedAccount,
+          promptIfNecessary: promptIfNecessary,
         );
       }
 
-      final promptedAccount = await _googleSignIn.signIn();
-      if (promptedAccount == null) {
-        throw const AuthServiceException('Google sign in was cancelled.');
-      }
-
-      _googleAccount = promptedAccount;
-      return _loadDriveHeaders(
-        promptedAccount,
-        promptIfNecessary: promptIfNecessary,
+      _googleAccount = account;
+      return _loadDriveHeaders(account, promptIfNecessary: promptIfNecessary);
+    } on AuthServiceException {
+      rethrow;
+    } on PlatformException catch (error) {
+      throw AuthServiceException(
+        _googleSignInMessage(error, action: 'connect Google Drive'),
+      );
+    } catch (error) {
+      throw AuthServiceException(
+        'Could not connect Google Drive. ${error.toString()}',
       );
     }
-
-    _googleAccount = account;
-    return _loadDriveHeaders(account, promptIfNecessary: promptIfNecessary);
   }
 
   Future<void> refreshGoogleDriveHeaders() async {
@@ -204,20 +220,19 @@ class AuthService {
     GoogleSignInAccount account, {
     required bool promptIfNecessary,
   }) async {
-    final hasDriveAccess = await _googleSignIn.canAccessScopes(_driveScopes);
-    if (!hasDriveAccess) {
-      if (!promptIfNecessary) {
-        throw const AuthServiceException(
-          'Google Drive permission is required for cloud sync.',
-        );
-      }
+    if (!promptIfNecessary) {
+      // Without prompting, just try to use existing auth headers.
+      final headers = Map<String, String>.unmodifiable(await account.authHeaders);
+      _googleDriveHeaders = headers;
+      _setAuthenticatedDriveClient(GoogleHttpClient(headers));
+      return headers;
+    }
 
-      final granted = await _googleSignIn.requestScopes(_driveScopes);
-      if (!granted) {
-        throw const AuthServiceException(
-          'Google Drive permission is required for cloud sync.',
-        );
-      }
+    final granted = await _googleSignIn.requestScopes(_driveScopes);
+    if (!granted) {
+      throw const AuthServiceException(
+        'Google Drive permission is required for cloud sync.',
+      );
     }
 
     final headers = Map<String, String>.unmodifiable(await account.authHeaders);
@@ -251,6 +266,15 @@ class AuthService {
         'Check your internet connection and try again.',
       _ => 'Authentication failed. Please try again.',
     };
+  }
+
+  String _googleSignInMessage(
+    PlatformException error, {
+    required String action,
+  }) {
+    final details = error.message ?? error.details?.toString();
+    final suffix = details == null || details.isEmpty ? '' : ' ($details)';
+    return 'Could not $action. Google sign-in returned ${error.code}$suffix.';
   }
 }
 
