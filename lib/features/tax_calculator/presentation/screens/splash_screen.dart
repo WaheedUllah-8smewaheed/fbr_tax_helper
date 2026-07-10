@@ -2,14 +2,17 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../services/auth_service.dart';
 import 'tax_calculator_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({
     super.key,
+    required this.authService,
     this.duration = const Duration(milliseconds: 1600),
   });
 
+  final AuthService authService;
   final Duration duration;
 
   @override
@@ -50,7 +53,7 @@ class _SplashScreenState extends State<SplashScreen>
     Navigator.of(context).pushReplacement(
       PageRouteBuilder<void>(
         pageBuilder: (context, animation, secondaryAnimation) {
-          return const TaxCalculatorScreen();
+          return TaxCalculatorScreen(authService: widget.authService);
         },
         transitionDuration: const Duration(milliseconds: 360),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -116,7 +119,7 @@ class _SplashScreenState extends State<SplashScreen>
                           ),
                           const SizedBox(height: 28),
                           Text(
-                            'FBR Tax Helper',
+                            'FilerFlow',
                             textAlign: TextAlign.center,
                             style: Theme.of(context).textTheme.headlineMedium
                                 ?.copyWith(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:fbr_tax_helper/main.dart';
+import 'package:fbr_tax_helper/services/auth_service.dart';
 import 'package:fbr_tax_helper/features/tax_calculator/data/datasources/tax_local_data_source.dart';
 import 'package:fbr_tax_helper/features/tax_calculator/data/models/tax_profile_model.dart';
 import 'package:fbr_tax_helper/features/tax_calculator/data/repositories/tax_repository_impl.dart';
@@ -31,14 +32,14 @@ void main() {
   testWidgets('launches from animated splash, then shows a blank calculator', (
     tester,
   ) async {
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(MyApp(authService: AuthService()));
 
     expect(find.byType(SplashScreen), findsOneWidget);
 
     await _pumpPastSplash(tester);
 
     expect(find.byType(TaxCalculatorScreen), findsOneWidget);
-    expect(find.text('FBR Tax Helper'), findsOneWidget);
+    expect(find.text('FilerFlow'), findsOneWidget);
     expect(find.text('Tax Year 2026-27'), findsWidgets);
     expect(find.text('Monthly gross income'), findsOneWidget);
     expect(find.text('Calculate'), findsOneWidget);
@@ -50,14 +51,14 @@ void main() {
   testWidgets('builds on compact phone screens', (tester) async {
     await _pumpAppAtSize(tester, const Size(360, 640));
 
-    expect(find.text('FBR Tax Helper'), findsOneWidget);
+    expect(find.text('FilerFlow'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('builds on extra narrow phone screens', (tester) async {
     await _pumpAppAtSize(tester, const Size(320, 640));
 
-    expect(find.text('FBR Tax Helper'), findsOneWidget);
+    expect(find.text('FilerFlow'), findsOneWidget);
     expect(find.text('Salaried'), findsOneWidget);
     expect(find.text('Registered'), findsOneWidget);
     expect(find.text('Other'), findsOneWidget);
@@ -67,7 +68,7 @@ void main() {
   testWidgets('builds on tablet width screens', (tester) async {
     await _pumpAppAtSize(tester, const Size(900, 700));
 
-    expect(find.text('FBR Tax Helper'), findsOneWidget);
+    expect(find.text('FilerFlow'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -106,7 +107,7 @@ Future<void> _pumpAppAtSize(WidgetTester tester, Size size) async {
   addTearDown(tester.view.resetDevicePixelRatio);
   addTearDown(tester.view.resetPhysicalSize);
 
-  await tester.pumpWidget(const MyApp());
+  await tester.pumpWidget(MyApp(authService: AuthService()));
   await _pumpPastSplash(tester);
 }
 

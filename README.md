@@ -1,6 +1,6 @@
-# fbr_tax_helper
+# FilerFlow
 
-A new Flutter project.
+FilerFlow is a Flutter app for tax estimation, expense tracking, and filing support.
 
 ## Getting Started
 

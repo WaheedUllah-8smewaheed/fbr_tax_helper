@@ -1,11 +1,11 @@
 {
-    "name": "fbr_tax_helper",
-    "short_name": "fbr_tax_helper",
+    "name": "FilerFlow",
+    "short_name": "FilerFlow",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0F6B57",
     "theme_color": "#0F6B57",
-    "description": "A new Flutter project.",
+    "description": "FilerFlow tax and expense tracker.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
