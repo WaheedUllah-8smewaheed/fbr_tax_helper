@@ -60,8 +60,23 @@ class TransactionReportService {
 
     pdf.addPage(
       pw.MultiPage(
-        pageFormat: pageFormat,
-        margin: const pw.EdgeInsets.all(32),
+        pageTheme: pw.PageTheme(
+          pageFormat: pageFormat,
+          margin: const pw.EdgeInsets.all(32),
+          buildBackground: (context) => pw.Center(
+            child: pw.Transform.rotate(
+              angle: -0.30,
+              child: pw.Text(
+                'FilerFlow',
+                style: pw.TextStyle(
+                  fontSize: 76,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColor.fromHex('#F1F7F5'),
+                ),
+              ),
+            ),
+          ),
+        ),
         footer: (context) => pw.Container(
           padding: const pw.EdgeInsets.only(top: 8),
           decoration: const pw.BoxDecoration(
@@ -227,7 +242,6 @@ class TransactionReportService {
       width: double.infinity,
       padding: const pw.EdgeInsets.all(14),
       decoration: pw.BoxDecoration(
-        color: PdfColors.white,
         border: pw.Border.all(color: PdfColors.grey300),
         borderRadius: pw.BorderRadius.circular(10),
       ),

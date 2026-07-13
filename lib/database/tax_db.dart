@@ -22,7 +22,7 @@ class TaxDatabase {
 
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -71,6 +71,14 @@ class TaxDatabase {
         table: 'transactions',
         column: 'receiptImagePath',
         definition: 'TEXT',
+      );
+    }
+    if (oldVersion < 4) {
+      await db.update(
+        'transactions',
+        {'isExpense': 1},
+        where: 'category = ?',
+        whereArgs: ['Tax'],
       );
     }
   }

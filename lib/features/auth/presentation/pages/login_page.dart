@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:fbr_tax_helper/features/auth/presentation/pages/session_router.dart';
+import 'package:fbr_tax_helper/features/auth/presentation/pages/public_calculator_screen.dart';
 import 'package:fbr_tax_helper/features/auth/presentation/pages/signup_page.dart';
 import 'package:fbr_tax_helper/login_bloc.dart';
 import 'package:fbr_tax_helper/services/auth_service.dart';
@@ -96,10 +96,7 @@ class _LoginFormState extends State<LoginForm>
           ScaffoldMessenger.of(context)
             ..hideCurrentSnackBar()
             ..showSnackBar(const SnackBar(content: Text('Login successful.')));
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (context) => const SessionRouter()),
-            (route) => false,
-          );
+          Navigator.of(context).popUntil((route) => route.isFirst);
         }
       },
       child: Scaffold(
@@ -163,6 +160,14 @@ class _LoginFormState extends State<LoginForm>
                                       ),
                                     );
                                   },
+                                  onTaxCalculator: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const PublicCalculatorScreen(),
+                                      ),
+                                    );
+                                  },
                                   validateEmail: _validateEmail,
                                   validatePassword: _validatePassword,
                                 ),
@@ -193,6 +198,14 @@ class _LoginFormState extends State<LoginForm>
                                         MaterialPageRoute(
                                           builder: (context) =>
                                               const SignupPage(),
+                                        ),
+                                      );
+                                    },
+                                    onTaxCalculator: () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const PublicCalculatorScreen(),
                                         ),
                                       );
                                     },
@@ -315,6 +328,7 @@ class _LoginPanel extends StatelessWidget {
     required this.onTogglePassword,
     required this.onEmailLogin,
     required this.onCreateAccount,
+    required this.onTaxCalculator,
     required this.validateEmail,
     required this.validatePassword,
   });
@@ -326,6 +340,7 @@ class _LoginPanel extends StatelessWidget {
   final VoidCallback onTogglePassword;
   final VoidCallback onEmailLogin;
   final VoidCallback onCreateAccount;
+  final VoidCallback onTaxCalculator;
   final FormFieldValidator<String> validateEmail;
   final FormFieldValidator<String> validatePassword;
 
@@ -442,6 +457,12 @@ class _LoginPanel extends StatelessWidget {
                         child: const Text('Create account'),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: isLoading ? null : onTaxCalculator,
+                    icon: const Icon(Icons.calculate_outlined),
+                    label: const Text('Tax Calculator'),
                   ),
                 ],
               ),

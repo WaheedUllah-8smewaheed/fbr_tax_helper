@@ -22,8 +22,9 @@ import '../../../verification/presentation/pages/verification_page.dart';
 class TaxCalculatorScreen extends StatefulWidget {
   final TaxCalculatorBloc? bloc;
   final Widget? footer;
+  final VoidCallback? onLogin;
 
-  const TaxCalculatorScreen({super.key, this.bloc, this.footer});
+  const TaxCalculatorScreen({super.key, this.bloc, this.footer, this.onLogin});
 
   @override
   State<TaxCalculatorScreen> createState() => _TaxCalculatorScreenState();
@@ -168,18 +169,25 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
       appBar: AppBar(
         title: const Text('FilerFlow'),
         centerTitle: false,
+        automaticallyImplyLeading: widget.onLogin == null,
         actions: [
-          IconButton(
-            tooltip: 'Live verification',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const VerificationPage(),
-                ),
-              );
-            },
-            icon: const Icon(Icons.verified_user_outlined),
-          ),
+          // if (widget.onLogin != null)
+          //   TextButton.icon(
+          //     onPressed: widget.onLogin,
+          //     icon: const Icon(Icons.login, color: Colors.white),
+          //     label: const Text('Login', style: TextStyle(color: Colors.white)),
+          //   ),
+          // IconButton(
+          //   tooltip: 'Live verification',
+          //   onPressed: () {
+          //     Navigator.of(context).push(
+          //       MaterialPageRoute(
+          //         builder: (context) => const VerificationPage(),
+          //       ),
+          //     );
+          //   },
+          //   icon: const Icon(Icons.verified_user_outlined),
+          // ),
           IconButton(
             tooltip: 'Clear calculator',
             onPressed: () {
@@ -188,6 +196,16 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
             },
             icon: const Icon(Icons.refresh_rounded),
           ),
+         if (widget.onLogin != null)
+      TextButton.icon(
+        onPressed: widget.onLogin,
+        icon: const Icon(Icons.login, color: Colors.white),
+        label: const Text(
+          'Login',
+          style: TextStyle(color: Colors.white),
+        ),
+      ),
+          
         ],
       ),
       floatingActionButton: FloatingActionButton(

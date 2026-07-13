@@ -11,16 +11,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 
 class AddTransactionPage extends StatefulWidget {
-  const AddTransactionPage({
-    super.key,
-    this.transaction,
-    this.initialCategory,
-    this.initialIsExpense,
-  });
+  const AddTransactionPage({super.key, this.transaction, this.initialCategory});
 
   final entity.Transaction? transaction;
   final String? initialCategory;
-  final bool? initialIsExpense;
 
   bool get isEditing => transaction != null;
 
@@ -36,7 +30,6 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   final _amountController = TextEditingController();
   final _receiptScanner = ReceiptScannerService();
 
-  bool _isExpense = true;
   bool _isScanningReceipt = false;
   DateTime _selectedDate = DateTime.now();
   String? _selectedCategory;
@@ -51,12 +44,10 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       _beneficiaryController.text = transaction.beneficiary;
       _purposeController.text = transaction.purpose;
       _amountController.text = _formatAmountInput(transaction.amount);
-      _isExpense = transaction.isExpense;
       _selectedDate = transaction.date;
       _selectedCategory = transaction.category;
       _receiptImagePath = transaction.receiptImagePath;
     } else {
-      _isExpense = widget.initialIsExpense ?? true;
       _selectedCategory =
           widget.initialCategory ?? TransactionCategory.misc.name;
     }
@@ -135,7 +126,6 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
             _selectedCategory == TransactionCategory.misc.name) {
           _selectedCategory = result.suggestedCategory;
         }
-        _isExpense = true;
       });
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -182,7 +172,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       beneficiary: _beneficiaryController.text.trim(),
       purpose: _purposeController.text.trim(),
       amount: double.parse(_amountController.text.trim().replaceAll(',', '')),
-      isExpense: _isExpense,
+      isExpense: TransactionCategory.fromName(_selectedCategory!).isExpense,
       date: _selectedDate,
       category: _selectedCategory!,
       receiptImagePath: _receiptImagePath,
@@ -239,12 +229,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                           .toList(),
                       onChanged: (value) {
                         if (value == null) return;
-                        final category = TransactionCategory.all.firstWhere(
-                          (category) => category.name == value,
-                        );
                         setState(() {
                           _selectedCategory = value;
-                          _isExpense = category.isExpense;
                         });
                       },
                     ),

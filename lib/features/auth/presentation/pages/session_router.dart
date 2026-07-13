@@ -1,5 +1,5 @@
 import 'package:fbr_tax_helper/features/auth/presentation/pages/dashboard_screen.dart';
-import 'package:fbr_tax_helper/features/auth/presentation/pages/public_calculator_screen.dart';
+import 'package:fbr_tax_helper/features/auth/presentation/pages/login_page.dart';
 import 'package:fbr_tax_helper/services/auth_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -26,8 +26,8 @@ class SessionRouter extends StatelessWidget {
           return const DashboardScreen(); // Full tracking + calculator view
         }
 
-        // Default layout if completely anonymous or unauthenticated
-        return const PublicCalculatorScreen(); // Calculator utility only
+        // Signed-out users authenticate before opening account features.
+        return const LoginPage();
       },
     );
   }

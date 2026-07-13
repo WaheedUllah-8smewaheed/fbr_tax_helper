@@ -147,14 +147,6 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                                   ),
                                 ),
                               ],
-                              const SizedBox(width: 12),
-                              _PrintTransactionsButton(
-                                transactions: visibleTransactions,
-                                filterLabel: _transactionFilterLabel(
-                                  _selectedMonth,
-                                ),
-                                iconOnly: true,
-                              ),
                             ],
                           );
                         }
@@ -187,16 +179,6 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                                 ),
                               ),
                             ],
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: _PrintTransactionsButton(
-                                transactions: visibleTransactions,
-                                filterLabel: _transactionFilterLabel(
-                                  _selectedMonth,
-                                ),
-                              ),
-                            ),
                           ],
                         );
                       },
@@ -205,6 +187,14 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                     _SummaryCards(transactions: visibleTransactions),
                     const SizedBox(height: 16),
                     _IncomeExpensePiePanel(transactions: visibleTransactions),
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: _PrintTransactionsButton(
+                        transactions: visibleTransactions,
+                        filterLabel: _transactionFilterLabel(_selectedMonth),
+                      ),
+                    ),
                     const SizedBox(height: 24),
                     Text(
                       'Income Categories',
@@ -638,7 +628,6 @@ class _CategoryCards extends StatelessWidget {
             return _CategoryCard(
               category: category.name,
               transactions: categoryTransactions,
-              isExpense: category.isExpense,
             );
           },
         );
@@ -648,15 +637,10 @@ class _CategoryCards extends StatelessWidget {
 }
 
 class _CategoryCard extends StatelessWidget {
-  const _CategoryCard({
-    required this.category,
-    required this.transactions,
-    required this.isExpense,
-  });
+  const _CategoryCard({required this.category, required this.transactions});
 
   final String category;
   final List<entity.Transaction> transactions;
-  final bool isExpense;
 
   @override
   Widget build(BuildContext context) {
@@ -684,10 +668,8 @@ class _CategoryCard extends StatelessWidget {
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (context) => _CategoryTransactionsPage(
-                    category: category,
-                    isExpense: isExpense,
-                  ),
+                  builder: (context) =>
+                      _CategoryTransactionsPage(category: category),
                 ),
               );
             },
@@ -766,21 +748,14 @@ class _CategoryCard extends StatelessWidget {
 }
 
 class _CategoryTransactionsPage extends StatelessWidget {
-  const _CategoryTransactionsPage({
-    required this.category,
-    required this.isExpense,
-  });
+  const _CategoryTransactionsPage({required this.category});
 
   final String category;
-  final bool isExpense;
 
   void _openAddTransaction(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => AddTransactionPage(
-          initialCategory: category,
-          initialIsExpense: isExpense,
-        ),
+        builder: (context) => AddTransactionPage(initialCategory: category),
       ),
     );
   }
@@ -853,6 +828,7 @@ class _CategoryTransactionsPage extends StatelessWidget {
               _PrintTransactionsButton(
                 transactions: transactions,
                 filterLabel: '$category transactions',
+                buttonLabel: 'Print $category report',
               ),
               const SizedBox(height: 16),
               Text(
@@ -890,12 +866,12 @@ class _PrintTransactionsButton extends StatefulWidget {
   const _PrintTransactionsButton({
     required this.transactions,
     required this.filterLabel,
-    this.iconOnly = false,
+    this.buttonLabel = 'Print report',
   });
 
   final List<entity.Transaction> transactions;
   final String filterLabel;
-  final bool iconOnly;
+  final String buttonLabel;
 
   @override
   State<_PrintTransactionsButton> createState() =>
@@ -934,22 +910,13 @@ class _PrintTransactionsButtonState extends State<_PrintTransactionsButton> {
             child: CircularProgressIndicator(strokeWidth: 2),
           )
         : const Icon(Icons.print_outlined);
-    if (widget.iconOnly) {
-      return IconButton.outlined(
-        tooltip: widget.transactions.isEmpty
-            ? 'No filtered transactions to print'
-            : 'Print ${widget.filterLabel}',
-        onPressed: enabled ? _print : null,
-        icon: icon,
-      );
-    }
     return OutlinedButton.icon(
       onPressed: enabled ? _print : null,
       icon: icon,
       label: Text(
         widget.transactions.isEmpty
             ? 'No transactions to print'
-            : 'Print report',
+            : widget.buttonLabel,
       ),
     );
   }
