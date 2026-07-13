@@ -1,4 +1,5 @@
 import 'package:fbr_tax_helper/database/tax_db.dart';
+import 'package:fbr_tax_helper/core/theme/app_theme.dart';
 import 'package:fbr_tax_helper/features/auth/presentation/pages/session_router.dart';
 import 'package:fbr_tax_helper/features/tax_calculator/presentation/screens/splash_screen.dart';
 import 'package:fbr_tax_helper/features/transactions/data/datasources/transaction_local_data_source.dart';
@@ -45,7 +46,7 @@ class MyApp extends StatelessWidget {
         ),
         child: MaterialApp(
           title: 'FilerFlow',
-          theme: ThemeData(primarySwatch: Colors.teal, useMaterial3: true),
+          theme: AppTheme.light,
           home: _useSessionRouter
               ? const SessionRouter()
               : SplashScreen(authService: authService),

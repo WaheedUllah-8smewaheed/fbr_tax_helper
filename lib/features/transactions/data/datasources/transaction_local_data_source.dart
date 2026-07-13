@@ -28,6 +28,7 @@ class TransactionLocalDataSourceImpl implements TransactionLocalDataSource {
       'isExpense': transaction.isExpense ? 1 : 0,
       'date': transaction.date.toIso8601String(),
       'category': transaction.category,
+      'receiptImagePath': transaction.receiptImagePath,
     });
   }
 
@@ -52,6 +53,7 @@ class TransactionLocalDataSourceImpl implements TransactionLocalDataSource {
         isExpense: (map['isExpense'] as int) == 1,
         date: DateTime.parse(map['date'] as String),
         category: map['category'] as String,
+        receiptImagePath: map['receiptImagePath'] as String?,
       );
     }).toList();
   }
@@ -74,6 +76,7 @@ class TransactionLocalDataSourceImpl implements TransactionLocalDataSource {
         'isExpense': transaction.isExpense ? 1 : 0,
         'date': transaction.date.toIso8601String(),
         'category': transaction.category,
+        'receiptImagePath': transaction.receiptImagePath,
       },
       where: 'id = ? AND userId = ?',
       whereArgs: [id, transaction.userId],

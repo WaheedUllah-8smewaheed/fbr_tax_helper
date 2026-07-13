@@ -37,7 +37,6 @@ class _VerificationPageState extends State<VerificationPage> {
       child: DefaultTabController(
         length: 3,
         child: Scaffold(
-          backgroundColor: const Color(0xFFF6F7F4),
           appBar: AppBar(
             title: const Text('Live Verification'),
             bottom: const TabBar(
@@ -351,7 +350,7 @@ class _VerificationFormPanel extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFE0E4DD)),
       ),
       child: Padding(
@@ -493,7 +492,7 @@ class _ResultPanel extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFE0E4DD)),
       ),
       child: Padding(
@@ -669,7 +668,7 @@ class _ErrorPanel extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: const Color(0xFFFFF1F0),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFFFDAD6)),
       ),
       child: Padding(
@@ -696,7 +695,7 @@ class _SkeletonPanel extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE0E4DD)),
       ),
       child: Padding(

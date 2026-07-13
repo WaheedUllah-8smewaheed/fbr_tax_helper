@@ -368,7 +368,9 @@ class _SignupPanel extends StatelessWidget {
           elevation: 18,
           color: Colors.white,
           shadowColor: Colors.black.withValues(alpha: 0.18),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(22),
             child: Form(

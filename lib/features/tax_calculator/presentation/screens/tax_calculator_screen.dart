@@ -7,8 +7,6 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
-import '../../../auth/presentation/pages/auth_page.dart';
-import '../../../../services/auth_service.dart';
 import '../../data/datasources/tax_local_data_source.dart';
 import '../../data/repositories/tax_repository_impl.dart';
 import '../../domain/entities/tax_assessment.dart';
@@ -23,15 +21,9 @@ import '../../../verification/presentation/pages/verification_page.dart';
 
 class TaxCalculatorScreen extends StatefulWidget {
   final TaxCalculatorBloc? bloc;
-  final AuthService? authService;
   final Widget? footer;
 
-  const TaxCalculatorScreen({
-    super.key,
-    this.bloc,
-    this.authService,
-    this.footer,
-  });
+  const TaxCalculatorScreen({super.key, this.bloc, this.footer});
 
   @override
   State<TaxCalculatorScreen> createState() => _TaxCalculatorScreenState();
@@ -173,24 +165,10 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7F4),
       appBar: AppBar(
         title: const Text('FilerFlow'),
         centerTitle: false,
         actions: [
-          if (widget.authService != null)
-            IconButton(
-              tooltip: 'Account',
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        AuthPage(authService: widget.authService!),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.account_circle_outlined),
-            ),
           IconButton(
             tooltip: 'Live verification',
             onPressed: () {
@@ -395,7 +373,7 @@ class _HeaderBand extends StatelessWidget {
       height: 44,
       decoration: BoxDecoration(
         color: const Color(0xFF0F6B57),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(18),
       ),
       child: const Icon(Icons.account_balance_outlined, color: Colors.white),
     );
@@ -428,7 +406,7 @@ class _HeaderBand extends StatelessWidget {
       padding: EdgeInsets.all(metrics.panelPadding),
       decoration: BoxDecoration(
         color: const Color(0xFFE7F0EA),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFC8D8CD)),
       ),
       child: metrics.stackHeader
@@ -495,7 +473,7 @@ class _CalculatorForm extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFE0E4DD)),
       ),
       child: Padding(
@@ -913,7 +891,7 @@ class _MetricTile extends StatelessWidget {
       return DecoratedBox(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: const Color(0xFFE0E4DD)),
         ),
         child: Padding(
@@ -938,7 +916,7 @@ class _MetricTile extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE0E4DD)),
       ),
       child: Padding(
@@ -1087,7 +1065,7 @@ class _FilingReceipt extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: const Color(0xFFFFFBEE),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE9D18B)),
       ),
       child: Padding(
@@ -1329,7 +1307,7 @@ class _MessagePanel extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE0E4DD)),
       ),
       child: Padding(

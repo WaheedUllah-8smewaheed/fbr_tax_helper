@@ -22,7 +22,7 @@ class TaxDatabase {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -39,7 +39,8 @@ class TaxDatabase {
           amount REAL NOT NULL,
           isExpense INTEGER NOT NULL,
           date TEXT NOT NULL,
-          category TEXT NOT NULL)
+          category TEXT NOT NULL,
+          receiptImagePath TEXT)
     ''');
   }
 
@@ -62,6 +63,14 @@ class TaxDatabase {
         table: 'transactions',
         column: 'purpose',
         definition: "TEXT NOT NULL DEFAULT ''",
+      );
+    }
+    if (oldVersion < 3) {
+      await _addColumnIfMissing(
+        db,
+        table: 'transactions',
+        column: 'receiptImagePath',
+        definition: 'TEXT',
       );
     }
   }
@@ -103,5 +112,142 @@ class TaxDatabase {
   Future<File> getDatabaseFile() async {
     Directory docDirectory = await getApplicationDocumentsDirectory();
     return File(join(docDirectory.path, 'fbr_tax_vault.db'));
+  }
+
+  Future<Directory> getReceiptDirectory() async {
+    final documents = await getApplicationDocumentsDirectory();
+    return Directory(join(documents.path, 'transaction_receipts'));
+  }
+
+  Future<void> prepareForBackup() async {
+    final db = await database;
+    await db.rawQuery('PRAGMA wal_checkpoint(FULL)');
+  }
+
+  Future<void> close() async {
+    final current = _database;
+    _database = null;
+    await current?.close();
+  }
+
+  Future<void> restoreFromBackup({
+    required File stagedDatabase,
+    required Directory stagedReceipts,
+  }) async {
+    await _validateBackupDatabase(stagedDatabase.path);
+
+    final liveDatabase = await getDatabaseFile();
+    final liveReceipts = await getReceiptDirectory();
+    final databaseRollback = File('${liveDatabase.path}.restore_previous');
+    final receiptsRollback = Directory('${liveReceipts.path}_restore_previous');
+
+    await close();
+    await _deleteDatabaseSidecars(liveDatabase.path);
+    if (await databaseRollback.exists()) await databaseRollback.delete();
+    if (await receiptsRollback.exists()) {
+      await receiptsRollback.delete(recursive: true);
+    }
+
+    if (await liveDatabase.exists()) {
+      await liveDatabase.rename(databaseRollback.path);
+    }
+    if (await liveReceipts.exists()) {
+      await liveReceipts.rename(receiptsRollback.path);
+    }
+
+    try {
+      await stagedDatabase.copy(liveDatabase.path);
+      await _copyDirectory(stagedReceipts, liveReceipts);
+      await _rewriteReceiptPaths(liveReceipts);
+
+      if (await databaseRollback.exists()) await databaseRollback.delete();
+      if (await receiptsRollback.exists()) {
+        await receiptsRollback.delete(recursive: true);
+      }
+    } catch (_) {
+      await close();
+      await _deleteDatabaseSidecars(liveDatabase.path);
+      if (await liveDatabase.exists()) await liveDatabase.delete();
+      if (await liveReceipts.exists()) {
+        await liveReceipts.delete(recursive: true);
+      }
+      if (await databaseRollback.exists()) {
+        await databaseRollback.rename(liveDatabase.path);
+      }
+      if (await receiptsRollback.exists()) {
+        await receiptsRollback.rename(liveReceipts.path);
+      }
+      await database;
+      rethrow;
+    }
+  }
+
+  Future<void> _validateBackupDatabase(String databasePath) async {
+    final candidate = await openDatabase(
+      databasePath,
+      readOnly: true,
+      singleInstance: false,
+    );
+    try {
+      final integrity = await candidate.rawQuery('PRAGMA integrity_check');
+      if (integrity.isEmpty || integrity.first.values.first != 'ok') {
+        throw const FormatException('The backup database is corrupted.');
+      }
+      final tables = await candidate.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'transactions'",
+      );
+      if (tables.isEmpty) {
+        throw const FormatException(
+          'The backup does not contain a transactions table.',
+        );
+      }
+    } finally {
+      await candidate.close();
+    }
+  }
+
+  Future<void> _rewriteReceiptPaths(Directory receiptDirectory) async {
+    final db = await database;
+    final rows = await db.query(
+      'transactions',
+      columns: ['id', 'receiptImagePath'],
+      where: 'receiptImagePath IS NOT NULL AND receiptImagePath != ?',
+      whereArgs: [''],
+    );
+    await db.transaction((transaction) async {
+      for (final row in rows) {
+        final id = row['id'] as int?;
+        final oldPath = row['receiptImagePath'] as String?;
+        if (id == null || oldPath == null) continue;
+        final restoredPath = join(receiptDirectory.path, basename(oldPath));
+        await transaction.update(
+          'transactions',
+          {
+            'receiptImagePath': await File(restoredPath).exists()
+                ? restoredPath
+                : null,
+          },
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+      }
+    });
+  }
+
+  Future<void> _copyDirectory(Directory source, Directory target) async {
+    await target.create(recursive: true);
+    if (!await source.exists()) return;
+    await for (final entity in source.list(followLinks: false)) {
+      if (entity is File) {
+        await entity.copy(join(target.path, basename(entity.path)));
+      }
+    }
+  }
+
+  Future<void> _deleteDatabaseSidecars(String databasePath) async {
+    for (final suffix in ['-wal', '-shm', '-journal']) {
+      final sidecar = File('$databasePath$suffix');
+      if (await sidecar.exists()) await sidecar.delete();
+    }
   }
 }

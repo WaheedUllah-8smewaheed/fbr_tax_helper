@@ -11,6 +11,7 @@ class Transaction extends Equatable {
     required this.isExpense,
     required this.date,
     required this.category,
+    this.receiptImagePath,
   });
 
   final int? id;
@@ -22,6 +23,7 @@ class Transaction extends Equatable {
   final bool isExpense;
   final DateTime date;
   final String category;
+  final String? receiptImagePath;
 
   Transaction copyWith({
     int? id,
@@ -33,6 +35,7 @@ class Transaction extends Equatable {
     bool? isExpense,
     DateTime? date,
     String? category,
+    String? receiptImagePath,
   }) {
     return Transaction(
       id: id ?? this.id,
@@ -44,6 +47,7 @@ class Transaction extends Equatable {
       isExpense: isExpense ?? this.isExpense,
       date: date ?? this.date,
       category: category ?? this.category,
+      receiptImagePath: receiptImagePath ?? this.receiptImagePath,
     );
   }
 
@@ -58,5 +62,6 @@ class Transaction extends Equatable {
     isExpense,
     date,
     category,
+    receiptImagePath,
   ];
 }

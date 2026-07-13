@@ -62,10 +62,6 @@ class _LoginFormState extends State<LoginForm>
     );
   }
 
-  void _submitGoogleLogin() {
-    context.read<LoginBloc>().add(LoginWithGooglePressed());
-  }
-
   String? _validateEmail(String? value) {
     final email = value?.trim() ?? '';
     if (email.isEmpty) return 'Enter your email address';
@@ -159,7 +155,6 @@ class _LoginFormState extends State<LoginForm>
                                     });
                                   },
                                   onEmailLogin: _submitEmailLogin,
-                                  onGoogleLogin: _submitGoogleLogin,
                                   onCreateAccount: () {
                                     Navigator.of(context).push(
                                       MaterialPageRoute(
@@ -193,7 +188,6 @@ class _LoginFormState extends State<LoginForm>
                                       });
                                     },
                                     onEmailLogin: _submitEmailLogin,
-                                    onGoogleLogin: _submitGoogleLogin,
                                     onCreateAccount: () {
                                       Navigator.of(context).push(
                                         MaterialPageRoute(
@@ -320,7 +314,6 @@ class _LoginPanel extends StatelessWidget {
     required this.obscurePassword,
     required this.onTogglePassword,
     required this.onEmailLogin,
-    required this.onGoogleLogin,
     required this.onCreateAccount,
     required this.validateEmail,
     required this.validatePassword,
@@ -332,7 +325,6 @@ class _LoginPanel extends StatelessWidget {
   final bool obscurePassword;
   final VoidCallback onTogglePassword;
   final VoidCallback onEmailLogin;
-  final VoidCallback onGoogleLogin;
   final VoidCallback onCreateAccount;
   final FormFieldValidator<String> validateEmail;
   final FormFieldValidator<String> validatePassword;
@@ -433,22 +425,6 @@ class _LoginPanel extends StatelessWidget {
                             )
                           : const Icon(Icons.login),
                       label: const Text('Sign in'),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 52,
-                    child: OutlinedButton.icon(
-                      onPressed: isLoading ? null : onGoogleLogin,
-                      icon: const Icon(Icons.g_mobiledata, size: 30),
-                      label: const Text('Continue with Google'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF123D36),
-                        side: const BorderSide(color: Color(0xFFB7D8D0)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
                     ),
                   ),
                   const SizedBox(height: 18),

@@ -17,7 +17,7 @@ class SessionRouter extends StatelessWidget {
         // While Firebase is reading the local device token key on startup
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
-            body: Center(child: CircularProgressIndicator(color: Colors.teal)),
+            body: Center(child: CircularProgressIndicator()),
           );
         }
 

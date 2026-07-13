@@ -9,11 +9,7 @@ class PublicCalculatorScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'FilerFlow Calculator',
-          style: TextStyle(color: Colors.white),
-        ),
-        backgroundColor: Colors.teal,
+        title: const Text('FilerFlow Calculator'),
         actions: [
           // Clear visual upgrade action button
           TextButton.icon(
@@ -31,11 +27,7 @@ class PublicCalculatorScreen extends StatelessWidget {
           ),
         ],
       ),
-      // We pass null for authService to hide authenticated features
-      body: TaxCalculatorScreen(
-        authService: null,
-        footer: _buildUpsellBanner(context),
-      ),
+      body: TaxCalculatorScreen(footer: _buildUpsellBanner(context)),
     );
   }
 
@@ -44,9 +36,9 @@ class PublicCalculatorScreen extends StatelessWidget {
       margin: const EdgeInsets.all(16.0),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.teal.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.teal),
+        color: Theme.of(context).colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
       ),
       child: Column(
         children: [
@@ -60,18 +52,15 @@ class PublicCalculatorScreen extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 12),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.teal,
-              foregroundColor: Colors.white,
-            ),
+          ElevatedButton.icon(
             onPressed: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const LoginPage()),
               );
             },
-            child: const Text("Create Free Account"),
+            icon: const Icon(Icons.person_add_alt_1_outlined),
+            label: const Text("Create Free Account"),
           ),
         ],
       ),

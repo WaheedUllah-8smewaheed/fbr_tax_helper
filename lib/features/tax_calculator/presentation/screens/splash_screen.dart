@@ -53,7 +53,7 @@ class _SplashScreenState extends State<SplashScreen>
     Navigator.of(context).pushReplacement(
       PageRouteBuilder<void>(
         pageBuilder: (context, animation, secondaryAnimation) {
-          return TaxCalculatorScreen(authService: widget.authService);
+          return const TaxCalculatorScreen();
         },
         transitionDuration: const Duration(milliseconds: 360),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -98,7 +98,7 @@ class _SplashScreenState extends State<SplashScreen>
                           DecoratedBox(
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(18),
                               boxShadow: const [
                                 BoxShadow(
                                   color: Color(0x33000000),
@@ -141,7 +141,7 @@ class _SplashScreenState extends State<SplashScreen>
                           SizedBox(
                             width: 172,
                             child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(18),
                               child: const LinearProgressIndicator(
                                 minHeight: 5,
                                 backgroundColor: Color(0x44FFFFFF),
