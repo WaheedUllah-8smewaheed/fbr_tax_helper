@@ -1,6 +1,6 @@
-# FilerFlow
+# Filer Flow
 
-FilerFlow is a Flutter app for tax estimation, expense tracking, and filing support.
+Filer Flow is a Flutter app for tax estimation, expense tracking, and filing support.
 
 ## Getting Started
 

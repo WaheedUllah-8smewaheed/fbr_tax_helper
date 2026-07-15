@@ -45,7 +45,7 @@ class MyApp extends StatelessWidget {
           authService: context.read<AuthService>(),
         ),
         child: MaterialApp(
-          title: 'FilerFlow',
+          title: 'Filer Flow',
           theme: AppTheme.light,
           home: _useSessionRouter
               ? const SessionRouter()

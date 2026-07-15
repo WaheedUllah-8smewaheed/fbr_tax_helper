@@ -119,7 +119,7 @@ class _SplashScreenState extends State<SplashScreen>
                           ),
                           const SizedBox(height: 28),
                           Text(
-                            'FilerFlow',
+                            'Filer Flow',
                             textAlign: TextAlign.center,
                             style: Theme.of(context).textTheme.headlineMedium
                                 ?.copyWith(

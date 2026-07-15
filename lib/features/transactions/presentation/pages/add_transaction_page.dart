@@ -11,10 +11,16 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 
 class AddTransactionPage extends StatefulWidget {
-  const AddTransactionPage({super.key, this.transaction, this.initialCategory});
+  const AddTransactionPage({
+    super.key,
+    this.transaction,
+    this.initialCategory,
+    this.initialIsExpense,
+  });
 
   final entity.Transaction? transaction;
   final String? initialCategory;
+  final bool? initialIsExpense;
 
   bool get isEditing => transaction != null;
 
@@ -122,10 +128,6 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         if (result.date != null) {
           _selectedDate = result.date!;
         }
-        if (widget.initialCategory == null ||
-            _selectedCategory == TransactionCategory.misc.name) {
-          _selectedCategory = result.suggestedCategory;
-        }
       });
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -172,7 +174,10 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       beneficiary: _beneficiaryController.text.trim(),
       purpose: _purposeController.text.trim(),
       amount: double.parse(_amountController.text.trim().replaceAll(',', '')),
-      isExpense: TransactionCategory.fromName(_selectedCategory!).isExpense,
+      isExpense:
+          widget.initialIsExpense ??
+          widget.transaction?.isExpense ??
+          TransactionCategory.fromName(_selectedCategory!).isExpense,
       date: _selectedDate,
       category: _selectedCategory!,
       receiptImagePath: _receiptImagePath,
@@ -190,7 +195,11 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.isEditing ? 'Edit Transaction' : 'Add Transaction'),
+        title: Text(
+          widget.isEditing
+              ? 'Edit Transaction'
+              : 'Add ${_selectedCategory ?? ''} Transaction',
+        ),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
       ),
@@ -213,28 +222,6 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    DropdownButtonFormField<String>(
-                      initialValue: _selectedCategory,
-                      decoration: const InputDecoration(
-                        labelText: 'Category',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: TransactionCategory.all
-                          .map(
-                            (category) => DropdownMenuItem(
-                              value: category.name,
-                              child: Text(category.name),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        setState(() {
-                          _selectedCategory = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 14),
                     TextFormField(
                       controller: _titleController,
                       decoration: const InputDecoration(
@@ -249,23 +236,21 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                     TextFormField(
                       controller: _beneficiaryController,
                       decoration: const InputDecoration(
-                        labelText: 'Beneficiary',
+                        labelText: 'Beneficiary (optional)',
                         border: OutlineInputBorder(),
                       ),
                       textCapitalization: TextCapitalization.words,
                       textInputAction: TextInputAction.next,
-                      validator: _requiredValidator('Enter a beneficiary.'),
                     ),
                     const SizedBox(height: 14),
                     TextFormField(
                       controller: _purposeController,
                       decoration: const InputDecoration(
-                        labelText: 'Purpose',
+                        labelText: 'Purpose (optional)',
                         border: OutlineInputBorder(),
                       ),
                       textCapitalization: TextCapitalization.sentences,
                       textInputAction: TextInputAction.next,
-                      validator: _requiredValidator('Enter a purpose.'),
                     ),
                     const SizedBox(height: 14),
                     TextFormField(

@@ -5,6 +5,7 @@ import 'package:fbr_tax_helper/features/auth/presentation/pages/signup_page.dart
 import 'package:fbr_tax_helper/login_bloc.dart';
 import 'package:fbr_tax_helper/services/auth_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class LoginPage extends StatelessWidget {
@@ -33,6 +34,7 @@ class _LoginFormState extends State<LoginForm>
   final _passwordController = TextEditingController();
   late final AnimationController _animationController;
   bool _obscurePassword = true;
+  bool _isShowingTotpChallenge = false;
 
   @override
   void initState() {
@@ -62,6 +64,10 @@ class _LoginFormState extends State<LoginForm>
     );
   }
 
+  void _submitGoogleLogin() {
+    context.read<LoginBloc>().add(const LoginWithGooglePressed());
+  }
+
   String? _validateEmail(String? value) {
     final email = value?.trim() ?? '';
     if (email.isEmpty) return 'Enter your email address';
@@ -78,6 +84,26 @@ class _LoginFormState extends State<LoginForm>
     return null;
   }
 
+  Future<void> _showTotpChallenge(TotpSignInChallenge challenge) async {
+    if (_isShowingTotpChallenge) return;
+    _isShowingTotpChallenge = true;
+    final verified = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => _TotpSignInDialog(
+        authService: context.read<AuthService>(),
+        challenge: challenge,
+      ),
+    );
+    _isShowingTotpChallenge = false;
+    if (!mounted || verified != true) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('Login successful.')));
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
@@ -85,6 +111,9 @@ class _LoginFormState extends State<LoginForm>
 
     return BlocListener<LoginBloc, LoginState>(
       listener: (context, state) {
+        if (state is LoginTotpRequired) {
+          _showTotpChallenge(state.challenge);
+        }
         if (state is LoginFailure) {
           ScaffoldMessenger.of(context)
             ..hideCurrentSnackBar()
@@ -152,6 +181,7 @@ class _LoginFormState extends State<LoginForm>
                                     });
                                   },
                                   onEmailLogin: _submitEmailLogin,
+                                  onGoogleLogin: _submitGoogleLogin,
                                   onCreateAccount: () {
                                     Navigator.of(context).push(
                                       MaterialPageRoute(
@@ -193,6 +223,7 @@ class _LoginFormState extends State<LoginForm>
                                       });
                                     },
                                     onEmailLogin: _submitEmailLogin,
+                                    onGoogleLogin: _submitGoogleLogin,
                                     onCreateAccount: () {
                                       Navigator.of(context).push(
                                         MaterialPageRoute(
@@ -223,6 +254,107 @@ class _LoginFormState extends State<LoginForm>
           ),
         ),
       ),
+    );
+  }
+}
+
+class _TotpSignInDialog extends StatefulWidget {
+  const _TotpSignInDialog({required this.authService, required this.challenge});
+
+  final AuthService authService;
+  final TotpSignInChallenge challenge;
+
+  @override
+  State<_TotpSignInDialog> createState() => _TotpSignInDialogState();
+}
+
+class _TotpSignInDialogState extends State<_TotpSignInDialog> {
+  final _codeController = TextEditingController();
+  String? _error;
+  bool _isVerifying = false;
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _verify() async {
+    if (_codeController.text.length != 6 || _isVerifying) {
+      setState(() => _error = 'Enter the 6-digit code.');
+      return;
+    }
+    setState(() {
+      _isVerifying = true;
+      _error = null;
+    });
+    try {
+      await widget.authService.resolveTotpSignIn(
+        widget.challenge,
+        _codeController.text,
+      );
+      if (mounted) Navigator.of(context).pop(true);
+    } on AuthServiceException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isVerifying = false;
+        _error = error.message;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      icon: const Icon(Icons.phonelink_lock_outlined),
+      title: const Text('Two-factor authentication'),
+      content: SizedBox(
+        width: 360,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Enter the current code from your authenticator app.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _codeController,
+              autofocus: true,
+              enabled: !_isVerifying,
+              keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.done,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(6),
+              ],
+              onSubmitted: (_) => _verify(),
+              decoration: InputDecoration(
+                labelText: '6-digit code',
+                errorText: _error,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isVerifying
+              ? null
+              : () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _isVerifying ? null : _verify,
+          child: _isVerifying
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Verify'),
+        ),
+      ],
     );
   }
 }
@@ -327,6 +459,7 @@ class _LoginPanel extends StatelessWidget {
     required this.obscurePassword,
     required this.onTogglePassword,
     required this.onEmailLogin,
+    required this.onGoogleLogin,
     required this.onCreateAccount,
     required this.onTaxCalculator,
     required this.validateEmail,
@@ -339,6 +472,7 @@ class _LoginPanel extends StatelessWidget {
   final bool obscurePassword;
   final VoidCallback onTogglePassword;
   final VoidCallback onEmailLogin;
+  final VoidCallback onGoogleLogin;
   final VoidCallback onCreateAccount;
   final VoidCallback onTaxCalculator;
   final FormFieldValidator<String> validateEmail;
@@ -440,6 +574,20 @@ class _LoginPanel extends StatelessWidget {
                             )
                           : const Icon(Icons.login),
                       label: const Text('Sign in'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: isLoading ? null : onGoogleLogin,
+                    icon: const Icon(Icons.g_mobiledata, size: 28),
+                    label: const Text('Continue with Google'),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Google accounts are already email-verified and can enable authenticator 2FA without an email link.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF65716C),
                     ),
                   ),
                   const SizedBox(height: 18),
@@ -552,7 +700,7 @@ class _TaxBadge extends StatelessWidget {
           Icon(Icons.verified_outlined, color: Color(0xFFFFC857), size: 20),
           SizedBox(width: 8),
           Text(
-            'FilerFlow',
+            'Filer Flow',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
           ),
         ],

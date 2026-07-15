@@ -16,3 +16,7 @@ class LoginWithEmailAndPasswordPressed extends LoginEvent {
     required this.password,
   });
 }
+
+class LoginWithGooglePressed extends LoginEvent {
+  const LoginWithGooglePressed();
+}

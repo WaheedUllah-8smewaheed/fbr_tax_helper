@@ -170,7 +170,20 @@ class ReceiptScannerService {
     if (_containsAny(lower, ['hospital', 'clinic', 'pharmacy', 'medical'])) {
       return 'Health';
     }
-    if (_containsAny(lower, ['electric', 'gas bill', 'water bill', 'rent'])) {
+    if (_containsAny(lower, ['rent', 'landlord', 'tenant'])) {
+      return 'Rent';
+    }
+    if (_containsAny(lower, [
+      'transport',
+      'fuel',
+      'petrol',
+      'diesel',
+      'taxi',
+      'bus fare',
+    ])) {
+      return 'Transport';
+    }
+    if (_containsAny(lower, ['electric', 'gas bill', 'water bill'])) {
       return 'Housing & Utils';
     }
     if (_containsAny(lower, ['salon', 'spa', 'cosmetic'])) {

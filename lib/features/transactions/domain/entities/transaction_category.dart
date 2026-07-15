@@ -23,6 +23,11 @@ class TransactionCategory {
     name: 'Housing & Utils',
     isExpense: true,
   );
+  static const rent = TransactionCategory(name: 'Rent', isExpense: true);
+  static const transport = TransactionCategory(
+    name: 'Transport',
+    isExpense: true,
+  );
   static const personalCare = TransactionCategory(
     name: 'Personal Care',
     isExpense: true,
@@ -46,6 +51,8 @@ class TransactionCategory {
     foodAndDrinks,
     shopping,
     housingAndUtils,
+    rent,
+    transport,
     personalCare,
     subscriptions,
     giftsAndRewards,

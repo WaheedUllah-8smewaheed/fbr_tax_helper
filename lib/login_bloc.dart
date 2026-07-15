@@ -12,6 +12,7 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
     : _authService = authService,
       super(LoginInitial()) {
     on<LoginWithEmailAndPasswordPressed>(_onLoginWithEmailAndPasswordPressed);
+    on<LoginWithGooglePressed>(_onLoginWithGooglePressed);
   }
 
   Future<void> _onLoginWithEmailAndPasswordPressed(
@@ -22,6 +23,8 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
     try {
       await _authService.signInWithEmail(event.email, event.password);
       emit(LoginSuccess());
+    } on TotpChallengeRequiredException catch (error) {
+      emit(LoginTotpRequired(error.challenge));
     } on AuthServiceException catch (e) {
       emit(LoginFailure(e.message));
     } catch (_) {
@@ -30,6 +33,23 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
           'Email login failed. Check Firebase Email/Password sign-in setup.',
         ),
       );
+    }
+  }
+
+  Future<void> _onLoginWithGooglePressed(
+    LoginWithGooglePressed event,
+    Emitter<LoginState> emit,
+  ) async {
+    emit(LoginLoading());
+    try {
+      await _authService.signInWithGoogle(requestDriveAccess: false);
+      emit(LoginSuccess());
+    } on TotpChallengeRequiredException catch (error) {
+      emit(LoginTotpRequired(error.challenge));
+    } on AuthServiceException catch (error) {
+      emit(LoginFailure(error.message));
+    } catch (_) {
+      emit(const LoginFailure('Google sign in failed. Please try again.'));
     }
   }
 }

@@ -17,7 +17,6 @@ import '../bloc/tax_calculator_bloc.dart';
 import '../bloc/tax_calculator_event.dart';
 import '../bloc/tax_calculator_state.dart';
 import '../../../deductions/presentation/pages/deductions_page.dart';
-import '../../../verification/presentation/pages/verification_page.dart';
 
 class TaxCalculatorScreen extends StatefulWidget {
   final TaxCalculatorBloc? bloc;
@@ -167,7 +166,7 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('FilerFlow'),
+        title: const Text('Filer Flow'),
         centerTitle: false,
         automaticallyImplyLeading: widget.onLogin == null,
         actions: [
@@ -196,16 +195,12 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
             },
             icon: const Icon(Icons.refresh_rounded),
           ),
-         if (widget.onLogin != null)
-      TextButton.icon(
-        onPressed: widget.onLogin,
-        icon: const Icon(Icons.login, color: Colors.white),
-        label: const Text(
-          'Login',
-          style: TextStyle(color: Colors.white),
-        ),
-      ),
-          
+          if (widget.onLogin != null)
+            TextButton.icon(
+              onPressed: widget.onLogin,
+              icon: const Icon(Icons.login, color: Colors.white),
+              label: const Text('Login', style: TextStyle(color: Colors.white)),
+            ),
         ],
       ),
       floatingActionButton: FloatingActionButton(

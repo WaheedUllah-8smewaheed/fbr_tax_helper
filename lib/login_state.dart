@@ -13,6 +13,15 @@ class LoginLoading extends LoginState {}
 
 class LoginSuccess extends LoginState {}
 
+class LoginTotpRequired extends LoginState {
+  const LoginTotpRequired(this.challenge);
+
+  final TotpSignInChallenge challenge;
+
+  @override
+  List<Object> get props => [challenge];
+}
+
 class LoginFailure extends LoginState {
   final String error;
 

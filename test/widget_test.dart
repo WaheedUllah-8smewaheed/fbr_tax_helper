@@ -39,7 +39,7 @@ void main() {
     await _pumpPastSplash(tester);
 
     expect(find.byType(TaxCalculatorScreen), findsOneWidget);
-    expect(find.text('FilerFlow'), findsOneWidget);
+    expect(find.text('Filer Flow'), findsOneWidget);
     expect(find.text('Tax Year 2026-27'), findsWidgets);
     expect(find.text('Monthly gross income'), findsOneWidget);
     expect(find.text('Calculate'), findsOneWidget);
@@ -51,14 +51,14 @@ void main() {
   testWidgets('builds on compact phone screens', (tester) async {
     await _pumpAppAtSize(tester, const Size(360, 640));
 
-    expect(find.text('FilerFlow'), findsOneWidget);
+    expect(find.text('Filer Flow'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('builds on extra narrow phone screens', (tester) async {
     await _pumpAppAtSize(tester, const Size(320, 640));
 
-    expect(find.text('FilerFlow'), findsOneWidget);
+    expect(find.text('Filer Flow'), findsOneWidget);
     expect(find.text('Salaried'), findsOneWidget);
     expect(find.text('Registered'), findsOneWidget);
     expect(find.text('Other'), findsOneWidget);
@@ -68,7 +68,7 @@ void main() {
   testWidgets('builds on tablet width screens', (tester) async {
     await _pumpAppAtSize(tester, const Size(900, 700));
 
-    expect(find.text('FilerFlow'), findsOneWidget);
+    expect(find.text('Filer Flow'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

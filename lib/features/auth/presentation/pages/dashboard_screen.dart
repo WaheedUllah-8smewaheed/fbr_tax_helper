@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:fbr_tax_helper/features/tax_calculator/presentation/screens/tax_calculator_screen.dart';
 import 'package:fbr_tax_helper/features/transactions/presentation/pages/add_transaction_page.dart';
@@ -6,12 +8,18 @@ import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction
     as entity;
 import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction_category.dart';
 import 'package:fbr_tax_helper/features/transactions/services/transaction_report_service.dart';
+import 'package:fbr_tax_helper/features/transactions/services/category_preferences_service.dart';
 
 import 'package:fbr_tax_helper/services/auth_service.dart';
+import 'package:fbr_tax_helper/services/biometric_lock_service.dart';
 import 'package:fbr_tax_helper/services/drive_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -22,19 +30,55 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
-
-  late final List<Widget> _pages;
+  late final CategoryPreferencesService _categoryPreferences;
 
   @override
   void initState() {
     super.initState();
     context.read<TransactionBloc>().add(const LoadTransactions());
-    _pages = [
-      const _HomeDashboard(),
-      const TaxCalculatorScreen(),
-      const Center(child: Text('Expenses Page (Coming Soon)')),
-      const Center(child: Text('Profile Page (Coming Soon)')),
-    ];
+    _categoryPreferences = CategoryPreferencesService();
+    final userId = context.read<AuthService>().currentUser?.uid;
+    if (userId != null && userId.isNotEmpty) {
+      _categoryPreferences.loadForUser(userId);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showBiometricReminderIfNeeded();
+    });
+  }
+
+  Future<void> _showBiometricReminderIfNeeded() async {
+    final authService = context.read<AuthService>();
+    final userId = authService.currentUser?.uid;
+    if (userId == null) return;
+
+    try {
+      final biometricLock = BiometricLockService();
+      if (!await biometricLock.isSupported()) return;
+      final isEnabled = await biometricLock.isEnabled(userId);
+      if (!mounted || isEnabled) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Fingerprint app lock is optional. You can enable it from your profile.',
+            ),
+            duration: const Duration(seconds: 8),
+            action: SnackBarAction(
+              label: 'Profile',
+              onPressed: () => setState(() => _selectedIndex = 3),
+            ),
+          ),
+        );
+    } on BiometricLockException {
+      // The optional reminder must never block dashboard access.
+    }
+  }
+
+  @override
+  void dispose() {
+    _categoryPreferences.dispose();
+    super.dispose();
   }
 
   void _onItemTapped(int index) {
@@ -46,7 +90,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: _selectedIndex, children: _pages),
+      body: ListenableBuilder(
+        listenable: _categoryPreferences,
+        builder: (context, _) => IndexedStack(
+          index: _selectedIndex,
+          children: [
+            _HomeDashboard(categoryPreferences: _categoryPreferences),
+            const TaxCalculatorScreen(),
+            _CategorySettingsPage(categoryPreferences: _categoryPreferences),
+            const _ProfilePage(),
+          ],
+        ),
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
@@ -59,7 +114,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             icon: Icon(Icons.calculate),
             label: 'Calculator',
           ),
-          BottomNavigationBarItem(icon: Icon(Icons.payment), label: 'Expenses'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings),
+            label: 'Settings',
+          ),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
@@ -67,8 +125,952 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
+class _CategorySettingsPage extends StatelessWidget {
+  const _CategorySettingsPage({required this.categoryPreferences});
+
+  final CategoryPreferencesService categoryPreferences;
+
+  Future<void> _updateCategory(
+    BuildContext context,
+    String categoryName,
+    bool isExpense,
+  ) async {
+    try {
+      await categoryPreferences.setExpenseClassification(
+        categoryName,
+        isExpense: isExpense,
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('Could not save category setting: $error')),
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Settings')),
+      body: categoryPreferences.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Text(
+                  'Category classification',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Choose whether each category belongs under Income or Expenses. Your dashboard totals, category sections, reports, and new transactions will follow these choices.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                if (categoryPreferences.loadError != null) ...[
+                  const SizedBox(height: 12),
+                  Card(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    child: const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text(
+                        'Saved category settings could not be loaded. Default classifications are currently shown.',
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 20),
+                ...TransactionCategory.all.map((category) {
+                  final isExpense = categoryPreferences.isExpense(
+                    category.name,
+                  );
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Card(
+                      margin: EdgeInsets.zero,
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                CircleAvatar(
+                                  backgroundColor: _getColorForCategory(
+                                    category.name,
+                                  ).withValues(alpha: 0.12),
+                                  foregroundColor: _getColorForCategory(
+                                    category.name,
+                                  ),
+                                  child: Icon(
+                                    _getIconForCategory(category.name),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    category.name,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            SegmentedButton<bool>(
+                              expandedInsets: EdgeInsets.zero,
+                              segments: const [
+                                ButtonSegment<bool>(
+                                  value: false,
+                                  label: Text('Income'),
+                                  icon: Icon(Icons.arrow_upward),
+                                ),
+                                ButtonSegment<bool>(
+                                  value: true,
+                                  label: Text('Expense'),
+                                  icon: Icon(Icons.arrow_downward),
+                                ),
+                              ],
+                              selected: {isExpense},
+                              onSelectionChanged: (selection) {
+                                final newValue = selection.first;
+                                if (newValue == isExpense) return;
+                                _updateCategory(
+                                  context,
+                                  category.name,
+                                  newValue,
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            ),
+    );
+  }
+}
+
+class _ProfilePage extends StatefulWidget {
+  const _ProfilePage();
+
+  @override
+  State<_ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<_ProfilePage>
+    with WidgetsBindingObserver {
+  static const _profileStorage = FlutterSecureStorage();
+  final _biometricLock = BiometricLockService();
+
+  bool _isLoadingBiometric = true;
+  bool _isBiometricEnabled = false;
+  bool _isBiometricSupported = false;
+  bool _isUpdatingProfile = false;
+  bool _isPickingImage = false;
+  String? _profileImagePath;
+  String? _pendingEmailChange;
+
+  AuthService get _authService => context.read<AuthService>();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadBiometricStatus();
+    _loadProfileImage();
+    _loadPendingEmailChange();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshAccount(showFeedback: false);
+    }
+  }
+
+  String get _profileImageKey =>
+      'profile_image_${_authService.currentUser?.uid ?? 'signed_out'}';
+
+  String get _pendingEmailKey =>
+      'pending_email_${_authService.currentUser?.uid ?? 'signed_out'}';
+
+  bool _emailsMatch(String? first, String? second) {
+    if (first == null || second == null) return false;
+    return first.trim().toLowerCase() == second.trim().toLowerCase();
+  }
+
+  Future<void> _loadPendingEmailChange() async {
+    final pendingEmail = await _profileStorage.read(key: _pendingEmailKey);
+    if (pendingEmail == null) return;
+
+    // Secure-storage loading and the app-resume refresh can finish in either
+    // order. Reload before restoring the notice so an already-applied email
+    // change is not shown as pending again.
+    try {
+      await _authService.reloadCurrentUser();
+    } on AuthServiceException {
+      // Keep the pending notice when Firebase cannot currently be reached.
+    }
+    final wasApplied = _emailsMatch(
+      pendingEmail,
+      _authService.currentUser?.email,
+    );
+    if (wasApplied) {
+      await _profileStorage.delete(key: _pendingEmailKey);
+    }
+    if (!mounted) return;
+    setState(() => _pendingEmailChange = wasApplied ? null : pendingEmail);
+  }
+
+  Future<void> _loadProfileImage() async {
+    final storedPath = await _profileStorage.read(key: _profileImageKey);
+    if (!mounted) return;
+    setState(() {
+      _profileImagePath = storedPath != null && File(storedPath).existsSync()
+          ? storedPath
+          : null;
+    });
+  }
+
+  Future<void> _pickProfileImage() async {
+    final userId = _authService.currentUser?.uid;
+    if (userId == null || _isPickingImage) return;
+
+    setState(() => _isPickingImage = true);
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        imageQuality: 85,
+      );
+      if (picked == null || !mounted) {
+        if (mounted) setState(() => _isPickingImage = false);
+        return;
+      }
+
+      final supportDirectory = await getApplicationSupportDirectory();
+      final imageDirectory = Directory(
+        path.join(supportDirectory.path, 'profile_images'),
+      );
+      await imageDirectory.create(recursive: true);
+      final extension = path.extension(picked.path).toLowerCase();
+      final targetPath = path.join(
+        imageDirectory.path,
+        '$userId${extension.isEmpty ? '.jpg' : extension}',
+      );
+      await File(picked.path).copy(targetPath);
+      await FileImage(File(targetPath)).evict();
+      await _profileStorage.write(key: _profileImageKey, value: targetPath);
+
+      if (!mounted) return;
+      setState(() {
+        _profileImagePath = targetPath;
+        _isPickingImage = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isPickingImage = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update profile image: $error')),
+      );
+    }
+  }
+
+  Future<void> _loadBiometricStatus() async {
+    final userId = _authService.currentUser?.uid;
+    if (userId == null) return;
+    try {
+      final supported = await _biometricLock.isSupported();
+      final enabled = await _biometricLock.isEnabled(userId);
+      if (!mounted) return;
+      setState(() {
+        _isBiometricSupported = supported;
+        _isBiometricEnabled = enabled;
+        _isLoadingBiometric = false;
+      });
+    } on BiometricLockException {
+      if (mounted) setState(() => _isLoadingBiometric = false);
+    }
+  }
+
+  Future<void> _toggleBiometricLock() async {
+    final userId = _authService.currentUser?.uid;
+    if (userId == null || _isLoadingBiometric) return;
+    setState(() => _isLoadingBiometric = true);
+    try {
+      if (_isBiometricEnabled) {
+        await _biometricLock.disable(userId);
+      } else {
+        await _biometricLock.enable(userId);
+      }
+      if (!mounted) return;
+      final enabled = !_isBiometricEnabled;
+      setState(() {
+        _isBiometricEnabled = enabled;
+        _isLoadingBiometric = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            enabled
+                ? 'Fingerprint app lock enabled.'
+                : 'Fingerprint app lock disabled.',
+          ),
+        ),
+      );
+    } on BiometricLockException catch (error) {
+      if (!mounted) return;
+      setState(() => _isLoadingBiometric = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<void> _editProfile() async {
+    final user = _authService.currentUser;
+    if (user == null || _isUpdatingProfile) return;
+
+    final update = await showDialog<_ProfileUpdate>(
+      context: context,
+      builder: (context) => _EditProfileDialog(
+        initialName: user.displayName ?? '',
+        initialEmail: user.email ?? '',
+      ),
+    );
+    if (update == null || !mounted) return;
+
+    setState(() => _isUpdatingProfile = true);
+    try {
+      final nameChanged = update.displayName != (user.displayName ?? '');
+      final emailChanged = update.email != (user.email ?? '');
+      if (nameChanged) {
+        await _authService.updateCurrentUserDisplayName(update.displayName);
+      }
+      if (emailChanged) {
+        await _requestEmailChangeWithReauthentication(update.email);
+        _pendingEmailChange = update.email;
+        await _profileStorage.write(key: _pendingEmailKey, value: update.email);
+      }
+      if (!mounted) return;
+      setState(() => _isUpdatingProfile = false);
+      if (emailChanged) {
+        await _showEmailChangeLinkSent(update.email);
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Profile updated.')));
+      }
+    } on AuthServiceException catch (error) {
+      if (!mounted) return;
+      setState(() => _isUpdatingProfile = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update profile: ${error.message}')),
+      );
+    }
+  }
+
+  Future<void> _refreshAccount({bool showFeedback = true}) async {
+    if (_isUpdatingProfile) return;
+    setState(() => _isUpdatingProfile = true);
+    try {
+      final previousEmail = _authService.currentUser?.email;
+      await _authService.reloadCurrentUser();
+      final refreshedEmail = _authService.currentUser?.email;
+      final emailChanged = previousEmail != refreshedEmail;
+      final pendingWasApplied = _emailsMatch(
+        _pendingEmailChange,
+        refreshedEmail,
+      );
+      if (!mounted) return;
+      setState(() {
+        _isUpdatingProfile = false;
+        if (pendingWasApplied) {
+          _pendingEmailChange = null;
+        }
+      });
+      if (pendingWasApplied) {
+        await _profileStorage.delete(key: _pendingEmailKey);
+      }
+      if (!mounted) return;
+      if (showFeedback || emailChanged || pendingWasApplied) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              emailChanged || pendingWasApplied
+                  ? 'Account email updated to $refreshedEmail.'
+                  : _pendingEmailChange != null
+                  ? 'Firebase still reports $refreshedEmail. The email-change link has not been applied yet.'
+                  : 'Account information refreshed.',
+            ),
+          ),
+        );
+      }
+    } on AuthServiceException catch (error) {
+      if (!mounted) return;
+      setState(() => _isUpdatingProfile = false);
+      if (showFeedback) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
+  }
+
+  Future<void> _dismissPendingEmailChange() async {
+    await _profileStorage.delete(key: _pendingEmailKey);
+    if (!mounted) return;
+    setState(() => _pendingEmailChange = null);
+  }
+
+  Future<void> _resendPendingEmailChange() async {
+    final pendingEmail = _pendingEmailChange;
+    if (pendingEmail == null || _isUpdatingProfile) return;
+    setState(() => _isUpdatingProfile = true);
+    try {
+      await _requestEmailChangeWithReauthentication(pendingEmail);
+      if (!mounted) return;
+      setState(() => _isUpdatingProfile = false);
+      await _showEmailChangeLinkSent(pendingEmail);
+    } on AuthServiceException catch (error) {
+      if (!mounted) return;
+      setState(() => _isUpdatingProfile = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not resend link: ${error.message}')),
+      );
+    }
+  }
+
+  Future<void> _showEmailChangeLinkSent(String newEmail) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.mark_email_read_outlined),
+        title: const Text('Check your new email'),
+        content: Text(
+          'Firebase accepted the request for:\n\n$newEmail\n\nOpen the newest verification link to finish changing the account email. Check Spam, Junk, and Promotions if it is not in the inbox. Delivery can be delayed or limited after repeated requests.',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _requestEmailChangeWithReauthentication(String email) async {
+    try {
+      await _authService.requestCurrentUserEmailChange(email);
+    } on RecentLoginRequiredException {
+      if (!mounted) rethrow;
+      final password = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const _ConfirmPasswordDialog(),
+      );
+      if (password == null) {
+        throw const AuthServiceException('Email change was canceled.');
+      }
+      await _authService.reauthenticateCurrentUserWithPassword(password);
+      await _authService.requestCurrentUserEmailChange(email);
+    }
+  }
+
+  Future<void> _sendPasswordReset() async {
+    try {
+      await _authService.sendCurrentUserPasswordReset();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password reset email sent.')),
+      );
+    } on AuthServiceException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<void> _sendEmailVerification() async {
+    try {
+      await _authService.sendCurrentUserEmailVerification();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Verification email sent.')));
+    } on AuthServiceException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<void> _signOut() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.logout),
+        title: const Text('Log out?'),
+        content: const Text(
+          'You will need to sign in again to access your account.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isUpdatingProfile = true);
+    try {
+      await _authService.signOut();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isUpdatingProfile = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not log out: $error')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = _authService.currentUser;
+    final hasProfileImage =
+        _profileImagePath != null && File(_profileImagePath!).existsSync();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Profile'),
+        actions: [
+          IconButton(
+            tooltip: 'Edit profile',
+            onPressed: _isUpdatingProfile ? null : _editProfile,
+            icon: const Icon(Icons.edit_outlined),
+          ),
+          IconButton(
+            tooltip: 'Refresh account',
+            onPressed: _isUpdatingProfile ? null : _refreshAccount,
+            icon: const Icon(Icons.refresh),
+          ),
+          IconButton(
+            tooltip: 'Log out',
+            onPressed: _isUpdatingProfile ? null : _signOut,
+            icon: const Icon(Icons.logout),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                children: [
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      CircleAvatar(
+                        radius: 44,
+                        backgroundImage: hasProfileImage
+                            ? FileImage(File(_profileImagePath!))
+                            : null,
+                        child: hasProfileImage
+                            ? null
+                            : const Icon(Icons.person_outline, size: 42),
+                      ),
+                      Positioned(
+                        right: -4,
+                        bottom: -4,
+                        child: IconButton.filled(
+                          tooltip: 'Change profile image',
+                          onPressed: _isPickingImage ? null : _pickProfileImage,
+                          icon: _isPickingImage
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.camera_alt_outlined),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    user?.displayName ?? 'User',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(user?.email ?? ''),
+                  const SizedBox(height: 8),
+                  Chip(
+                    avatar: Icon(
+                      user?.emailVerified == true
+                          ? Icons.verified
+                          : Icons.warning_amber,
+                      size: 18,
+                    ),
+                    label: Text(
+                      user?.emailVerified == true
+                          ? 'Email verified'
+                          : 'Email not verified',
+                    ),
+                  ),
+                  if (_isUpdatingProfile) ...[
+                    const SizedBox(height: 12),
+                    const LinearProgressIndicator(),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          if (_pendingEmailChange != null) ...[
+            const SizedBox(height: 12),
+            Card(
+              color: Theme.of(context).colorScheme.secondaryContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.pending_actions_outlined),
+                      title: const Text('Email change pending'),
+                      subtitle: Text(
+                        'Verify the change link sent to ${_pendingEmailChange!}.',
+                      ),
+                    ),
+                    Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 8,
+                      children: [
+                        TextButton(
+                          onPressed: _isUpdatingProfile
+                              ? null
+                              : _dismissPendingEmailChange,
+                          child: const Text('Dismiss'),
+                        ),
+                        TextButton.icon(
+                          onPressed: _isUpdatingProfile
+                              ? null
+                              : _resendPendingEmailChange,
+                          icon: const Icon(Icons.send_outlined),
+                          label: const Text('Resend link'),
+                        ),
+                        FilledButton.icon(
+                          onPressed: _isUpdatingProfile
+                              ? null
+                              : _refreshAccount,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('I verified, refresh'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 20),
+          Text(
+            'Account',
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 10),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.edit_outlined),
+                  title: const Text('Name and email'),
+                  subtitle: const Text('Update your account information'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _isUpdatingProfile ? null : _editProfile,
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.password_outlined),
+                  title: const Text('Change password'),
+                  subtitle: const Text('Receive a secure password reset email'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _sendPasswordReset,
+                ),
+                if (user?.emailVerified != true &&
+                    _pendingEmailChange == null) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.mark_email_unread_outlined),
+                    title: const Text('Verify email'),
+                    subtitle: const Text('Send another verification link'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: _sendEmailVerification,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Security',
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 10),
+          Card(
+            child: ListTile(
+              leading: Icon(
+                _isBiometricEnabled ? Icons.fingerprint : Icons.lock_outline,
+                color: _isBiometricEnabled ? Colors.green : Colors.teal,
+              ),
+              title: Text(
+                _isBiometricEnabled
+                    ? 'Fingerprint app lock enabled'
+                    : 'Enable fingerprint app lock',
+              ),
+              subtitle: Text(
+                !_isBiometricSupported
+                    ? 'Set up biometrics or a device screen lock first'
+                    : _isBiometricEnabled
+                    ? 'This app requires device authentication to open.'
+                    : 'Protect this app with your device security.',
+              ),
+              trailing: _isLoadingBiometric
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.chevron_right),
+              onTap: _isBiometricSupported && !_isLoadingBiometric
+                  ? _toggleBiometricLock
+                  : null,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'When enabled, Filer Flow asks for your fingerprint, Face ID, or device screen lock on launch and after returning from the background.',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EditProfileDialog extends StatefulWidget {
+  const _EditProfileDialog({
+    required this.initialName,
+    required this.initialEmail,
+  });
+
+  final String initialName;
+  final String initialEmail;
+
+  @override
+  State<_EditProfileDialog> createState() => _EditProfileDialogState();
+}
+
+class _EditProfileDialogState extends State<_EditProfileDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameController;
+  late final TextEditingController _emailController;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.initialName);
+    _emailController = TextEditingController(text: widget.initialEmail);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.of(context).pop(
+      _ProfileUpdate(
+        displayName: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Edit profile'),
+      content: SizedBox(
+        width: 420,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _nameController,
+                autofocus: true,
+                textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Display name',
+                  prefixIcon: Icon(Icons.person_outline),
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) => (value ?? '').trim().length < 2
+                    ? 'Enter at least 2 characters'
+                    : null,
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _save(),
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  prefixIcon: Icon(Icons.alternate_email),
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  final email = (value ?? '').trim();
+                  if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+                    return 'Enter a valid email address';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _save, child: const Text('Save')),
+      ],
+    );
+  }
+}
+
+class _ProfileUpdate {
+  const _ProfileUpdate({required this.displayName, required this.email});
+
+  final String displayName;
+  final String email;
+}
+
+class _ConfirmPasswordDialog extends StatefulWidget {
+  const _ConfirmPasswordDialog();
+
+  @override
+  State<_ConfirmPasswordDialog> createState() => _ConfirmPasswordDialogState();
+}
+
+class _ConfirmPasswordDialogState extends State<_ConfirmPasswordDialog> {
+  final _passwordController = TextEditingController();
+  bool _obscurePassword = true;
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  void _confirm() {
+    if (_passwordController.text.isEmpty) return;
+    Navigator.of(context).pop(_passwordController.text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      icon: const Icon(Icons.lock_outline),
+      title: const Text('Confirm your password'),
+      content: SizedBox(
+        width: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Firebase requires a recent login before changing your email.',
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _passwordController,
+              autofocus: true,
+              obscureText: _obscurePassword,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _confirm(),
+              decoration: InputDecoration(
+                labelText: 'Current password',
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  tooltip: _obscurePassword ? 'Show password' : 'Hide password',
+                  onPressed: () =>
+                      setState(() => _obscurePassword = !_obscurePassword),
+                  icon: Icon(
+                    _obscurePassword
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _confirm, child: const Text('Confirm')),
+      ],
+    );
+  }
+}
+
 class _HomeDashboard extends StatefulWidget {
-  const _HomeDashboard();
+  const _HomeDashboard({required this.categoryPreferences});
+
+  final CategoryPreferencesService categoryPreferences;
 
   @override
   State<_HomeDashboard> createState() => _HomeDashboardState();
@@ -103,10 +1105,19 @@ class _HomeDashboardState extends State<_HomeDashboard> {
             BlocBuilder<TransactionBloc, TransactionState>(
               builder: (context, state) {
                 final currentUserId = user?.uid ?? '';
-                final transactions =
+                final storedTransactions =
                     state is TransactionLoaded && state.userId == currentUserId
                     ? state.transactions
                     : const <entity.Transaction>[];
+                final transactions = storedTransactions
+                    .map(
+                      (transaction) => transaction.copyWith(
+                        isExpense: widget.categoryPreferences.isExpense(
+                          transaction.category,
+                        ),
+                      ),
+                    )
+                    .toList();
                 final visibleTransactions = filterTransactionsByMonth(
                   transactions,
                   _selectedMonth,
@@ -204,6 +1215,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                     _CategoryCards(
                       transactions: visibleTransactions,
                       isExpense: false,
+                      categoryPreferences: widget.categoryPreferences,
                     ),
                     const SizedBox(height: 24),
                     Text(
@@ -214,6 +1226,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                     _CategoryCards(
                       transactions: visibleTransactions,
                       isExpense: true,
+                      categoryPreferences: widget.categoryPreferences,
                     ),
                     const SizedBox(height: 24),
                     Text(
@@ -384,6 +1397,10 @@ IconData _getIconForCategory(String category) {
       return Icons.shopping_bag;
     case 'housing & utils':
       return Icons.home_work;
+    case 'rent':
+      return Icons.key_outlined;
+    case 'transport':
+      return Icons.directions_car_outlined;
     case 'personal care':
       return Icons.spa;
     case 'subscriptions':
@@ -415,6 +1432,10 @@ Color _getColorForCategory(String category) {
       return Colors.purple;
     case 'housing & utils':
       return Colors.blueGrey;
+    case 'rent':
+      return Colors.brown;
+    case 'transport':
+      return Colors.cyan.shade800;
     case 'personal care':
       return Colors.pink;
     case 'subscriptions':
@@ -593,10 +1614,15 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _CategoryCards extends StatelessWidget {
-  const _CategoryCards({required this.transactions, required this.isExpense});
+  const _CategoryCards({
+    required this.transactions,
+    required this.isExpense,
+    required this.categoryPreferences,
+  });
 
   final List<entity.Transaction> transactions;
   final bool isExpense;
+  final CategoryPreferencesService categoryPreferences;
 
   @override
   Widget build(BuildContext context) {
@@ -606,7 +1632,10 @@ class _CategoryCards extends StatelessWidget {
         final isCompact = constraints.maxWidth < 360;
 
         final categories = TransactionCategory.all
-            .where((cat) => cat.isExpense == isExpense)
+            .where(
+              (category) =>
+                  categoryPreferences.isExpense(category.name) == isExpense,
+            )
             .toList();
 
         return GridView.builder(
@@ -628,6 +1657,7 @@ class _CategoryCards extends StatelessWidget {
             return _CategoryCard(
               category: category.name,
               transactions: categoryTransactions,
+              categoryPreferences: categoryPreferences,
             );
           },
         );
@@ -637,10 +1667,15 @@ class _CategoryCards extends StatelessWidget {
 }
 
 class _CategoryCard extends StatelessWidget {
-  const _CategoryCard({required this.category, required this.transactions});
+  const _CategoryCard({
+    required this.category,
+    required this.transactions,
+    required this.categoryPreferences,
+  });
 
   final String category;
   final List<entity.Transaction> transactions;
+  final CategoryPreferencesService categoryPreferences;
 
   @override
   Widget build(BuildContext context) {
@@ -668,8 +1703,10 @@ class _CategoryCard extends StatelessWidget {
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (context) =>
-                      _CategoryTransactionsPage(category: category),
+                  builder: (context) => _CategoryTransactionsPage(
+                    category: category,
+                    categoryPreferences: categoryPreferences,
+                  ),
                 ),
               );
             },
@@ -748,14 +1785,21 @@ class _CategoryCard extends StatelessWidget {
 }
 
 class _CategoryTransactionsPage extends StatelessWidget {
-  const _CategoryTransactionsPage({required this.category});
+  const _CategoryTransactionsPage({
+    required this.category,
+    required this.categoryPreferences,
+  });
 
   final String category;
+  final CategoryPreferencesService categoryPreferences;
 
   void _openAddTransaction(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => AddTransactionPage(initialCategory: category),
+        builder: (context) => AddTransactionPage(
+          initialCategory: category,
+          initialIsExpense: categoryPreferences.isExpense(category),
+        ),
       ),
     );
   }
@@ -776,6 +1820,11 @@ class _CategoryTransactionsPage extends StatelessWidget {
 
           final transactions = (state as TransactionLoaded).transactions
               .where((transaction) => transaction.category == category)
+              .map(
+                (transaction) => transaction.copyWith(
+                  isExpense: categoryPreferences.isExpense(category),
+                ),
+              )
               .toList();
           final total = transactions.fold<double>(
             0,
@@ -1103,6 +2152,7 @@ class _IncomeExpensePieChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final total = totalIncome + totalExpenses;
+    final netBalance = totalIncome - totalExpenses;
     final incomePercent = total == 0 ? 0 : (totalIncome / total) * 100;
     final expensePercent = total == 0 ? 0 : (totalExpenses / total) * 100;
 
@@ -1148,16 +2198,19 @@ class _IncomeExpensePieChart extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'Total',
+                'Net Balance',
                 style: TextStyle(color: Colors.grey, fontSize: 12),
               ),
               const SizedBox(height: 2),
               FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
-                  _formatDashboardMoney(total),
+                  _formatDashboardMoney(netBalance),
                   maxLines: 1,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+                  style: TextStyle(
+                    color: netBalance < 0 ? Colors.red : Colors.green,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ],

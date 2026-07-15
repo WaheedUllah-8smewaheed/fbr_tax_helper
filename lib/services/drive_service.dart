@@ -86,7 +86,7 @@ class DriveService {
       final backups = await _findFiles(driveApi, _backupName);
       if (backups.isEmpty) {
         return const DriveSyncResult.failure(
-          'No full FilerFlow backup was found in this Google account.',
+          'No full Filer Flow backup was found in this Google account.',
         );
       }
       final backupId = backups.first.id;
@@ -200,7 +200,7 @@ class DriveService {
 
     final manifest = jsonDecode(utf8.decode(manifestFile.content as List<int>));
     if (manifest is! Map<String, dynamic> || manifest['formatVersion'] != 1) {
-      throw const FormatException('Unsupported FilerFlow backup format.');
+      throw const FormatException('Unsupported Filer Flow backup format.');
     }
 
     final database = File(path.join(stagingRoot.path, 'restored.db'));

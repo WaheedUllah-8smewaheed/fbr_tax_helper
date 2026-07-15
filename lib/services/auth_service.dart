@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
@@ -46,6 +47,11 @@ class AuthService {
 
   bool get hasGoogleDriveHeaders => _googleDriveHeaders != null;
 
+  bool get supportsTotpMfa =>
+      kIsWeb ||
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
+
   Future<UserCredential> signInWithEmailAndPassword({
     required String email,
     required String password,
@@ -55,6 +61,229 @@ class AuthService {
         email: email.trim(),
         password: password,
       );
+    } on FirebaseAuthMultiFactorException catch (error) {
+      for (final hint in error.resolver.hints) {
+        if (hint is TotpMultiFactorInfo) {
+          throw TotpChallengeRequiredException(
+            TotpSignInChallenge(
+              resolver: error.resolver,
+              enrollmentId: hint.uid,
+            ),
+          );
+        }
+      }
+      throw const AuthServiceException(
+        'This account requires an unsupported second-factor method.',
+      );
+    } on FirebaseAuthException catch (error) {
+      throw AuthServiceException(_firebaseAuthMessage(error));
+    }
+  }
+
+  Future<UserCredential> resolveTotpSignIn(
+    TotpSignInChallenge challenge,
+    String code,
+  ) async {
+    try {
+      final assertion = await TotpMultiFactorGenerator.getAssertionForSignIn(
+        challenge.enrollmentId,
+        code.trim(),
+      );
+      return await challenge.resolver.resolveSignIn(assertion);
+    } on FirebaseAuthException catch (error) {
+      throw AuthServiceException(_firebaseAuthMessage(error));
+    }
+  }
+
+  Future<List<MultiFactorInfo>> getEnrolledTotpFactors() async {
+    _ensureTotpSupport();
+    final user = _requireCurrentUser();
+    try {
+      final factors = await user.multiFactor.getEnrolledFactors();
+      return factors.whereType<TotpMultiFactorInfo>().toList();
+    } on FirebaseAuthException catch (error) {
+      throw AuthServiceException(_firebaseAuthMessage(error));
+    } on PlatformException catch (error) {
+      throw AuthServiceException(_platformAuthMessage(error));
+    }
+  }
+
+  Future<void> sendCurrentUserEmailVerification() async {
+    final user = _requireCurrentUser();
+    try {
+      if (!user.emailVerified) {
+        await user.sendEmailVerification();
+      }
+    } on FirebaseAuthException catch (error) {
+      throw AuthServiceException(_firebaseAuthMessage(error));
+    }
+  }
+
+  Future<bool> refreshCurrentUserEmailVerification() async {
+    final user = _requireCurrentUser();
+    try {
+      await user.reload();
+      return _firebaseAuth.currentUser?.emailVerified ?? false;
+    } on FirebaseAuthException catch (error) {
+      throw AuthServiceException(_firebaseAuthMessage(error));
+    }
+  }
+
+  Future<void> updateCurrentUserDisplayName(String displayName) async {
+    final user = _requireCurrentUser();
+    try {
+      await user.updateDisplayName(displayName.trim());
+      await user.reload();
+    } on FirebaseAuthException catch (error) {
+      throw AuthServiceException(_firebaseAuthMessage(error));
+    }
+  }
+
+  Future<void> reloadCurrentUser() async {
+    final user = _requireCurrentUser();
+    try {
+      await user.reload();
+      await _firebaseAuth.currentUser?.getIdToken(true);
+    } on FirebaseAuthException catch (error) {
+      throw AuthServiceException(_firebaseAuthMessage(error));
+    }
+  }
+
+  Future<void> requestCurrentUserEmailChange(String email) async {
+    final user = _requireCurrentUser();
+    try {
+      // Use Firebase's hosted VERIFY_AND_CHANGE_EMAIL handler. Supplying a
+      // custom continuation URL makes delivery/application depend on that URL
+      // and its authorized-domain configuration in the Firebase project.
+      await user.verifyBeforeUpdateEmail(email.trim());
+    } on FirebaseAuthException catch (error) {
+      if (error.code == 'requires-recent-login') {
+        throw const RecentLoginRequiredException();
+      }
+      throw AuthServiceException(_firebaseAuthMessage(error));
+    }
+  }
+
+  Future<void> reauthenticateCurrentUserWithPassword(String password) async {
+    final user = _requireCurrentUser();
+    final email = user.email;
+    if (email == null || email.isEmpty) {
+      throw const AuthServiceException(
+        'Password confirmation is unavailable for this account.',
+      );
+    }
+    try {
+      final credential = EmailAuthProvider.credential(
+        email: email,
+        password: password,
+      );
+      await user.reauthenticateWithCredential(credential);
+    } on FirebaseAuthException catch (error) {
+      throw AuthServiceException(_firebaseAuthMessage(error));
+    }
+  }
+
+  Future<void> reauthenticateCurrentUserWithGoogle() async {
+    final user = _requireCurrentUser();
+    try {
+      final googleUser =
+          _googleAccount ??
+          _googleSignIn.currentUser ??
+          await _googleSignIn.signInSilently() ??
+          await _googleSignIn.signIn();
+      if (googleUser == null) {
+        throw const AuthServiceException(
+          'Google reauthentication was cancelled.',
+        );
+      }
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      await user.reauthenticateWithCredential(credential);
+      _googleAccount = googleUser;
+    } on AuthServiceException {
+      rethrow;
+    } on FirebaseAuthException catch (error) {
+      throw AuthServiceException(_firebaseAuthMessage(error));
+    } on PlatformException catch (error) {
+      throw AuthServiceException(
+        _googleSignInMessage(error, action: 'confirm your Google account'),
+      );
+    }
+  }
+
+  Future<void> sendCurrentUserPasswordReset() async {
+    final email = _requireCurrentUser().email;
+    if (email == null || email.isEmpty) {
+      throw const AuthServiceException(
+        'This account does not have an email address.',
+      );
+    }
+    await sendPasswordResetEmail(email);
+  }
+
+  Future<bool> hasTotpEnrollment() async {
+    return (await getEnrolledTotpFactors()).isNotEmpty;
+  }
+
+  Future<TotpEnrollmentData> startTotpEnrollment() async {
+    _ensureTotpSupport();
+    final user = _requireCurrentUser();
+    try {
+      final session = await user.multiFactor.getSession();
+      final secret = await TotpMultiFactorGenerator.generateSecret(session);
+      final qrCodeUrl = await secret.generateQrCodeUrl(
+        accountName: user.email ?? user.uid,
+        issuer: 'Filer Flow',
+      );
+      return TotpEnrollmentData(secret: secret, qrCodeUrl: qrCodeUrl);
+    } on FirebaseAuthException catch (error) {
+      if (_requiresRecentLogin(error.code)) {
+        throw const RecentLoginRequiredException();
+      }
+      throw AuthServiceException(_firebaseAuthMessage(error));
+    } on PlatformException catch (error) {
+      if (_requiresRecentLogin(error.code)) {
+        throw const RecentLoginRequiredException();
+      }
+      throw AuthServiceException(_platformAuthMessage(error));
+    }
+  }
+
+  Future<void> openTotpEnrollmentInAuthenticator(
+    TotpEnrollmentData enrollment,
+  ) {
+    return enrollment.secret.openInOtpApp(enrollment.qrCodeUrl);
+  }
+
+  Future<void> completeTotpEnrollment(
+    TotpEnrollmentData enrollment,
+    String code,
+  ) async {
+    final user = _requireCurrentUser();
+    try {
+      final assertion =
+          await TotpMultiFactorGenerator.getAssertionForEnrollment(
+            enrollment.secret,
+            code.trim(),
+          );
+      await user.multiFactor.enroll(
+        assertion,
+        displayName: 'Authenticator app',
+      );
+    } on FirebaseAuthException catch (error) {
+      throw AuthServiceException(_firebaseAuthMessage(error));
+    } on PlatformException catch (error) {
+      throw AuthServiceException(_platformAuthMessage(error));
+    }
+  }
+
+  Future<void> disableTotp(MultiFactorInfo factor) async {
+    final user = _requireCurrentUser();
+    try {
+      await user.multiFactor.unenroll(multiFactorInfo: factor);
     } on FirebaseAuthException catch (error) {
       throw AuthServiceException(_firebaseAuthMessage(error));
     }
@@ -95,6 +324,13 @@ class AuthService {
     final user = credential.user;
     if (user != null) {
       await user.updateDisplayName(name.trim());
+      if (!user.emailVerified) {
+        try {
+          await user.sendEmailVerification();
+        } on FirebaseAuthException {
+          // The mandatory MFA screen lets the user resend this safely.
+        }
+      }
       await user.reload();
     }
     return user;
@@ -139,7 +375,26 @@ class AuthService {
       return userCredential;
     } on AuthServiceException {
       rethrow;
+    } on FirebaseAuthMultiFactorException catch (error) {
+      for (final hint in error.resolver.hints) {
+        if (hint is TotpMultiFactorInfo) {
+          throw TotpChallengeRequiredException(
+            TotpSignInChallenge(
+              resolver: error.resolver,
+              enrollmentId: hint.uid,
+            ),
+          );
+        }
+      }
+      throw const AuthServiceException(
+        'This Google account requires an unsupported second-factor method.',
+      );
     } on FirebaseAuthException catch (error) {
+      if (error.code == 'operation-not-allowed') {
+        throw const AuthServiceException(
+          'Google Sign-In is disabled in Firebase. Enable Google under Firebase Console > Authentication > Sign-in method.',
+        );
+      }
       throw AuthServiceException(_firebaseAuthMessage(error));
     } catch (_) {
       throw const AuthServiceException(
@@ -222,7 +477,9 @@ class AuthService {
   }) async {
     if (!promptIfNecessary) {
       // Without prompting, just try to use existing auth headers.
-      final headers = Map<String, String>.unmodifiable(await account.authHeaders);
+      final headers = Map<String, String>.unmodifiable(
+        await account.authHeaders,
+      );
       _googleDriveHeaders = headers;
       _setAuthenticatedDriveClient(GoogleHttpClient(headers));
       return headers;
@@ -264,8 +521,48 @@ class AuthService {
       'weak-password' => 'Choose a stronger password.',
       'network-request-failed' =>
         'Check your internet connection and try again.',
+      'invalid-verification-code' || 'invalid-multi-factor-session' =>
+        'The authenticator code is invalid or expired.',
+      'second-factor-already-in-use' =>
+        'An authenticator app is already enrolled.',
+      'requires-recent-login' =>
+        'For security, confirm your password before changing sensitive account information.',
+      'unsupported-first-factor' =>
+        'This sign-in method cannot be used with two-factor authentication.',
+      'unverified-email' =>
+        'Verify your email address before enabling two-factor authentication.',
       _ => 'Authentication failed. Please try again.',
     };
+  }
+
+  bool _requiresRecentLogin(String code) {
+    final normalized = code.toLowerCase().replaceAll('_', '-');
+    return normalized.contains('user-token-expired') ||
+        normalized.contains('requires-recent-login') ||
+        normalized.contains('invalid-user-token');
+  }
+
+  String _platformAuthMessage(PlatformException error) {
+    if (_requiresRecentLogin(error.code)) {
+      return 'Your session expired. Sign in again and retry.';
+    }
+    return error.message ?? 'Authentication failed. Please try again.';
+  }
+
+  User _requireCurrentUser() {
+    final user = currentUser;
+    if (user == null) {
+      throw const AuthServiceException('Sign in before managing security.');
+    }
+    return user;
+  }
+
+  void _ensureTotpSupport() {
+    if (!supportsTotpMfa) {
+      throw const AuthServiceException(
+        'Authenticator-app verification is supported on Android, iOS, and web.',
+      );
+    }
   }
 
   String _googleSignInMessage(
@@ -304,4 +601,34 @@ class AuthServiceException implements Exception {
 
   @override
   String toString() => message;
+}
+
+class RecentLoginRequiredException extends AuthServiceException {
+  const RecentLoginRequiredException()
+    : super('Your session expired. Confirm your sign-in and try again.');
+}
+
+class TotpSignInChallenge {
+  const TotpSignInChallenge({
+    required this.resolver,
+    required this.enrollmentId,
+  });
+
+  final MultiFactorResolver resolver;
+  final String enrollmentId;
+}
+
+class TotpChallengeRequiredException implements Exception {
+  const TotpChallengeRequiredException(this.challenge);
+
+  final TotpSignInChallenge challenge;
+}
+
+class TotpEnrollmentData {
+  const TotpEnrollmentData({required this.secret, required this.qrCodeUrl});
+
+  final TotpSecret secret;
+  final String qrCodeUrl;
+
+  String get secretKey => secret.secretKey;
 }

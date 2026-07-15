@@ -4,6 +4,7 @@ import 'package:fbr_tax_helper/features/auth/presentation/pages/session_router.d
 import 'package:fbr_tax_helper/services/auth_service.dart';
 import 'package:fbr_tax_helper/services/signup_bloc.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class SignupPage extends StatelessWidget {
@@ -64,11 +65,15 @@ class _SignupFormState extends State<SignupForm>
     context.read<SignupBloc>().add(
       SignUpButtonPressed(
         name: _nameController.text.trim(),
-        contactNumber: _contactController.text.trim(),
+        contactNumber: '03${_contactController.text}',
         email: _emailController.text.trim(),
         password: _passwordController.text,
       ),
     );
+  }
+
+  void _submitGoogleSignup() {
+    context.read<SignupBloc>().add(const SignUpWithGooglePressed());
   }
 
   String? _validateName(String? value) {
@@ -89,16 +94,31 @@ class _SignupFormState extends State<SignupForm>
 
   String? _validateContact(String? value) {
     final contact = (value ?? '').trim();
-    final digits = contact.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.length < 7) {
-      return 'Enter a valid contact number';
+    if (!RegExp(r'^\d{7}$').hasMatch(contact)) {
+      return 'Enter exactly 7 digits after 03';
     }
     return null;
   }
 
   String? _validatePassword(String? value) {
-    if ((value ?? '').length < 6) {
-      return 'Password must be at least 6 characters';
+    final password = value ?? '';
+    if (password.length < 8) {
+      return 'Use at least 8 characters';
+    }
+    if (!RegExp(r'[A-Z]').hasMatch(password)) {
+      return 'Add at least one uppercase letter';
+    }
+    if (!RegExp(r'[a-z]').hasMatch(password)) {
+      return 'Add at least one lowercase letter';
+    }
+    if (!RegExp(r'\d').hasMatch(password)) {
+      return 'Add at least one number';
+    }
+    if (RegExp(r'\s').hasMatch(password)) {
+      return 'Password cannot contain spaces';
+    }
+    if (!RegExp(r'[^A-Za-z0-9]').hasMatch(password)) {
+      return 'Add at least one special character';
     }
     return null;
   }
@@ -148,16 +168,16 @@ class _SignupFormState extends State<SignupForm>
           child: SafeArea(
             child: Stack(
               children: [
-                if (Navigator.of(context).canPop())
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: IconButton.filledTonal(
-                      tooltip: 'Back',
-                      onPressed: () => Navigator.of(context).maybePop(),
-                      icon: const Icon(Icons.arrow_back),
-                    ),
-                  ),
+                // if (Navigator.of(context).canPop())
+                //   Positioned(
+                //     top: 8,
+                //     left: 8,
+                //     child: IconButton.filledTonal(
+                //       tooltip: 'Back',
+                //       onPressed: () => Navigator.of(context).maybePop(),
+                //       icon: const Icon(Icons.arrow_back),
+                //     ),
+                //   ),
                 Center(
                   child: SingleChildScrollView(
                     keyboardDismissBehavior:
@@ -201,6 +221,7 @@ class _SignupFormState extends State<SignupForm>
                                     });
                                   },
                                   onSignup: _submitSignup,
+                                  onGoogleSignup: _submitGoogleSignup,
                                   validateName: _validateName,
                                   validateEmail: _validateEmail,
                                   validateContact: _validateContact,
@@ -242,6 +263,7 @@ class _SignupFormState extends State<SignupForm>
                                       });
                                     },
                                     onSignup: _submitSignup,
+                                    onGoogleSignup: _submitGoogleSignup,
                                     validateName: _validateName,
                                     validateEmail: _validateEmail,
                                     validateContact: _validateContact,
@@ -334,6 +356,7 @@ class _SignupPanel extends StatelessWidget {
     required this.onTogglePassword,
     required this.onToggleConfirmPassword,
     required this.onSignup,
+    required this.onGoogleSignup,
     required this.validateName,
     required this.validateEmail,
     required this.validateContact,
@@ -352,6 +375,7 @@ class _SignupPanel extends StatelessWidget {
   final VoidCallback onTogglePassword;
   final VoidCallback onToggleConfirmPassword;
   final VoidCallback onSignup;
+  final VoidCallback onGoogleSignup;
   final String? Function(String?) validateName;
   final String? Function(String?) validateEmail;
   final String? Function(String?) validateContact;
@@ -416,11 +440,27 @@ class _SignupPanel extends StatelessWidget {
                     controller: contactController,
                     enabled: !isLoading,
                     keyboardType: TextInputType.phone,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(07),
+                    ],
                     textInputAction: TextInputAction.next,
                     validator: validateContact,
                     decoration: const InputDecoration(
                       labelText: 'Contact number',
-                      prefixIcon: Icon(Icons.phone_outlined),
+                      hintText: '123456789',
+                      prefixIcon: SizedBox(
+                        width: 76,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.phone_outlined),
+                            SizedBox(width: 8),
+                            Text('03'),
+                          ],
+                        ),
+                      ),
+                      prefixIconConstraints: BoxConstraints(minWidth: 76),
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -433,6 +473,10 @@ class _SignupPanel extends StatelessWidget {
                     validator: validatePassword,
                     decoration: InputDecoration(
                       labelText: 'Password',
+                      helperText:
+                          'Use at least 8 characters,including lower, Upper, number & special character',
+                      helperStyle: const TextStyle(fontSize: 10, height: 1.2),
+                      helperMaxLines: 2,
                       prefixIcon: const Icon(Icons.lock_outline),
                       suffixIcon: IconButton(
                         tooltip: obscurePassword
@@ -486,6 +530,18 @@ class _SignupPanel extends StatelessWidget {
                           )
                         : const Icon(Icons.person_add_alt_1),
                     label: const Text('Sign up'),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: isLoading ? null : onGoogleSignup,
+                    icon: const Icon(Icons.g_mobiledata, size: 28),
+                    label: const Text('Continue with Google'),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Google verifies your email automatically, so no verification email is needed before authenticator 2FA setup.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
               ),

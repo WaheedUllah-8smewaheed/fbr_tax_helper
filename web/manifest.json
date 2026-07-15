@@ -1,11 +1,11 @@
 {
-    "name": "FilerFlow",
-    "short_name": "FilerFlow",
+    "name": "Filer Flow",
+    "short_name": "Filer Flow",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0F6B57",
     "theme_color": "#0F6B57",
-    "description": "FilerFlow tax and expense tracker.",
+    "description": "Filer Flow tax and expense tracker.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

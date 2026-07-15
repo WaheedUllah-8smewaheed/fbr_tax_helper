@@ -5,6 +5,8 @@ void main() {
   test('salary is income and tax is expense', () {
     expect(TransactionCategory.fromName('Salary').isExpense, isFalse);
     expect(TransactionCategory.fromName('Tax').isExpense, isTrue);
+    expect(TransactionCategory.fromName('Rent').isExpense, isTrue);
+    expect(TransactionCategory.fromName('Transport').isExpense, isTrue);
   });
 
   test('unknown categories safely fall back to miscellaneous expense', () {
