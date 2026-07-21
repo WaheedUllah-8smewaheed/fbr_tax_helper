@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:fbr_tax_helper/features/tax_calculator/presentation/screens/tax_calculator_screen.dart';
 import 'package:fbr_tax_helper/features/transactions/presentation/pages/add_transaction_page.dart';
+import 'package:fbr_tax_helper/features/transactions/presentation/pages/notification_transactions_page.dart';
 import 'package:fbr_tax_helper/features/transactions/presentation/bloc/transaction_bloc.dart';
 import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction.dart'
     as entity;
@@ -10,16 +11,17 @@ import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction
 import 'package:fbr_tax_helper/features/transactions/services/transaction_report_service.dart';
 import 'package:fbr_tax_helper/features/transactions/services/category_preferences_service.dart';
 
+import 'package:fbr_tax_helper/core/platform/app_storage.dart';
 import 'package:fbr_tax_helper/services/auth_service.dart';
 import 'package:fbr_tax_helper/services/biometric_lock_service.dart';
 import 'package:fbr_tax_helper/services/drive_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -49,6 +51,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _showBiometricReminderIfNeeded() async {
     final authService = context.read<AuthService>();
     final userId = authService.currentUser?.uid;
+    if (kIsWeb) return;
     if (userId == null) return;
 
     try {
@@ -61,12 +64,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ..showSnackBar(
           SnackBar(
             content: const Text(
-              'Fingerprint app lock is optional. You can enable it from your profile.',
+              'Fingerprint app lock is optional. You can enable it from Profile.',
             ),
-            duration: const Duration(seconds: 8),
+            duration: const Duration(seconds: 5),
             action: SnackBarAction(
               label: 'Profile',
-              onPressed: () => setState(() => _selectedIndex = 3),
+              onPressed: () => _openProfilePage(context),
             ),
           ),
         );
@@ -96,19 +99,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
           index: _selectedIndex,
           children: [
             _HomeDashboard(categoryPreferences: _categoryPreferences),
+            NotificationTransactionsPage(isActive: _selectedIndex == 1),
             const TaxCalculatorScreen(),
             _CategorySettingsPage(categoryPreferences: _categoryPreferences),
-            const _ProfilePage(),
           ],
         ),
       ),
       bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.dashboard),
             label: 'Dashboard',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.notifications_active_outlined),
+            label: 'Notifications',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.calculate),
@@ -118,9 +126,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
             icon: Icon(Icons.settings),
             label: 'Settings',
           ),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
+    );
+  }
+}
+
+void _openProfilePage(BuildContext context) {
+  Navigator.of(
+    context,
+  ).push(MaterialPageRoute(builder: (context) => const _ProfilePage()));
+}
+
+class _ProfileAppBarButton extends StatelessWidget {
+  const _ProfileAppBarButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: 'Profile',
+      onPressed: () => _openProfilePage(context),
+      icon: const Icon(Icons.account_circle_outlined),
     );
   }
 }
@@ -150,10 +176,30 @@ class _CategorySettingsPage extends StatelessWidget {
     }
   }
 
+  Future<void> _updateDualMode(
+    BuildContext context,
+    String categoryName,
+    bool enabled,
+  ) async {
+    try {
+      await categoryPreferences.setDualMode(categoryName, enabled: enabled);
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('Could not save category setting: $error')),
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(
+        title: const Text('Settings'),
+        actions: const [_ProfileAppBarButton()],
+      ),
       body: categoryPreferences.isLoading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
@@ -167,7 +213,7 @@ class _CategorySettingsPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Choose whether each category belongs under Income or Expenses. Your dashboard totals, category sections, reports, and new transactions will follow these choices.',
+                  'Choose whether each category belongs under Income, Expenses, or Both. Your dashboard totals, category sections, reports, and new transactions will follow these choices.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 if (categoryPreferences.loadError != null) ...[
@@ -185,6 +231,9 @@ class _CategorySettingsPage extends StatelessWidget {
                 const SizedBox(height: 20),
                 ...TransactionCategory.all.map((category) {
                   final isExpense = categoryPreferences.isExpense(
+                    category.name,
+                  );
+                  final isDualMode = categoryPreferences.isDualMode(
                     category.name,
                   );
                   return Padding(
@@ -218,6 +267,16 @@ class _CategorySettingsPage extends StatelessWidget {
                                     ),
                                   ),
                                 ),
+                                const SizedBox(width: 8),
+                                const Text('Both'),
+                                Switch(
+                                  value: isDualMode,
+                                  onChanged: (enabled) => _updateDualMode(
+                                    context,
+                                    category.name,
+                                    enabled,
+                                  ),
+                                ),
                               ],
                             ),
                             const SizedBox(height: 12),
@@ -236,15 +295,17 @@ class _CategorySettingsPage extends StatelessWidget {
                                 ),
                               ],
                               selected: {isExpense},
-                              onSelectionChanged: (selection) {
-                                final newValue = selection.first;
-                                if (newValue == isExpense) return;
-                                _updateCategory(
-                                  context,
-                                  category.name,
-                                  newValue,
-                                );
-                              },
+                              onSelectionChanged: isDualMode
+                                  ? null
+                                  : (selection) {
+                                      final newValue = selection.first;
+                                      if (newValue == isExpense) return;
+                                      _updateCategory(
+                                        context,
+                                        category.name,
+                                        newValue,
+                                      );
+                                    },
                             ),
                           ],
                         ),
@@ -362,7 +423,10 @@ class _ProfilePageState extends State<_ProfilePage>
         return;
       }
 
-      final supportDirectory = await getApplicationSupportDirectory();
+      final supportDirectory = await AppStorage.getSupportDirectory();
+      if (supportDirectory == null) {
+        throw UnsupportedError('Profile image storage is unavailable on web.');
+      }
       final imageDirectory = Directory(
         path.join(supportDirectory.path, 'profile_images'),
       );
@@ -667,11 +731,6 @@ class _ProfilePageState extends State<_ProfilePage>
       appBar: AppBar(
         title: const Text('Profile'),
         actions: [
-          IconButton(
-            tooltip: 'Edit profile',
-            onPressed: _isUpdatingProfile ? null : _editProfile,
-            icon: const Icon(Icons.edit_outlined),
-          ),
           IconButton(
             tooltip: 'Refresh account',
             onPressed: _isUpdatingProfile ? null : _refreshAccount,
@@ -1112,9 +1171,11 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                 final transactions = storedTransactions
                     .map(
                       (transaction) => transaction.copyWith(
-                        isExpense: widget.categoryPreferences.isExpense(
-                          transaction.category,
-                        ),
+                        isExpense: widget.categoryPreferences
+                            .resolveTransactionTypeForCategory(
+                              categoryName: transaction.category,
+                              transactionIsExpense: transaction.isExpense,
+                            ),
                       ),
                     )
                     .toList();
@@ -1230,6 +1291,16 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                     ),
                     const SizedBox(height: 24),
                     Text(
+                      'Both Categories',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 12),
+                    _BothCategoryCards(
+                      transactions: visibleTransactions,
+                      categoryPreferences: widget.categoryPreferences,
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
                       'Recent Transactions',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
@@ -1274,7 +1345,16 @@ class _DriveSyncButtonState extends State<_DriveSyncButton> {
 
     try {
       await authService.getGoogleDriveHeaders(promptIfNecessary: true);
-      final driveService = DriveService();
+      final currentUser = authService.currentUser;
+      if (currentUser == null) {
+        throw const AuthServiceException(
+          'Sign in before using Google Drive backup and restore.',
+        );
+      }
+      final driveService = DriveService(
+        ownerId: currentUser.uid,
+        ownerEmail: currentUser.email,
+      );
       final result = action == _DriveAction.backup
           ? await driveService.syncDatabaseToCloud()
           : await driveService.restoreBackupFromCloud();
@@ -1316,13 +1396,14 @@ class _DriveSyncButtonState extends State<_DriveSyncButton> {
   }
 
   Future<bool> _confirmRestore() async {
+    final filerFlowEmail = context.read<AuthService>().currentUser?.email;
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
             icon: const Icon(Icons.restore_outlined),
             title: const Text('Restore Drive backup?'),
-            content: const Text(
-              'This replaces transactions and receipt images on this device with the latest Google Drive backup. Back up current changes first if you need them.',
+            content: Text(
+              'This restores transactions and receipt images for ${filerFlowEmail ?? 'the signed-in Filer Flow account'} and replaces local data on this device. When Google asks, select the same Drive account used for the backup.',
             ),
             actions: [
               TextButton(
@@ -1633,8 +1714,10 @@ class _CategoryCards extends StatelessWidget {
 
         final categories = TransactionCategory.all
             .where(
-              (category) =>
-                  categoryPreferences.isExpense(category.name) == isExpense,
+              (category) => categoryPreferences.shouldShowCategoryInSection(
+                categoryName: category.name,
+                isExpenseSection: isExpense,
+              ),
             )
             .toList();
 
@@ -1653,6 +1736,14 @@ class _CategoryCards extends StatelessWidget {
             final category = categories[index];
             final categoryTransactions = transactions
                 .where((transaction) => transaction.category == category.name)
+                .where(
+                  (transaction) =>
+                      categoryPreferences.shouldShowTransactionInSection(
+                        categoryName: category.name,
+                        isExpenseSection: isExpense,
+                        transactionIsExpense: transaction.isExpense,
+                      ),
+                )
                 .toList();
             return _CategoryCard(
               category: category.name,
@@ -1666,20 +1757,87 @@ class _CategoryCards extends StatelessWidget {
   }
 }
 
-class _CategoryCard extends StatelessWidget {
-  const _CategoryCard({
-    required this.category,
+class _BothCategoryCards extends StatelessWidget {
+  const _BothCategoryCards({
     required this.transactions,
     required this.categoryPreferences,
   });
 
-  final String category;
   final List<entity.Transaction> transactions;
   final CategoryPreferencesService categoryPreferences;
 
   @override
   Widget build(BuildContext context) {
-    final color = _getColorForCategory(category);
+    final categories = TransactionCategory.all
+        .where((category) => categoryPreferences.isDualMode(category.name))
+        .toList();
+
+    if (categories.isEmpty) {
+      return Card(
+        elevation: 0,
+        color: const Color(0xFFFFF8EF),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: const Padding(
+          padding: EdgeInsets.all(16),
+          child: Text(
+            'No categories are set to Both yet. Enable Both from Settings to show them here.',
+          ),
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const crossAxisCount = 2;
+        final isCompact = constraints.maxWidth < 360;
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: categories.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            mainAxisExtent: isCompact ? 180 : 172,
+          ),
+          itemBuilder: (context, index) {
+            final category = categories[index];
+            final categoryTransactions = transactions
+                .where((transaction) => transaction.category == category.name)
+                .toList();
+            return _CategoryCard(
+              category: category.name,
+              transactions: categoryTransactions,
+              categoryPreferences: categoryPreferences,
+              accentColor: const Color(0xFFFFB74D),
+              showBreakdown: true,
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _CategoryCard extends StatelessWidget {
+  const _CategoryCard({
+    required this.category,
+    required this.transactions,
+    required this.categoryPreferences,
+    this.accentColor,
+    this.showBreakdown = false,
+  });
+
+  final String category;
+  final List<entity.Transaction> transactions;
+  final CategoryPreferencesService categoryPreferences;
+  final Color? accentColor;
+  final bool showBreakdown;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = accentColor ?? _getColorForCategory(category);
     final income = transactions
         .where((transaction) => !transaction.isExpense)
         .fold<double>(0, (total, transaction) => total + transaction.amount);
@@ -1762,18 +1920,33 @@ class _CategoryCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  _CategoryAmountRow(
-                    label: 'Amount',
-                    value: _formatDashboardMoney(
-                      transactions.any((transaction) => transaction.isExpense)
-                          ? expenses
-                          : income,
+                  if (showBreakdown) ...[
+                    _CategoryAmountRow(
+                      label: 'Income',
+                      value: _formatDashboardMoney(income),
+                      color: Colors.green.shade700,
                     ),
-                    color:
+                    const SizedBox(height: 3),
+                    _CategoryAmountRow(
+                      label: 'Expense',
+                      value: _formatDashboardMoney(expenses),
+                      color: Colors.red.shade700,
+                    ),
+                  ] else
+                    _CategoryAmountRow(
+                      label: 'Amount',
+                      value: _formatDashboardMoney(
                         transactions.any((transaction) => transaction.isExpense)
-                        ? Colors.red.shade700
-                        : Colors.green.shade700,
-                  ),
+                            ? expenses
+                            : income,
+                      ),
+                      color:
+                          transactions.any(
+                            (transaction) => transaction.isExpense,
+                          )
+                          ? Colors.red.shade700
+                          : Colors.green.shade700,
+                    ),
                 ],
               ),
             ),
@@ -1798,7 +1971,9 @@ class _CategoryTransactionsPage extends StatelessWidget {
       MaterialPageRoute(
         builder: (context) => AddTransactionPage(
           initialCategory: category,
-          initialIsExpense: categoryPreferences.isExpense(category),
+          initialIsExpense: categoryPreferences.isDualMode(category)
+              ? null
+              : categoryPreferences.isExpense(category),
         ),
       ),
     );
@@ -1822,7 +1997,11 @@ class _CategoryTransactionsPage extends StatelessWidget {
               .where((transaction) => transaction.category == category)
               .map(
                 (transaction) => transaction.copyWith(
-                  isExpense: categoryPreferences.isExpense(category),
+                  isExpense: categoryPreferences
+                      .resolveTransactionTypeForCategory(
+                        categoryName: category,
+                        transactionIsExpense: transaction.isExpense,
+                      ),
                 ),
               )
               .toList();

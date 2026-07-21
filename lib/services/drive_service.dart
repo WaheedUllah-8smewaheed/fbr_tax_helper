@@ -5,16 +5,43 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:fbr_tax_helper/database/tax_db.dart';
 import 'package:fbr_tax_helper/services/auth_service.dart';
+import 'package:fbr_tax_helper/core/platform/app_storage.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
 
 class DriveService {
-  static const _backupName = 'filerflow_full_backup.zip';
+  DriveService({required this.ownerId, required this.ownerEmail});
+
+  final String ownerId;
+  final String? ownerEmail;
+
+  static const _genericBackupName = 'filerflow_full_backup.zip';
   static const _legacyBackupName = 'fbr_tax_vault.db';
   static const _databaseEntry = 'database/fbr_tax_vault.db';
   static const _manifestEntry = 'manifest.json';
   static const _receiptPrefix = 'receipts/';
+
+  static String backupNameForUser(String userId) {
+    final safeId = userId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+    if (safeId.isEmpty) {
+      throw ArgumentError.value(userId, 'userId', 'User ID cannot be empty.');
+    }
+    return 'filerflow_backup_$safeId.zip';
+  }
+
+  String get _accountBackupName => backupNameForUser(ownerId);
+
+  String get _accountLabel {
+    final email = ownerEmail?.trim();
+    return email == null || email.isEmpty ? 'this account' : email;
+  }
+
+  Map<String, String> get _ownerProperties {
+    final properties = <String, String>{'filerflowOwnerId': ownerId};
+    final email = ownerEmail;
+    if (email != null) properties['filerflowOwnerEmail'] = email;
+    return properties;
+  }
 
   Future<DriveSyncResult> syncDatabaseToCloud() async {
     final client = AuthService.authenticatedDriveClient;
@@ -26,7 +53,7 @@ class DriveService {
     try {
       archiveFile = await _createBackupArchive();
       final driveApi = drive.DriveApi(client);
-      final backups = await _findFiles(driveApi, _backupName);
+      final backups = await _findFiles(driveApi, _accountBackupName);
       final media = drive.Media(
         archiveFile.openRead(),
         await archiveFile.length(),
@@ -34,8 +61,9 @@ class DriveService {
 
       if (backups.isEmpty) {
         final metadata = drive.File()
-          ..name = _backupName
+          ..name = _accountBackupName
           ..mimeType = 'application/zip'
+          ..appProperties = _ownerProperties
           ..parents = const ['appDataFolder'];
         await driveApi.files.create(metadata, uploadMedia: media);
       } else {
@@ -44,20 +72,17 @@ class DriveService {
           throw StateError('The existing Drive backup has no file id.');
         }
         await driveApi.files.update(
-          drive.File()..mimeType = 'application/zip',
+          drive.File()
+            ..mimeType = 'application/zip'
+            ..appProperties = _ownerProperties,
           stableId,
           uploadMedia: media,
         );
         await _deleteDuplicates(driveApi, backups.skip(1));
       }
 
-      // The ZIP supersedes the older database-only backup.
-      await _deleteDuplicates(
-        driveApi,
-        await _findFiles(driveApi, _legacyBackupName),
-      );
-      return const DriveSyncResult.success(
-        'Database and receipt images backed up to Google Drive.',
+      return DriveSyncResult.success(
+        'Database and receipt images for $_accountLabel were backed up to Google Drive.',
       );
     } catch (error, stackTrace) {
       developer.log(
@@ -83,34 +108,63 @@ class DriveService {
     Directory? stagingDirectory;
     try {
       final driveApi = drive.DriveApi(client);
-      final backups = await _findFiles(driveApi, _backupName);
+      var backups = await _findFiles(driveApi, _accountBackupName);
+      var backupName = _accountBackupName;
       if (backups.isEmpty) {
-        return const DriveSyncResult.failure(
-          'No full Filer Flow backup was found in this Google account.',
+        backups = await _findFiles(driveApi, _genericBackupName);
+        backupName = _genericBackupName;
+      }
+
+      final legacyFiles = backups.isEmpty
+          ? await _findFiles(driveApi, _legacyBackupName)
+          : const <drive.File>[];
+      if (backups.isEmpty && legacyFiles.isEmpty) {
+        return DriveSyncResult.failure(
+          'No backup for $_accountLabel was found in the selected Google Drive account. Select the same Google account that was used on the previous device.',
         );
       }
-      final backupId = backups.first.id;
+
+      final selectedFile = backups.isNotEmpty
+          ? backups.first
+          : legacyFiles.first;
+      final backupId = selectedFile.id;
       if (backupId == null) {
         throw StateError('The Drive backup has no file id.');
       }
 
-      final temporary = await getTemporaryDirectory();
+      final temporary = await AppStorage.getTemporaryDirectory();
+      if (temporary == null) {
+        throw UnsupportedError(
+          'Temporary directory storage is unavailable on web.',
+        );
+      }
       stagingDirectory = await Directory(
         path.join(
           temporary.path,
           'filerflow_restore_${DateTime.now().microsecondsSinceEpoch}',
         ),
       ).create(recursive: true);
-      final downloaded = File(path.join(stagingDirectory.path, _backupName));
+      final isLegacyDatabase = backups.isEmpty;
+      final downloaded = File(
+        path.join(
+          stagingDirectory.path,
+          isLegacyDatabase ? _legacyBackupName : backupName,
+        ),
+      );
       await _downloadFile(driveApi, backupId, downloaded);
 
-      final extracted = await _extractAndValidate(downloaded, stagingDirectory);
+      final extracted = isLegacyDatabase
+          ? await _stageLegacyDatabase(downloaded, stagingDirectory)
+          : await _extractAndValidate(downloaded, stagingDirectory);
       await TaxDatabase.instance.restoreFromBackup(
         stagedDatabase: extracted.database,
         stagedReceipts: extracted.receipts,
+        expectedUserId: ownerId,
       );
-      return const DriveSyncResult.success(
-        'Database and receipt images restored successfully.',
+      return DriveSyncResult.success(
+        isLegacyDatabase
+            ? 'Transactions for $_accountLabel were restored from the legacy backup. Older receipt images were not part of that backup format.'
+            : 'Database and receipt images for $_accountLabel were restored successfully.',
       );
     } catch (error, stackTrace) {
       developer.log(
@@ -128,13 +182,19 @@ class DriveService {
   }
 
   Future<File> _createBackupArchive() async {
-    await TaxDatabase.instance.prepareForBackup();
-    final database = await TaxDatabase.instance.getDatabaseFile();
-    if (!await database.exists()) {
-      throw StateError('Local database file was not found.');
+    final temporary = await AppStorage.getTemporaryDirectory();
+    if (temporary == null) {
+      throw UnsupportedError(
+        'Temporary directory storage is unavailable on web.',
+      );
     }
-
-    final receipts = await TaxDatabase.instance.getReceiptDirectory();
+    final database = await TaxDatabase.instance.createBackupSnapshot(
+      userId: ownerId,
+      destinationPath: path.join(
+        temporary.path,
+        'filerflow_snapshot_${DateTime.now().microsecondsSinceEpoch}.db',
+      ),
+    );
     final archive = Archive();
     final databaseBytes = await database.readAsBytes();
     archive.addFile(
@@ -142,9 +202,12 @@ class DriveService {
     );
 
     var receiptCount = 0;
-    if (await receipts.exists()) {
-      await for (final entry in receipts.list(followLinks: false)) {
-        if (entry is! File) continue;
+    final receiptPaths = await TaxDatabase.instance.getReceiptPathsForUser(
+      ownerId,
+    );
+    for (final receiptPath in receiptPaths) {
+      final entry = File(receiptPath);
+      if (await entry.exists()) {
         final bytes = await entry.readAsBytes();
         archive.addFile(
           ArchiveFile(
@@ -159,8 +222,10 @@ class DriveService {
 
     final manifestBytes = utf8.encode(
       jsonEncode({
-        'formatVersion': 1,
+        'formatVersion': 2,
         'createdAt': DateTime.now().toUtc().toIso8601String(),
+        'ownerId': ownerId,
+        'ownerEmail': ownerEmail,
         'database': _databaseEntry,
         'receiptCount': receiptCount,
       }),
@@ -173,7 +238,6 @@ class DriveService {
     if (encoded == null) {
       throw StateError('Could not create the backup archive.');
     }
-    final temporary = await getTemporaryDirectory();
     final output = File(
       path.join(
         temporary.path,
@@ -181,6 +245,7 @@ class DriveService {
       ),
     );
     await output.writeAsBytes(encoded, flush: true);
+    if (await database.exists()) await database.delete();
     return output;
   }
 
@@ -199,8 +264,18 @@ class DriveService {
     }
 
     final manifest = jsonDecode(utf8.decode(manifestFile.content as List<int>));
-    if (manifest is! Map<String, dynamic> || manifest['formatVersion'] != 1) {
+    if (manifest is! Map<String, dynamic>) {
+      throw const FormatException('Invalid Filer Flow backup manifest.');
+    }
+    final formatVersion = manifest['formatVersion'];
+    if (formatVersion != 1 && formatVersion != 2) {
       throw const FormatException('Unsupported Filer Flow backup format.');
+    }
+    if (formatVersion == 2 && manifest['ownerId'] != ownerId) {
+      final backupEmail = manifest['ownerEmail'] as String?;
+      throw FormatException(
+        'This backup belongs to ${backupEmail ?? 'a different Filer Flow account'}, not $_accountLabel.',
+      );
     }
 
     final database = File(path.join(stagingRoot.path, 'restored.db'));
@@ -216,6 +291,18 @@ class DriveService {
         path.join(receipts.path, safeName),
       ).writeAsBytes(entry.content as List<int>, flush: true);
     }
+    return _ExtractedBackup(database: database, receipts: receipts);
+  }
+
+  Future<_ExtractedBackup> _stageLegacyDatabase(
+    File downloaded,
+    Directory stagingRoot,
+  ) async {
+    final database = File(path.join(stagingRoot.path, 'legacy_restored.db'));
+    await downloaded.copy(database.path);
+    final receipts = await Directory(
+      path.join(stagingRoot.path, 'receipts'),
+    ).create(recursive: true);
     return _ExtractedBackup(database: database, receipts: receipts);
   }
 
@@ -255,11 +342,9 @@ class DriveService {
     if (response is! drive.Media) {
       throw const FormatException('Drive did not return backup content.');
     }
-    final sink = destination.openWrite();
-    try {
-      await response.stream.pipe(sink);
-    } finally {
-      await sink.close();
+    await response.stream.pipe(destination.openWrite());
+    if (!await destination.exists() || await destination.length() == 0) {
+      throw const FormatException('The downloaded Drive backup is empty.');
     }
   }
 

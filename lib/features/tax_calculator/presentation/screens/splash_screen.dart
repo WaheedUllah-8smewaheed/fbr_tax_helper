@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:fbr_tax_helper/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../services/auth_service.dart';
@@ -10,10 +11,12 @@ class SplashScreen extends StatefulWidget {
     super.key,
     required this.authService,
     this.duration = const Duration(milliseconds: 1600),
+    this.nextScreen,
   });
 
   final AuthService authService;
   final Duration duration;
+  final Widget? nextScreen;
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -25,12 +28,14 @@ class _SplashScreenState extends State<SplashScreen>
   late final Animation<double> _fadeAnimation;
   late final Animation<Offset> _slideAnimation;
   Timer? _timer;
+  bool _isNavigating = false;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       duration: const Duration(milliseconds: 850),
+      reverseDuration: const Duration(milliseconds: 240),
       vsync: this,
     );
     final curvedAnimation = CurvedAnimation(
@@ -44,18 +49,22 @@ class _SplashScreenState extends State<SplashScreen>
     ).animate(curvedAnimation);
 
     _controller.forward();
-    _timer = Timer(widget.duration, _openCalculator);
+    _timer = Timer(widget.duration, _openNextScreen);
   }
 
-  void _openCalculator() {
+  Future<void> _openNextScreen() async {
+    if (!mounted || _isNavigating) return;
+    _isNavigating = true;
+
+    await _controller.reverse();
     if (!mounted) return;
 
     Navigator.of(context).pushReplacement(
       PageRouteBuilder<void>(
         pageBuilder: (context, animation, secondaryAnimation) {
-          return const TaxCalculatorScreen();
+          return widget.nextScreen ?? const TaxCalculatorScreen();
         },
-        transitionDuration: const Duration(milliseconds: 360),
+        transitionDuration: const Duration(milliseconds: 320),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
         },
@@ -170,10 +179,10 @@ class _SplashBackdropPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final basePaint = Paint()..color = const Color(0xFF0F6B57);
-    final lightPaint = Paint()..color = const Color(0xFFF6F7F4);
-    final goldPaint = Paint()..color = const Color(0xFFE2A72E);
-    final deepPaint = Paint()..color = const Color(0xFF0A3D35);
+    final basePaint = Paint()..color = AppColors.primary;
+    final lightPaint = Paint()..color = AppColors.background;
+    final goldPaint = Paint()..color = AppColors.gold;
+    final deepPaint = Paint()..color = AppColors.primaryDark;
 
     canvas.drawRect(Offset.zero & size, basePaint);
 

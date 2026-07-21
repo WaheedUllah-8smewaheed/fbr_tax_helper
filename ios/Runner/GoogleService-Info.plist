@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>422412426431-4ubciq6hunodjes8fo33blmvg2dgjf2d.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.422412426431-4ubciq6hunodjes8fo33blmvg2dgjf2d</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>422412426431-9jvn8auo7tua7toiu3u33kouga8ckehk.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyA_eow5pSD7JwBXzi7_4bhfyyEo1JNF_Bw</string>
+	<key>GCM_SENDER_ID</key>
+	<string>422412426431</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.filerflow.app</string>
+	<key>PROJECT_ID</key>
+	<string>taxflutter-application</string>
+	<key>STORAGE_BUCKET</key>
+	<string>taxflutter-application.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:422412426431:ios:eec99c7b3e8e6f9194fa0a</string>
+</dict>
+</plist>

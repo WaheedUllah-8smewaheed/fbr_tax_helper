@@ -1,6 +1,6 @@
 import 'dart:io';
+import 'package:fbr_tax_helper/core/platform/app_storage.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart';
 
 class TaxDatabase {
@@ -16,9 +16,7 @@ class TaxDatabase {
   }
 
   Future<Database> _initDB(String filePath) async {
-    // Stores the database file within the app's private app directory on the system
-    Directory docDirectory = await getApplicationDocumentsDirectory();
-    String path = join(docDirectory.path, filePath);
+    final path = await AppStorage.resolveDatabasePath(filePath);
 
     return await openDatabase(
       path,
@@ -118,18 +116,66 @@ class TaxDatabase {
 
   // Gets the exact path of the database file on disk to pass to Google Drive API
   Future<File> getDatabaseFile() async {
-    Directory docDirectory = await getApplicationDocumentsDirectory();
-    return File(join(docDirectory.path, 'fbr_tax_vault.db'));
+    final documents = await AppStorage.getDocumentsDirectory();
+    if (documents == null) {
+      throw UnsupportedError('Local database storage is unavailable on web.');
+    }
+    return File(join(documents.path, 'fbr_tax_vault.db'));
   }
 
   Future<Directory> getReceiptDirectory() async {
-    final documents = await getApplicationDocumentsDirectory();
+    final documents = await AppStorage.getDocumentsDirectory();
+    if (documents == null) {
+      throw UnsupportedError('Receipt storage is unavailable on web.');
+    }
     return Directory(join(documents.path, 'transaction_receipts'));
   }
 
   Future<void> prepareForBackup() async {
     final db = await database;
     await db.rawQuery('PRAGMA wal_checkpoint(FULL)');
+  }
+
+  Future<File> createBackupSnapshot({
+    required String userId,
+    required String destinationPath,
+  }) async {
+    await prepareForBackup();
+    final source = await getDatabaseFile();
+    if (!await source.exists()) {
+      throw StateError('Local database file was not found.');
+    }
+    final snapshot = await source.copy(destinationPath);
+    final snapshotDatabase = await openDatabase(
+      snapshot.path,
+      singleInstance: false,
+    );
+    try {
+      await snapshotDatabase.delete(
+        'transactions',
+        where: 'userId != ?',
+        whereArgs: [userId],
+      );
+    } finally {
+      await snapshotDatabase.close();
+    }
+    return snapshot;
+  }
+
+  Future<List<String>> getReceiptPathsForUser(String userId) async {
+    final db = await database;
+    final rows = await db.query(
+      'transactions',
+      distinct: true,
+      columns: ['receiptImagePath'],
+      where:
+          'userId = ? AND receiptImagePath IS NOT NULL AND receiptImagePath != ?',
+      whereArgs: [userId, ''],
+    );
+    return rows
+        .map((row) => row['receiptImagePath'] as String?)
+        .whereType<String>()
+        .toList();
   }
 
   Future<void> close() async {
@@ -141,8 +187,9 @@ class TaxDatabase {
   Future<void> restoreFromBackup({
     required File stagedDatabase,
     required Directory stagedReceipts,
+    required String expectedUserId,
   }) async {
-    await _validateBackupDatabase(stagedDatabase.path);
+    await _validateBackupDatabase(stagedDatabase.path, expectedUserId);
 
     final liveDatabase = await getDatabaseFile();
     final liveReceipts = await getReceiptDirectory();
@@ -166,6 +213,7 @@ class TaxDatabase {
     try {
       await stagedDatabase.copy(liveDatabase.path);
       await _copyDirectory(stagedReceipts, liveReceipts);
+      await _normalizeRestoredOwnership(expectedUserId);
       await _rewriteReceiptPaths(liveReceipts);
 
       if (await databaseRollback.exists()) await databaseRollback.delete();
@@ -190,7 +238,10 @@ class TaxDatabase {
     }
   }
 
-  Future<void> _validateBackupDatabase(String databasePath) async {
+  Future<void> _validateBackupDatabase(
+    String databasePath,
+    String expectedUserId,
+  ) async {
     final candidate = await openDatabase(
       databasePath,
       readOnly: true,
@@ -209,9 +260,41 @@ class TaxDatabase {
           'The backup does not contain a transactions table.',
         );
       }
+      final columns = await candidate.rawQuery(
+        'PRAGMA table_info(transactions)',
+      );
+      final hasUserId = columns.any((row) => row['name'] == 'userId');
+      if (hasUserId) {
+        final owners = await candidate.rawQuery(
+          "SELECT DISTINCT userId FROM transactions WHERE userId IS NOT NULL AND userId != ''",
+        );
+        final ownerIds = owners
+            .map((row) => row['userId'] as String?)
+            .whereType<String>()
+            .toSet();
+        if (ownerIds.isNotEmpty && !ownerIds.contains(expectedUserId)) {
+          throw const FormatException(
+            'The backup belongs to a different Filer Flow account.',
+          );
+        }
+      }
     } finally {
       await candidate.close();
     }
+  }
+
+  Future<void> _normalizeRestoredOwnership(String expectedUserId) async {
+    final db = await database;
+    await db.transaction((transaction) async {
+      await transaction.update('transactions', {
+        'userId': expectedUserId,
+      }, where: "userId IS NULL OR userId = ''");
+      await transaction.delete(
+        'transactions',
+        where: 'userId != ?',
+        whereArgs: [expectedUserId],
+      );
+    });
   }
 
   Future<void> _rewriteReceiptPaths(Directory receiptDirectory) async {

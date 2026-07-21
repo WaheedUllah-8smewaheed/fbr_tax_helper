@@ -3,6 +3,7 @@ import 'package:fbr_tax_helper/features/auth/presentation/pages/login_page.dart'
 import 'package:fbr_tax_helper/services/auth_service.dart';
 import 'package:fbr_tax_helper/services/biometric_lock_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -24,6 +25,9 @@ class SessionRouter extends StatelessWidget {
 
         // If a valid user session token is found on the device hardware
         if (snapshot.hasData && snapshot.data != null) {
+          if (kIsWeb) {
+            return const DashboardScreen();
+          }
           return _BiometricSessionGate(user: snapshot.data!);
         }
 

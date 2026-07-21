@@ -31,12 +31,11 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
   fl_chart: ^0.68.0 # For beautiful charts
   intl: ^0.19.0
-  flutter_bloc: ^8.1.6 # Includes bloc and equatable
+  bloc: ^8.1.4
+  equatable: ^2.0.7
+  flutter_bloc: ^8.1.6
   flutter_secure_storage: ^10.3.1 # For secure storage, might be useful later
   pdf: ^3.11.0 # For creating PDFs, might be useful for exporting tax summary
   printing: ^5.13.0 # For printing PDFs
@@ -44,10 +43,6 @@ dependencies:
   # Phase 1: Deductions & Adjustments Module
   image_picker: ^1.2.2 # For picking images from gallery or camera
   google_mlkit_text_recognition: ^0.15.1 # For on-device OCR
-  excel: ^4.0.2 # For creating and editing Excel files
-  file_picker: ^11.0.2 # For picking files like PDFs
-  syncfusion_flutter_pdf: ^26.1.35 # For extracting text from PDFs
-  permission_handler: ^12.0.3 # To handle runtime permissions
   dio: ^5.10.0
   firebase_core: ^3.0.0
   firebase_auth: ^5.0.0
@@ -58,9 +53,11 @@ dependencies:
   googleapis: ^13.0.0
   http: ^1.2.0
   archive: ^3.5.1
-  qr_flutter: ^4.1.0
+  qr: ^3.0.2
   local_auth: ^3.0.2
 
+  sqflite_common_ffi_web: ^1.1.1
+  sqflite_common_ffi: ^2.4.0+3
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -1,10 +1,10 @@
 import 'dart:io';
 
+import 'package:fbr_tax_helper/core/platform/app_storage.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
 
 class ReceiptScanResult {
   const ReceiptScanResult({
@@ -53,7 +53,10 @@ class ReceiptScannerService {
   }
 
   Future<String> _storeReceipt(XFile picked) async {
-    final documents = await getApplicationDocumentsDirectory();
+    final documents = await AppStorage.getDocumentsDirectory();
+    if (documents == null) {
+      throw UnsupportedError('Receipt storage is unavailable on web.');
+    }
     final receiptDirectory = Directory(
       path.join(documents.path, 'transaction_receipts'),
     );

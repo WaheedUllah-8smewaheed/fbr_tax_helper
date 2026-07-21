@@ -4,6 +4,7 @@ import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction
     as entity;
 import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction_category.dart';
 import 'package:fbr_tax_helper/features/transactions/presentation/bloc/transaction_bloc.dart';
+import 'package:fbr_tax_helper/features/transactions/services/category_preferences_service.dart';
 import 'package:fbr_tax_helper/features/transactions/services/receipt_scanner_service.dart';
 import 'package:fbr_tax_helper/services/auth_service.dart';
 import 'package:flutter/material.dart';
@@ -34,9 +35,13 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   final _beneficiaryController = TextEditingController();
   final _purposeController = TextEditingController();
   final _amountController = TextEditingController();
+  final _categoryPreferences = CategoryPreferencesService();
   final _receiptScanner = ReceiptScannerService();
 
   bool _isScanningReceipt = false;
+  bool _isLoadingCategoryPreferences = true;
+  bool _didLoadCategoryPreferences = false;
+  bool _isExpense = true;
   DateTime _selectedDate = DateTime.now();
   String? _selectedCategory;
   String? _receiptImagePath;
@@ -50,13 +55,25 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       _beneficiaryController.text = transaction.beneficiary;
       _purposeController.text = transaction.purpose;
       _amountController.text = _formatAmountInput(transaction.amount);
+      _isExpense = transaction.isExpense;
       _selectedDate = transaction.date;
       _selectedCategory = transaction.category;
       _receiptImagePath = transaction.receiptImagePath;
     } else {
       _selectedCategory =
           widget.initialCategory ?? TransactionCategory.misc.name;
+      _isExpense =
+          widget.initialIsExpense ??
+          TransactionCategory.fromName(_selectedCategory!).isExpense;
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didLoadCategoryPreferences) return;
+    _didLoadCategoryPreferences = true;
+    _loadCategoryPreferences();
   }
 
   @override
@@ -65,7 +82,30 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     _beneficiaryController.dispose();
     _purposeController.dispose();
     _amountController.dispose();
+    _categoryPreferences.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadCategoryPreferences() async {
+    final userId = context.read<AuthService>().currentUser?.uid;
+    if (userId != null && userId.isNotEmpty) {
+      await _categoryPreferences.loadForUser(userId);
+    }
+    if (!mounted) return;
+    setState(() {
+      _isLoadingCategoryPreferences = false;
+      _applySelectedCategoryMode();
+    });
+  }
+
+  void _applySelectedCategoryMode() {
+    final selectedCategory = _selectedCategory;
+    if (selectedCategory == null) return;
+    if (_categoryPreferences.isDualMode(selectedCategory)) return;
+
+    _isExpense =
+        widget.initialIsExpense ??
+        _categoryPreferences.isExpense(selectedCategory);
   }
 
   Future<void> _selectDate() async {
@@ -174,10 +214,10 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       beneficiary: _beneficiaryController.text.trim(),
       purpose: _purposeController.text.trim(),
       amount: double.parse(_amountController.text.trim().replaceAll(',', '')),
-      isExpense:
-          widget.initialIsExpense ??
-          widget.transaction?.isExpense ??
-          TransactionCategory.fromName(_selectedCategory!).isExpense,
+      isExpense: _categoryPreferences.resolveTransactionTypeForCategory(
+        categoryName: _selectedCategory!,
+        transactionIsExpense: _isExpense,
+      ),
       date: _selectedDate,
       category: _selectedCategory!,
       receiptImagePath: _receiptImagePath,
@@ -193,6 +233,11 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
   @override
   Widget build(BuildContext context) {
+    final canSelectTransactionType =
+        !_isLoadingCategoryPreferences &&
+        _selectedCategory != null &&
+        _categoryPreferences.isDualMode(_selectedCategory!);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -200,8 +245,6 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
               ? 'Edit Transaction'
               : 'Add ${_selectedCategory ?? ''} Transaction',
         ),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -280,6 +323,30 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                       label: Text(
                         _selectedDate.toLocal().toString().split(' ')[0],
                       ),
+                    ),
+                    const SizedBox(height: 16),
+                    SegmentedButton<bool>(
+                      expandedInsets: EdgeInsets.zero,
+                      segments: const [
+                        ButtonSegment<bool>(
+                          value: false,
+                          label: Text('Income'),
+                          icon: Icon(Icons.arrow_upward),
+                        ),
+                        ButtonSegment<bool>(
+                          value: true,
+                          label: Text('Expense'),
+                          icon: Icon(Icons.arrow_downward),
+                        ),
+                      ],
+                      selected: {_isExpense},
+                      onSelectionChanged: canSelectTransactionType
+                          ? (selection) {
+                              setState(() {
+                                _isExpense = selection.first;
+                              });
+                            }
+                          : null,
                     ),
                     const SizedBox(height: 16),
                     FilledButton.icon(
