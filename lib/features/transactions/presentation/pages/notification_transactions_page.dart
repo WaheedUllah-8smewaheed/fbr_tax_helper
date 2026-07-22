@@ -1,14 +1,9 @@
 import 'package:fbr_tax_helper/features/transactions/domain/entities/captured_push_notification.dart';
-import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction.dart'
-    as entity;
-import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction_category.dart';
-import 'package:fbr_tax_helper/features/transactions/presentation/bloc/transaction_bloc.dart';
+import 'package:fbr_tax_helper/features/transactions/presentation/pages/add_transaction_page.dart';
 import 'package:fbr_tax_helper/features/transactions/services/notification_transaction_parser.dart';
 import 'package:fbr_tax_helper/features/transactions/services/push_notification_import_service.dart';
-import 'package:fbr_tax_helper/services/auth_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
 class NotificationTransactionsPage extends StatefulWidget {
@@ -66,6 +61,9 @@ class _NotificationTransactionsPageState
     final hasAccess = kIsWeb
         ? false
         : await _service.isNotificationAccessEnabled();
+    if (hasAccess) {
+      await _service.refreshNotificationListener();
+    }
     final notifications = kIsWeb
         ? const <CapturedPushNotification>[]
         : await _service.getCapturedNotifications();
@@ -91,51 +89,36 @@ class _NotificationTransactionsPageState
       ..showSnackBar(const SnackBar(content: Text('Notification dismissed.')));
   }
 
-  Future<void> _approve(
-    CapturedPushNotification notification, {
-    required String category,
-  }) async {
+  Future<void> _approve(CapturedPushNotification notification) async {
     final details = notification.details;
-    final amount = details?.amount;
-    if (details == null || amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Amount was not detected, so this cannot be approved.',
+    final fallbackTitle = notification.title.trim().isNotEmpty
+        ? notification.title.trim()
+        : '${notification.appName} transaction';
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) => AddTransactionPage(
+          initialTitle: details?.title ?? fallbackTitle,
+          initialBeneficiary: details?.beneficiary,
+          initialPurpose: notification.message,
+          initialAmount: details?.amount,
+          initialDate: notification.postedAt,
+          initialIsExpense: details?.isExpense ?? true,
+          showCategoryPicker: true,
+          appBarActions: [
+            IconButton(
+              tooltip: 'Notifications',
+              icon: _NotificationCountBadge(count: _notifications.length),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const NotificationTransactionsPage(),
+                ),
+              ),
             ),
-          ),
-        );
-      return;
-    }
-
-    final userId = context.read<AuthService>().currentUser?.uid;
-    if (userId == null || userId.isEmpty) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('Sign in before approving transactions.'),
-          ),
-        );
-      return;
-    }
-
-    context.read<TransactionBloc>().add(
-      AddTransaction(
-        entity.Transaction(
-          userId: userId,
-          title: details.title,
-          beneficiary: details.beneficiary,
-          purpose: details.purpose,
-          amount: amount,
-          isExpense: details.isExpense,
-          date: notification.postedAt,
-          category: category,
+          ],
         ),
       ),
     );
+    if (saved != true || !mounted) return;
 
     await _service.dismissNotification(notification.id);
     if (!mounted) return;
@@ -146,19 +129,18 @@ class _NotificationTransactionsPageState
     });
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('Transaction approved.')));
+      ..showSnackBar(const SnackBar(content: Text('Transaction saved.')));
   }
 
   Future<void> _showDetails(CapturedPushNotification notification) async {
     final details = notification.details;
-    var selectedCategory = details?.category ?? TransactionCategory.misc.name;
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
       builder: (context) {
         return StatefulBuilder(
-          builder: (context, setSheetState) {
+          builder: (context, _) {
             return SafeArea(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(
@@ -191,27 +173,6 @@ class _NotificationTransactionsPageState
                       const SizedBox(height: 18),
                       if (details != null) _DetectedDetails(details: details),
                       const SizedBox(height: 18),
-                      DropdownButtonFormField<String>(
-                        initialValue: selectedCategory,
-                        decoration: const InputDecoration(
-                          labelText: 'Category',
-                          prefixIcon: Icon(Icons.category_outlined),
-                          border: OutlineInputBorder(),
-                        ),
-                        items: TransactionCategory.all
-                            .map(
-                              (category) => DropdownMenuItem<String>(
-                                value: category.name,
-                                child: Text(category.name),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          if (value == null) return;
-                          setSheetState(() => selectedCategory = value);
-                        },
-                      ),
-                      const SizedBox(height: 18),
                       Row(
                         children: [
                           Expanded(
@@ -229,10 +190,7 @@ class _NotificationTransactionsPageState
                             child: FilledButton.icon(
                               onPressed: () {
                                 Navigator.pop(context);
-                                _approve(
-                                  notification,
-                                  category: selectedCategory,
-                                );
+                                _approve(notification);
                               },
                               icon: const Icon(Icons.check),
                               label: const Text('Approve'),
@@ -268,7 +226,7 @@ class _NotificationTransactionsPageState
           IconButton(
             tooltip: 'Refresh',
             onPressed: _isLoading ? null : _refresh,
-            icon: const Icon(Icons.refresh),
+            icon: _NotificationCountBadge(count: _notifications.length),
           ),
         ],
       ),
@@ -311,6 +269,46 @@ class _NotificationTransactionsPageState
 
   String _formatDate(DateTime date) {
     return DateFormat('MMM d, yyyy h:mm a').format(date);
+  }
+}
+
+class _NotificationCountBadge extends StatelessWidget {
+  const _NotificationCountBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        const Icon(Icons.notifications_active_outlined),
+        if (count > 0)
+          Positioned(
+            top: -7,
+            right: -9,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.red.shade700,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.white, width: 1.5),
+              ),
+              child: Text(
+                count > 99 ? '99+' : '$count',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  height: 1,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }
 

@@ -38,7 +38,7 @@ class NotificationTransactionParser {
       caseSensitive: false,
     ).hasMatch(lower);
     final isExpense = RegExp(
-      r'\b(sent|paid|payment|purchase|debited|debit|withdrawn|withdrawal|spent|transferred|transfer)\b',
+      r'\b(sent|paid|payment|purchase|debited|debit|withdrawn|withdrawal|spent|transferred|transfered|transfer)\b',
       caseSensitive: false,
     ).hasMatch(lower);
     if (!isIncome && !isExpense) return null;

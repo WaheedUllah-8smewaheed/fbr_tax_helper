@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction.dart';
+import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction_category.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -141,6 +142,8 @@ class TransactionReportService {
               ),
               pw.SizedBox(height: 10),
             ],
+          pw.SizedBox(height: 12),
+          _buildReportTotals(income: income, expenses: expenses),
         ],
       ),
     );
@@ -231,10 +234,75 @@ class TransactionReportService {
     );
   }
 
+  pw.Widget _buildReportTotals({
+    required double income,
+    required double expenses,
+  }) {
+    final grandTotal = income + expenses;
+    final balance = income - expenses;
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.all(16),
+      decoration: pw.BoxDecoration(
+        color: PdfColor.fromHex('#F6F7F4'),
+        border: pw.Border.all(color: PdfColor.fromHex('#B7C9C3')),
+        borderRadius: pw.BorderRadius.circular(10),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        children: [
+          pw.Text(
+            'Report totals',
+            style: pw.TextStyle(
+              fontSize: 15,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColor.fromHex('#123D36'),
+            ),
+          ),
+          pw.SizedBox(height: 10),
+          _totalRow('Total income', _formatMoney(income)),
+          _totalRow('Total expenses', _formatMoney(expenses)),
+          _totalRow('Grand total', _formatMoney(grandTotal)),
+          pw.Divider(color: PdfColor.fromHex('#B7C9C3')),
+          _totalRow('Balance', _formatMoney(balance), emphasize: true),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _totalRow(String label, String value, {bool emphasize = false}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 4),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(
+            label,
+            style: pw.TextStyle(
+              fontSize: emphasize ? 12 : 10,
+              fontWeight: emphasize ? pw.FontWeight.bold : pw.FontWeight.normal,
+            ),
+          ),
+          pw.Text(
+            value,
+            style: pw.TextStyle(
+              fontSize: emphasize ? 12 : 10,
+              fontWeight: pw.FontWeight.bold,
+              color: emphasize ? PdfColor.fromHex('#0F6B57') : null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   pw.Widget _buildTransaction(
     Transaction transaction, {
     pw.MemoryImage? receiptImage,
   }) {
+    final categoryPath = TransactionCategory.hierarchyPathFor(
+      transaction.category,
+    );
     final amountColor = transaction.isExpense
         ? PdfColor.fromHex('#B3261E')
         : PdfColor.fromHex('#0F6B57');
@@ -285,7 +353,13 @@ class TransactionReportService {
                   'Type',
                   transaction.isExpense ? 'Expense' : 'Income',
                 ),
-                _detailRow('Category', transaction.category),
+                if (categoryPath.length >= 2)
+                  _detailRow('Super Category', categoryPath[0]),
+                if (categoryPath.length >= 3) ...[
+                  _detailRow('Category', categoryPath[1]),
+                  _detailRow('Subcategory', categoryPath[2]),
+                ] else
+                  _detailRow('Category', categoryPath.last),
                 _detailRow('Beneficiary', transaction.beneficiary),
                 _detailRow('Purpose', transaction.purpose),
                 _detailRow(

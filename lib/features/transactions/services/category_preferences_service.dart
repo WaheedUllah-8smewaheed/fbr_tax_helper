@@ -4,6 +4,8 @@ import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+enum CategoryMode { income, expense, both }
+
 class CategoryPreferencesService extends ChangeNotifier {
   CategoryPreferencesService({FlutterSecureStorage? storage})
     : _storage = storage ?? const FlutterSecureStorage();
@@ -11,6 +13,8 @@ class CategoryPreferencesService extends ChangeNotifier {
   final FlutterSecureStorage _storage;
   final Map<String, bool> _classifications = {};
   final Set<String> _dualModeCategories = <String>{};
+  final Set<String> _disabledCategories = <String>{};
+  final Map<String, CategoryMode> _groupModes = {};
 
   String? _userId;
   bool _isLoading = false;
@@ -20,12 +24,36 @@ class CategoryPreferencesService extends ChangeNotifier {
   String? get loadError => _loadError;
 
   bool isExpense(String categoryName) {
+    final groupMode = _modeForCategory(categoryName);
+    if (groupMode == CategoryMode.income) return false;
+    if (groupMode == CategoryMode.expense) return true;
     return _classifications[categoryName] ??
         TransactionCategory.fromName(categoryName).isExpense;
   }
 
   bool isDualMode(String categoryName) {
+    final groupMode = _modeForCategory(categoryName);
+    if (groupMode != null) return groupMode == CategoryMode.both;
     return _dualModeCategories.contains(categoryName);
+  }
+
+  CategoryMode? _modeForCategory(String categoryName) {
+    final parentName = TransactionCategory.parentNameFor(categoryName);
+    return parentName == null ? null : modeForParent(parentName);
+  }
+
+  CategoryMode modeForParent(String parentName) {
+    final storedMode = _groupModes[parentName];
+    if (storedMode != null) return storedMode;
+    final children = TransactionCategory.childrenOf(parentName);
+    final hasIncome = children.any((category) => !category.isExpense);
+    final hasExpense = children.any((category) => category.isExpense);
+    if (hasIncome && hasExpense) return CategoryMode.both;
+    return hasExpense ? CategoryMode.expense : CategoryMode.income;
+  }
+
+  bool isEnabled(String categoryName) {
+    return !_disabledCategories.contains(categoryName);
   }
 
   bool resolveTransactionTypeForCategory({
@@ -95,6 +123,8 @@ class CategoryPreferencesService extends ChangeNotifier {
     _loadError = null;
     _classifications.clear();
     _dualModeCategories.clear();
+    _disabledCategories.clear();
+    _groupModes.clear();
     notifyListeners();
 
     try {
@@ -105,14 +135,20 @@ class CategoryPreferencesService extends ChangeNotifier {
           if (decoded['classifications'] is Map<String, dynamic>) {
             final classifications =
                 decoded['classifications'] as Map<String, dynamic>;
-            for (final category in TransactionCategory.all) {
+            for (final category in [
+              ...TransactionCategory.all,
+              ...TransactionCategory.legacy,
+            ]) {
               final value = classifications[category.name];
               if (value is bool) {
                 _classifications[category.name] = value;
               }
             }
           } else {
-            for (final category in TransactionCategory.all) {
+            for (final category in [
+              ...TransactionCategory.all,
+              ...TransactionCategory.legacy,
+            ]) {
               final value = decoded[category.name];
               if (value is bool) {
                 _classifications[category.name] = value;
@@ -125,6 +161,27 @@ class CategoryPreferencesService extends ChangeNotifier {
             for (final value in dualModes) {
               if (value is String) {
                 _dualModeCategories.add(value);
+              }
+            }
+          }
+
+          final disabledCategories = decoded['disabled_categories'];
+          if (disabledCategories is List) {
+            for (final value in disabledCategories) {
+              if (value is String) {
+                _disabledCategories.add(value);
+              }
+            }
+          }
+
+          final groupModes = decoded['group_modes'];
+          if (groupModes is Map<String, dynamic>) {
+            for (final entry in groupModes.entries) {
+              for (final mode in CategoryMode.values) {
+                if (mode.name == entry.value) {
+                  _groupModes[entry.key] = mode;
+                  break;
+                }
               }
             }
           }
@@ -198,11 +255,74 @@ class CategoryPreferencesService extends ChangeNotifier {
     }
   }
 
+  Future<void> setEnabled(String categoryName, {required bool enabled}) async {
+    final userId = _userId;
+    if (userId == null || userId.isEmpty) {
+      throw StateError('Sign in before changing category settings.');
+    }
+
+    final wasDisabled = _disabledCategories.contains(categoryName);
+    if (enabled) {
+      _disabledCategories.remove(categoryName);
+    } else {
+      _disabledCategories.add(categoryName);
+    }
+    notifyListeners();
+
+    try {
+      await _storage.write(
+        key: _storageKey(userId),
+        value: jsonEncode(_persistedState),
+      );
+    } catch (_) {
+      if (wasDisabled) {
+        _disabledCategories.add(categoryName);
+      } else {
+        _disabledCategories.remove(categoryName);
+      }
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> setParentMode(
+    String parentName, {
+    required CategoryMode mode,
+  }) async {
+    final userId = _userId;
+    if (userId == null || userId.isEmpty) {
+      throw StateError('Sign in before changing category settings.');
+    }
+
+    final previousMode = _groupModes[parentName];
+    _groupModes[parentName] = mode;
+    notifyListeners();
+
+    try {
+      await _storage.write(
+        key: _storageKey(userId),
+        value: jsonEncode(_persistedState),
+      );
+    } catch (_) {
+      if (previousMode == null) {
+        _groupModes.remove(parentName);
+      } else {
+        _groupModes[parentName] = previousMode;
+      }
+      notifyListeners();
+      rethrow;
+    }
+  }
+
   Map<String, dynamic> get _persistedState => {
     'classifications': {
       for (final entry in _classifications.entries) entry.key: entry.value,
     },
     'dual_modes': _dualModeCategories.toList(),
+    'disabled_categories': _disabledCategories.toList(),
+    'group_modes': {
+      for (final entry in _groupModes.entries) entry.key: entry.value.name,
+    },
   };
 
   String _storageKey(String userId) => 'category_preferences_$userId';

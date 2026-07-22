@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import '../../../core/validation/fbr_validators.dart';
-import 'models/atl_status_model.dart';
-import 'models/cpr_status_model.dart';
-import 'models/ntn_profile_model.dart';
-import 'verification_api_service.dart';
+import '../../../../core/validation/fbr_validators.dart';
+import '../models/atl_status_model.dart';
+import '../models/cpr_status_model.dart';
+import '../models/ntn_profile_model.dart';
+import '../services/verification_api_service.dart';
 
 class VerificationRepository {
   VerificationRepository({VerificationApiService? apiService})

@@ -1,33 +1,54 @@
 package com.example.fbr_tax_helper
 
 import android.app.Notification
-import android.content.ComponentName
-import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import org.json.JSONObject
 import java.util.Locale
 
 class NotificationCaptureService : NotificationListenerService() {
+    companion object {
+        @Volatile
+        private var connectedService: NotificationCaptureService? = null
+
+        fun isConnected(): Boolean = connectedService != null
+
+        fun refreshActiveNotifications(): Boolean {
+            val service = connectedService ?: return false
+            service.captureActiveNotifications()
+            return true
+        }
+    }
+
+    override fun onDestroy() {
+        if (connectedService === this) connectedService = null
+        super.onDestroy()
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        capture(sbn)
+        runCatching { capture(sbn) }
     }
 
     override fun onListenerConnected() {
         super.onListenerConnected()
         // Import matching notifications that are still present after Android
         // reconnects this listener, including while the Flutter app was closed.
-        try {
-            activeNotifications?.forEach(::capture)
-        } catch (_: SecurityException) {
-            // Android will call onNotificationPosted for subsequent alerts.
-        }
+        connectedService = this
+        captureActiveNotifications()
     }
 
     override fun onListenerDisconnected() {
+        if (connectedService === this) connectedService = null
         super.onListenerDisconnected()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            requestRebind(ComponentName(this, NotificationCaptureService::class.java))
+    }
+
+    private fun captureActiveNotifications() {
+        try {
+            activeNotifications?.forEach { notification ->
+                runCatching { capture(notification) }
+            }
+        } catch (_: SecurityException) {
+            // Android will call onNotificationPosted for subsequent alerts.
         }
     }
 
@@ -43,8 +64,14 @@ class NotificationCaptureService : NotificationListenerService() {
         val message = buildMessage(notification).trim()
         if (message.isBlank() || !shouldCapture(message)) return
 
+        // Apps commonly reuse one Android notification key. Include event data
+        // so later transactions remain distinct while active-notification
+        // refreshes still produce the same identifier for the same alert.
+        val eventId = "${sbn.key}|${sbn.postTime}|${message.hashCode()}"
+
         val item = JSONObject()
-            .put("id", sbn.key)
+            .put("id", eventId)
+            .put("sourceId", sbn.key)
             .put("packageName", sbn.packageName)
             .put("appName", appNameForPackage(sbn.packageName))
             .put("title", title)
@@ -79,28 +106,26 @@ class NotificationCaptureService : NotificationListenerService() {
     }
 
     private fun shouldCapture(message: String): Boolean {
-        val lower = message.lowercase(Locale.US)
-        val hasCurrency = Regex("""\b(rs\.?|pkr)\b""").containsMatchIn(lower)
+        val lower = message
+            .lowercase(Locale.US)
+            .replace(Regex("""\s+"""), " ")
         val hasTransactionPattern =
             lower.contains("sent to") ||
-                lower.contains("sent ") ||
-                lower.contains("paid for") ||
-                lower.contains("payment") ||
-                lower.contains("purchase") ||
-                lower.contains("transaction") ||
+                lower.contains("received from") ||
+                lower.contains("recieved from") ||
+                lower.contains("has been debited") ||
+                lower.contains("is debited") ||
+                lower.contains("has been credited") ||
+                lower.contains("is credited") ||
+                lower.contains("transferred") ||
+                lower.contains("transfered") ||
                 lower.contains("transfer") ||
                 lower.contains("debited") ||
-                lower.contains("debit") ||
-                lower.contains("withdrawn") ||
-                lower.contains("withdrawal") ||
                 lower.contains("credited") ||
-                lower.contains("credit") ||
-                lower.contains("deposited") ||
-                lower.contains("deposit") ||
                 lower.contains("received") ||
                 lower.contains("recieved")
 
-        return hasCurrency && hasTransactionPattern
+        return hasTransactionPattern
     }
 
     private fun appNameForPackage(packageName: String): String {

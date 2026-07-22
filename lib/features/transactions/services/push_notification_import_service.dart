@@ -22,6 +22,19 @@ class PushNotificationImportService {
     return _channel.invokeMethod<void>('openNotificationAccessSettings');
   }
 
+  Future<void> refreshNotificationListener() async {
+    try {
+      final wasConnected =
+          await _channel.invokeMethod<bool>('refreshNotificationListener') ??
+          false;
+      if (!wasConnected) {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      }
+    } on MissingPluginException {
+      // Notification capture is Android-only.
+    }
+  }
+
   Future<List<CapturedPushNotification>> getCapturedNotifications() async {
     String encoded;
     try {

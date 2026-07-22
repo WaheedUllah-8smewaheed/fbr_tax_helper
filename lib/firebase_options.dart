@@ -63,8 +63,10 @@ class DefaultFirebaseOptions {
     messagingSenderId: '422412426431',
     projectId: 'taxflutter-application',
     storageBucket: 'taxflutter-application.firebasestorage.app',
-    androidClientId: '422412426431-9jvn8auo7tua7toiu3u33kouga8ckehk.apps.googleusercontent.com',
-    iosClientId: '422412426431-i4ijurbhl7srbsb704bkkkjk0dipruju.apps.googleusercontent.com',
+    androidClientId:
+        '422412426431-9jvn8auo7tua7toiu3u33kouga8ckehk.apps.googleusercontent.com',
+    iosClientId:
+        '422412426431-i4ijurbhl7srbsb704bkkkjk0dipruju.apps.googleusercontent.com',
     iosBundleId: 'com.example.fbrTaxHelper',
   );
 
@@ -74,8 +76,10 @@ class DefaultFirebaseOptions {
     messagingSenderId: '422412426431',
     projectId: 'taxflutter-application',
     storageBucket: 'taxflutter-application.firebasestorage.app',
-    androidClientId: '422412426431-9jvn8auo7tua7toiu3u33kouga8ckehk.apps.googleusercontent.com',
-    iosClientId: '422412426431-i4ijurbhl7srbsb704bkkkjk0dipruju.apps.googleusercontent.com',
+    androidClientId:
+        '422412426431-9jvn8auo7tua7toiu3u33kouga8ckehk.apps.googleusercontent.com',
+    iosClientId:
+        '422412426431-i4ijurbhl7srbsb704bkkkjk0dipruju.apps.googleusercontent.com',
     iosBundleId: 'com.example.fbrTaxHelper',
   );
 

@@ -1,4 +1,4 @@
-import 'package:fbr_tax_helper/database/tax_db.dart';
+import 'package:fbr_tax_helper/core/database/tax_database.dart';
 import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction.dart';
 
 abstract class TransactionLocalDataSource {

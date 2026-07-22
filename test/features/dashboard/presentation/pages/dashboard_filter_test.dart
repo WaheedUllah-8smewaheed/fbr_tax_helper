@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fbr_tax_helper/features/auth/presentation/pages/dashboard_screen.dart';
+import 'package:fbr_tax_helper/features/dashboard/presentation/pages/dashboard_screen.dart';
 import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction.dart';
 
 void main() {
@@ -37,12 +37,12 @@ void main() {
       ),
     ];
 
-    final filtered = filterTransactionsByMonth(
-      transactions,
-      DateTime(2025, 2),
-    );
+    final filtered = filterTransactionsByMonth(transactions, DateTime(2025, 2));
 
     expect(filtered.length, 2);
-    expect(filtered.every((transaction) => transaction.date.month == 2), isTrue);
+    expect(
+      filtered.every((transaction) => transaction.date.month == 2),
+      isTrue,
+    );
   });
 }

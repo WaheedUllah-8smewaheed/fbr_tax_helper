@@ -22,8 +22,17 @@ class TaxCalculatorScreen extends StatefulWidget {
   final TaxCalculatorBloc? bloc;
   final Widget? footer;
   final VoidCallback? onLogin;
+  final String appBarTitle;
+  final List<Widget> appBarActions;
 
-  const TaxCalculatorScreen({super.key, this.bloc, this.footer, this.onLogin});
+  const TaxCalculatorScreen({
+    super.key,
+    this.bloc,
+    this.footer,
+    this.onLogin,
+    this.appBarTitle = 'Filer Flow',
+    this.appBarActions = const [],
+  });
 
   @override
   State<TaxCalculatorScreen> createState() => _TaxCalculatorScreenState();
@@ -166,10 +175,11 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Filer Flow'),
+        title: Text(widget.appBarTitle),
         centerTitle: false,
         automaticallyImplyLeading: widget.onLogin == null,
         actions: [
+          ...widget.appBarActions,
           // if (widget.onLogin != null)
           //   TextButton.icon(
           //     onPressed: widget.onLogin,

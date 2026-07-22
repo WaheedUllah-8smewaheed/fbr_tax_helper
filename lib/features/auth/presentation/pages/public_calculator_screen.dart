@@ -1,4 +1,4 @@
-import 'package:fbr_tax_helper/features/tax_calculator/presentation/screens/tax_calculator_screen.dart';
+import 'package:fbr_tax_helper/features/tax_calculator/presentation/pages/tax_calculator_screen.dart';
 import 'package:flutter/material.dart';
 
 class PublicCalculatorScreen extends StatelessWidget {

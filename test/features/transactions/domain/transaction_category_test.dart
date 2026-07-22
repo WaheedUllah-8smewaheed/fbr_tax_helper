@@ -13,4 +13,21 @@ void main() {
     expect(TransactionCategory.fromName('Unknown'), TransactionCategory.misc);
     expect(TransactionCategory.fromName('Unknown').isExpense, isTrue);
   });
+
+  test('builds printable paths for new and legacy categories', () {
+    expect(TransactionCategory.hierarchyPathFor('Fuel'), [
+      'Housing & Transport',
+      'Transport',
+      'Fuel',
+    ]);
+    expect(
+      TransactionCategory.displayPathFor('Basic Pay'),
+      'Income > Salary > Basic Pay',
+    );
+    expect(TransactionCategory.hierarchyPathFor('Salary'), [
+      'Income',
+      'Salary',
+    ]);
+    expect(TransactionCategory.hierarchyPathFor('Old Custom'), ['Old Custom']);
+  });
 }

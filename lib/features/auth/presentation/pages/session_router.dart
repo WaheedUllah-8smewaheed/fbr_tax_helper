@@ -1,7 +1,7 @@
-import 'package:fbr_tax_helper/features/auth/presentation/pages/dashboard_screen.dart';
+import 'package:fbr_tax_helper/features/dashboard/presentation/pages/dashboard_screen.dart';
 import 'package:fbr_tax_helper/features/auth/presentation/pages/login_page.dart';
-import 'package:fbr_tax_helper/services/auth_service.dart';
-import 'package:fbr_tax_helper/services/biometric_lock_service.dart';
+import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
+import 'package:fbr_tax_helper/features/auth/services/biometric_lock_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';

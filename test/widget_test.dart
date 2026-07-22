@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:fbr_tax_helper/main.dart';
-import 'package:fbr_tax_helper/services/auth_service.dart';
+import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:fbr_tax_helper/features/tax_calculator/data/datasources/tax_local_data_source.dart';
 import 'package:fbr_tax_helper/features/tax_calculator/data/models/tax_profile_model.dart';
 import 'package:fbr_tax_helper/features/tax_calculator/data/repositories/tax_repository_impl.dart';
 import 'package:fbr_tax_helper/features/tax_calculator/domain/usecases/calculate_tax_liability.dart';
 import 'package:fbr_tax_helper/features/tax_calculator/presentation/bloc/tax_calculator_bloc.dart';
-import 'package:fbr_tax_helper/features/tax_calculator/presentation/screens/splash_screen.dart';
-import 'package:fbr_tax_helper/features/tax_calculator/presentation/screens/tax_calculator_screen.dart';
+import 'package:fbr_tax_helper/features/splash/presentation/pages/splash_screen.dart';
+import 'package:fbr_tax_helper/features/tax_calculator/presentation/pages/tax_calculator_screen.dart';
 
 class FakeLocalDataSource implements TaxLocalDataSource {
   TaxProfileModel? cachedProfile;

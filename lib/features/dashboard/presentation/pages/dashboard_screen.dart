@@ -1,7 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:fl_chart/fl_chart.dart';
-import 'package:fbr_tax_helper/features/tax_calculator/presentation/screens/tax_calculator_screen.dart';
+import 'package:fbr_tax_helper/features/tax_calculator/presentation/pages/tax_calculator_screen.dart';
 import 'package:fbr_tax_helper/features/transactions/presentation/pages/add_transaction_page.dart';
 import 'package:fbr_tax_helper/features/transactions/presentation/pages/notification_transactions_page.dart';
 import 'package:fbr_tax_helper/features/transactions/presentation/bloc/transaction_bloc.dart';
@@ -10,11 +11,12 @@ import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction
 import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction_category.dart';
 import 'package:fbr_tax_helper/features/transactions/services/transaction_report_service.dart';
 import 'package:fbr_tax_helper/features/transactions/services/category_preferences_service.dart';
+import 'package:fbr_tax_helper/features/transactions/services/push_notification_import_service.dart';
 
 import 'package:fbr_tax_helper/core/platform/app_storage.dart';
-import 'package:fbr_tax_helper/services/auth_service.dart';
-import 'package:fbr_tax_helper/services/biometric_lock_service.dart';
-import 'package:fbr_tax_helper/services/drive_service.dart';
+import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
+import 'package:fbr_tax_helper/features/auth/services/biometric_lock_service.dart';
+import 'package:fbr_tax_helper/features/backup/services/drive_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -30,13 +32,17 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen>
+    with WidgetsBindingObserver {
   int _selectedIndex = 0;
+  int _notificationCount = 0;
+  Timer? _notificationTimer;
   late final CategoryPreferencesService _categoryPreferences;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     context.read<TransactionBloc>().add(const LoadTransactions());
     _categoryPreferences = CategoryPreferencesService();
     final userId = context.read<AuthService>().currentUser?.uid;
@@ -45,7 +51,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showBiometricReminderIfNeeded();
+      _refreshNotificationCount();
     });
+    _notificationTimer = Timer.periodic(
+      const Duration(seconds: 4),
+      (_) => _refreshNotificationCount(),
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshNotificationCount();
+    }
+  }
+
+  Future<void> _refreshNotificationCount() async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    try {
+      const service = PushNotificationImportService();
+      if (!await service.isNotificationAccessEnabled()) {
+        if (mounted && _notificationCount != 0) {
+          setState(() => _notificationCount = 0);
+        }
+        return;
+      }
+      await service.refreshNotificationListener();
+      final count = (await service.getCapturedNotifications()).length;
+      if (!mounted || count == _notificationCount) return;
+      setState(() => _notificationCount = count);
+    } catch (_) {
+      // Badge refresh must never interrupt dashboard use.
+    }
   }
 
   Future<void> _showBiometricReminderIfNeeded() async {
@@ -64,13 +101,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ..showSnackBar(
           SnackBar(
             content: const Text(
-              'Fingerprint app lock is optional. You can enable it from Profile.',
+              'Please enable fingerprint for two-factor authentication in the Profile menu.',
             ),
             duration: const Duration(seconds: 5),
-            action: SnackBarAction(
-              label: 'Profile',
-              onPressed: () => _openProfilePage(context),
-            ),
           ),
         );
     } on BiometricLockException {
@@ -80,6 +113,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _notificationTimer?.cancel();
     _categoryPreferences.dispose();
     super.dispose();
   }
@@ -92,16 +127,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    const titles = ['Dashboard', 'Transactions', 'Settings', 'More'];
     return Scaffold(
+      appBar: AppBar(
+        title: Text(titles[_selectedIndex]),
+        actions: [
+          IconButton(
+            tooltip: 'Notifications',
+            icon: _NotificationBadge(count: _notificationCount),
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const NotificationTransactionsPage(),
+                ),
+              );
+              await _refreshNotificationCount();
+            },
+          ),
+        ],
+      ),
       body: ListenableBuilder(
         listenable: _categoryPreferences,
         builder: (context, _) => IndexedStack(
           index: _selectedIndex,
           children: [
             _HomeDashboard(categoryPreferences: _categoryPreferences),
-            NotificationTransactionsPage(isActive: _selectedIndex == 1),
-            const TaxCalculatorScreen(),
+            _TransactionsPage(
+              categoryPreferences: _categoryPreferences,
+              notificationCount: _notificationCount,
+              onNotificationsChanged: _refreshNotificationCount,
+            ),
             _CategorySettingsPage(categoryPreferences: _categoryPreferences),
+            _MorePage(
+              notificationCount: _notificationCount,
+              onNotificationsChanged: _refreshNotificationCount,
+            ),
           ],
         ),
       ),
@@ -115,16 +175,647 @@ class _DashboardScreenState extends State<DashboardScreen> {
             label: 'Dashboard',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.notifications_active_outlined),
-            label: 'Notifications',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calculate),
-            label: 'Calculator',
+            icon: Icon(Icons.credit_card_outlined),
+            label: 'Transactions',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings),
             label: 'Settings',
+          ),
+          BottomNavigationBarItem(icon: Icon(Icons.menu), label: 'More'),
+        ],
+      ),
+    );
+  }
+}
+
+enum _TransactionFilter { income, expense, both }
+
+class _TransactionsPage extends StatefulWidget {
+  const _TransactionsPage({
+    required this.categoryPreferences,
+    required this.notificationCount,
+    required this.onNotificationsChanged,
+  });
+
+  final CategoryPreferencesService categoryPreferences;
+  final int notificationCount;
+  final Future<void> Function() onNotificationsChanged;
+
+  @override
+  State<_TransactionsPage> createState() => _TransactionsPageState();
+}
+
+class _TransactionsPageState extends State<_TransactionsPage> {
+  _TransactionFilter _filter = _TransactionFilter.income;
+
+  bool _isVisible(TransactionCategory category) {
+    if (!widget.categoryPreferences.isEnabled(category.name)) return false;
+    return switch (_filter) {
+      _TransactionFilter.income =>
+        widget.categoryPreferences.shouldShowCategoryInSection(
+          categoryName: category.name,
+          isExpenseSection: false,
+        ),
+      _TransactionFilter.expense =>
+        widget.categoryPreferences.shouldShowCategoryInSection(
+          categoryName: category.name,
+          isExpenseSection: true,
+        ),
+      _TransactionFilter.both => widget.categoryPreferences.isDualMode(
+        category.name,
+      ),
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          SegmentedButton<_TransactionFilter>(
+            expandedInsets: EdgeInsets.zero,
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(
+                value: _TransactionFilter.income,
+                label: Text('Income'),
+              ),
+              ButtonSegment(
+                value: _TransactionFilter.expense,
+                label: Text('Expense'),
+              ),
+              ButtonSegment(
+                value: _TransactionFilter.both,
+                label: Text('Both'),
+              ),
+            ],
+            selected: {_filter},
+            onSelectionChanged: (selection) {
+              setState(() => _filter = selection.first);
+            },
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => _AllTransactionsPage(
+                    categoryPreferences: widget.categoryPreferences,
+                    notificationCount: widget.notificationCount,
+                    onNotificationsChanged: widget.onNotificationsChanged,
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.receipt_long_outlined),
+            label: const Text('View All Transactions'),
+          ),
+          const SizedBox(height: 20),
+          ...TransactionCategory.hierarchy.entries.expand((superCategory) {
+            final visibleParents = superCategory.value.entries
+                .map(
+                  (parent) => MapEntry(
+                    parent.key,
+                    parent.value.where(_isVisible).toList(),
+                  ),
+                )
+                .where((parent) => parent.value.isNotEmpty)
+                .toList();
+            if (visibleParents.isEmpty) return const <Widget>[];
+            return <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+                child: Text(
+                  superCategory.key,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Card(
+                margin: const EdgeInsets.only(bottom: 18),
+                child: Column(
+                  children: [
+                    for (
+                      var parentIndex = 0;
+                      parentIndex < visibleParents.length;
+                      parentIndex++
+                    ) ...[
+                      ExpansionTile(
+                        leading: CircleAvatar(
+                          backgroundColor: _getColorForCategory(
+                            visibleParents[parentIndex].key,
+                          ).withValues(alpha: 0.12),
+                          foregroundColor: _getColorForCategory(
+                            visibleParents[parentIndex].key,
+                          ),
+                          child: Icon(
+                            _getIconForCategory(
+                              visibleParents[parentIndex].key,
+                            ),
+                            size: 20,
+                          ),
+                        ),
+                        title: Text(
+                          visibleParents[parentIndex].key,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        children: [
+                          for (
+                            var categoryIndex = 0;
+                            categoryIndex <
+                                visibleParents[parentIndex].value.length;
+                            categoryIndex++
+                          ) ...[
+                            ListTile(
+                              contentPadding: const EdgeInsets.only(
+                                left: 72,
+                                right: 16,
+                              ),
+                              title: Text(
+                                visibleParents[parentIndex]
+                                    .value[categoryIndex]
+                                    .name,
+                              ),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () {
+                                final category = visibleParents[parentIndex]
+                                    .value[categoryIndex];
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        _CategoryTransactionsPage(
+                                          category: category.name,
+                                          categoryPreferences:
+                                              widget.categoryPreferences,
+                                          notificationCount:
+                                              widget.notificationCount,
+                                          onNotificationsChanged:
+                                              widget.onNotificationsChanged,
+                                        ),
+                                  ),
+                                );
+                              },
+                            ),
+                            if (categoryIndex <
+                                visibleParents[parentIndex].value.length - 1)
+                              const Divider(height: 1, indent: 72),
+                          ],
+                        ],
+                      ),
+                      if (parentIndex < visibleParents.length - 1)
+                        const Divider(height: 1, indent: 72),
+                    ],
+                  ],
+                ),
+              ),
+            ];
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+enum _TransactionDateFilter { all, month, range }
+
+class _AllTransactionsPage extends StatefulWidget {
+  const _AllTransactionsPage({
+    required this.categoryPreferences,
+    required this.notificationCount,
+    required this.onNotificationsChanged,
+  });
+
+  final CategoryPreferencesService categoryPreferences;
+  final int notificationCount;
+  final Future<void> Function() onNotificationsChanged;
+
+  @override
+  State<_AllTransactionsPage> createState() => _AllTransactionsPageState();
+}
+
+class _AllTransactionsPageState extends State<_AllTransactionsPage> {
+  _TransactionDateFilter _dateFilter = _TransactionDateFilter.all;
+  DateTime? _selectedMonth;
+  DateTime? _rangeStart;
+  DateTime? _rangeEnd;
+
+  Future<void> _pickRangeDate({required bool isStart}) async {
+    final now = DateTime.now();
+    final firstDate = isStart
+        ? DateTime(2000)
+        : (_rangeStart ?? DateTime(2000));
+    final lastDate = isStart ? (_rangeEnd ?? now) : now;
+    final initialDate = isStart
+        ? (_rangeStart ?? _rangeEnd ?? now)
+        : (_rangeEnd ?? _rangeStart ?? now);
+    final selectedDate = await showDatePicker(
+      context: context,
+      firstDate: firstDate,
+      lastDate: lastDate,
+      initialDate: initialDate,
+    );
+    if (selectedDate == null || !mounted) return;
+    setState(() {
+      if (isStart) {
+        _rangeStart = selectedDate;
+      } else {
+        _rangeEnd = selectedDate;
+      }
+    });
+  }
+
+  List<entity.Transaction> _applyFilters(
+    List<entity.Transaction> transactions,
+  ) {
+    return transactions.where((transaction) {
+      return switch (_dateFilter) {
+        _TransactionDateFilter.all => true,
+        _TransactionDateFilter.month =>
+          _selectedMonth == null ||
+              (transaction.date.year == _selectedMonth!.year &&
+                  transaction.date.month == _selectedMonth!.month),
+        _TransactionDateFilter.range => _isInsideSelectedRange(
+          transaction.date,
+        ),
+      };
+    }).toList();
+  }
+
+  bool _isInsideSelectedRange(DateTime date) {
+    final rangeStart = _rangeStart;
+    final rangeEnd = _rangeEnd;
+    if (rangeStart == null || rangeEnd == null) return true;
+    final value = DateTime(date.year, date.month, date.day);
+    final start = DateTime(rangeStart.year, rangeStart.month, rangeStart.day);
+    final end = DateTime(rangeEnd.year, rangeEnd.month, rangeEnd.day);
+    return !value.isBefore(start) && !value.isAfter(end);
+  }
+
+  String _filterLabel() {
+    final period = switch (_dateFilter) {
+      _TransactionDateFilter.all => 'All dates',
+      _TransactionDateFilter.month =>
+        _selectedMonth == null
+            ? 'All months'
+            : DateFormat('MMMM yyyy').format(_selectedMonth!),
+      _TransactionDateFilter.range =>
+        _rangeStart == null || _rangeEnd == null
+            ? 'Select from and to dates'
+            : '${DateFormat('MMM d, yyyy').format(_rangeStart!)} – ${DateFormat('MMM d, yyyy').format(_rangeEnd!)}',
+    };
+    return 'All transactions • $period';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentUserId = context.read<AuthService>().currentUser?.uid ?? '';
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('All Transactions'),
+        actions: [
+          IconButton(
+            tooltip: 'Notifications',
+            icon: _NotificationBadge(count: widget.notificationCount),
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const NotificationTransactionsPage(),
+                ),
+              );
+              await widget.onNotificationsChanged();
+            },
+          ),
+        ],
+      ),
+      body: BlocBuilder<TransactionBloc, TransactionState>(
+        builder: (context, state) {
+          final storedTransactions =
+              state is TransactionLoaded && state.userId == currentUserId
+              ? state.transactions
+              : const <entity.Transaction>[];
+          final resolvedTransactions = storedTransactions
+              .map(
+                (transaction) => transaction.copyWith(
+                  isExpense: widget.categoryPreferences
+                      .resolveTransactionTypeForCategory(
+                        categoryName: transaction.category,
+                        transactionIsExpense: transaction.isExpense,
+                      ),
+                ),
+              )
+              .toList();
+          final monthOptions = _buildMonthOptions(resolvedTransactions);
+          final visibleTransactions = _applyFilters(resolvedTransactions);
+
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              SegmentedButton<_TransactionDateFilter>(
+                expandedInsets: EdgeInsets.zero,
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(
+                    value: _TransactionDateFilter.all,
+                    label: Text('All'),
+                  ),
+                  ButtonSegment(
+                    value: _TransactionDateFilter.month,
+                    label: Text('Month'),
+                  ),
+                  ButtonSegment(
+                    value: _TransactionDateFilter.range,
+                    label: Text('Range'),
+                  ),
+                ],
+                selected: {_dateFilter},
+                onSelectionChanged: (selection) {
+                  setState(() {
+                    _dateFilter = selection.first;
+                    if (_dateFilter == _TransactionDateFilter.month &&
+                        _selectedMonth == null &&
+                        monthOptions.isNotEmpty) {
+                      _selectedMonth = monthOptions.first;
+                    }
+                  });
+                },
+              ),
+              if (_dateFilter == _TransactionDateFilter.month) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<DateTime>(
+                  initialValue: _selectedMonth,
+                  decoration: const InputDecoration(
+                    labelText: 'Month',
+                    prefixIcon: Icon(Icons.calendar_month_outlined),
+                  ),
+                  items: monthOptions
+                      .map(
+                        (month) => DropdownMenuItem(
+                          value: month,
+                          child: Text(_monthLabel(month)),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (month) => setState(() => _selectedMonth = month),
+                ),
+              ],
+              if (_dateFilter == _TransactionDateFilter.range) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        key: ValueKey(_rangeStart),
+                        readOnly: true,
+                        initialValue: _rangeStart == null
+                            ? ''
+                            : DateFormat('dd MMM yyyy').format(_rangeStart!),
+                        decoration: const InputDecoration(
+                          labelText: 'From',
+                          hintText: 'Select date',
+                          suffixIcon: Icon(Icons.calendar_today_outlined),
+                        ),
+                        onTap: () => _pickRangeDate(isStart: true),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        key: ValueKey(_rangeEnd),
+                        readOnly: true,
+                        initialValue: _rangeEnd == null
+                            ? ''
+                            : DateFormat('dd MMM yyyy').format(_rangeEnd!),
+                        decoration: const InputDecoration(
+                          labelText: 'To',
+                          hintText: 'Select date',
+                          suffixIcon: Icon(Icons.calendar_today_outlined),
+                        ),
+                        onTap: () => _pickRangeDate(isStart: false),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_rangeStart == null || _rangeEnd == null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Select both dates to filter transactions in between.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ],
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${visibleTransactions.length} transactions',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  _PrintTransactionsButton(
+                    transactions: visibleTransactions,
+                    filterLabel: _filterLabel(),
+                    buttonLabel: 'Print',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              _TransactionList(
+                state: state,
+                currentUserId: currentUserId,
+                transactions: visibleTransactions,
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _MorePage extends StatelessWidget {
+  const _MorePage({
+    required this.notificationCount,
+    required this.onNotificationsChanged,
+  });
+
+  final int notificationCount;
+  final Future<void> Function() onNotificationsChanged;
+
+  Future<void> _confirmLogout(BuildContext context) async {
+    final confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Log out?'),
+            content: const Text('You will need to sign in again to continue.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Logout'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (confirmed && context.mounted) {
+      await context.read<AuthService>().signOut();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = context.read<AuthService>().currentUser;
+    final photoUrl = user?.photoURL;
+
+    return Scaffold(
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: ListTile(
+              contentPadding: const EdgeInsets.all(14),
+              leading: CircleAvatar(
+                radius: 28,
+                backgroundImage: photoUrl == null
+                    ? null
+                    : NetworkImage(photoUrl),
+                child: photoUrl == null
+                    ? const Icon(Icons.person_outline, size: 30)
+                    : null,
+              ),
+              title: Text(
+                user?.displayName ?? 'User',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              subtitle: Text(user?.email ?? ''),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => _ProfilePage(
+                      notificationCount: notificationCount,
+                      onNotificationsChanged: onNotificationsChanged,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 14),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.calculate_outlined),
+                  title: const Text('Tax Calculator'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => TaxCalculatorScreen(
+                          appBarTitle: 'Tax Calculator',
+                          appBarActions: [
+                            IconButton(
+                              tooltip: 'Notifications',
+                              icon: _NotificationBadge(
+                                count: notificationCount,
+                              ),
+                              onPressed: () async {
+                                await Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const NotificationTransactionsPage(),
+                                  ),
+                                );
+                                await onNotificationsChanged();
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const Divider(height: 1, indent: 56),
+                const _DriveSyncButton(asListTile: true),
+                const Divider(height: 1, indent: 56),
+                ListTile(
+                  leading: const Icon(Icons.help_outline),
+                  title: const Text('Help & Support'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => _InformationPage(
+                        title: 'Help & Support',
+                        icon: Icons.help_outline,
+                        message:
+                            'For help with transactions, backup, tax calculations, or account access, contact the Filer Flow support team.',
+                        notificationCount: notificationCount,
+                        onNotificationsChanged: onNotificationsChanged,
+                      ),
+                    ),
+                  ),
+                ),
+                const Divider(height: 1, indent: 56),
+                ListTile(
+                  leading: const Icon(Icons.info_outline),
+                  title: const Text('About'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => _InformationPage(
+                        title: 'About',
+                        icon: Icons.info_outline,
+                        message:
+                            '''Filer Flow is your all-in-one personal finance companion — track income and expenses, calculate taxes, and stay on top of your money effortlessly.
+
+Key Features:
+
+📊 Visual dashboard with income, expense & balance overview
+💳 Quick transaction entry — manually, via receipt scan, or auto-captured from notifications
+⚙️ Customizable income/expense categories
+🧮 Built-in tax calculator (Salary, PSEB Export, WHT)
+☁️ Secure backup & restore via Google Drive
+🔒 Fingerprint-secured profile with 2FA
+
+Your data stays on your device — you control when and where it's backed up.
+
+Version: 1.0.0
+Developed by: Graphie-Code Solutions''',
+                        messageTextAlign: TextAlign.left,
+                        useSmallMessageText: true,
+                        notificationCount: notificationCount,
+                        onNotificationsChanged: onNotificationsChanged,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Card(
+            child: ListTile(
+              leading: Icon(Icons.logout, color: Colors.red.shade700),
+              title: Text(
+                'Logout',
+                style: TextStyle(
+                  color: Colors.red.shade700,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              onTap: () => _confirmLogout(context),
+            ),
           ),
         ],
       ),
@@ -132,21 +823,85 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-void _openProfilePage(BuildContext context) {
-  Navigator.of(
-    context,
-  ).push(MaterialPageRoute(builder: (context) => const _ProfilePage()));
-}
+class _InformationPage extends StatelessWidget {
+  const _InformationPage({
+    required this.title,
+    required this.icon,
+    required this.message,
+    required this.notificationCount,
+    required this.onNotificationsChanged,
+    this.messageTextAlign = TextAlign.center,
+    this.useSmallMessageText = false,
+  });
 
-class _ProfileAppBarButton extends StatelessWidget {
-  const _ProfileAppBarButton();
+  final String title;
+  final IconData icon;
+  final String message;
+  final int notificationCount;
+  final Future<void> Function() onNotificationsChanged;
+  final TextAlign messageTextAlign;
+  final bool useSmallMessageText;
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: 'Profile',
-      onPressed: () => _openProfilePage(context),
-      icon: const Icon(Icons.account_circle_outlined),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(title),
+        actions: [
+          IconButton(
+            tooltip: 'Notifications',
+            icon: _NotificationBadge(count: notificationCount),
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const NotificationTransactionsPage(),
+                ),
+              );
+              await onNotificationsChanged();
+            },
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(icon, size: 52),
+                      const SizedBox(height: 16),
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: messageTextAlign == TextAlign.left
+                            ? Alignment.centerLeft
+                            : Alignment.center,
+                        child: Text(
+                          message,
+                          textAlign: messageTextAlign,
+                          style: useSmallMessageText
+                              ? Theme.of(context).textTheme.bodySmall
+                              : null,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -156,33 +911,13 @@ class _CategorySettingsPage extends StatelessWidget {
 
   final CategoryPreferencesService categoryPreferences;
 
-  Future<void> _updateCategory(
-    BuildContext context,
-    String categoryName,
-    bool isExpense,
-  ) async {
-    try {
-      await categoryPreferences.setExpenseClassification(
-        categoryName,
-        isExpense: isExpense,
-      );
-    } catch (error) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(content: Text('Could not save category setting: $error')),
-        );
-    }
-  }
-
-  Future<void> _updateDualMode(
+  Future<void> _updateEnabled(
     BuildContext context,
     String categoryName,
     bool enabled,
   ) async {
     try {
-      await categoryPreferences.setDualMode(categoryName, enabled: enabled);
+      await categoryPreferences.setEnabled(categoryName, enabled: enabled);
     } catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context)
@@ -193,27 +928,50 @@ class _CategorySettingsPage extends StatelessWidget {
     }
   }
 
+  Future<void> _updateParentMode(
+    BuildContext context,
+    String parentName,
+    CategoryMode mode,
+  ) async {
+    try {
+      await categoryPreferences.setParentMode(parentName, mode: mode);
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('Could not save category setting: $error')),
+        );
+    }
+  }
+
+  IconData _iconForSuperCategory(String name) {
+    return switch (name) {
+      'Income' => Icons.account_balance_wallet_outlined,
+      'Housing & Transport' => Icons.home_work_outlined,
+      'Food & Lifestyle' => Icons.restaurant_outlined,
+      'Wellness & Giving' => Icons.favorite_outline,
+      _ => Icons.receipt_long_outlined,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-        actions: const [_ProfileAppBarButton()],
-      ),
       body: categoryPreferences.isLoading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
                 Text(
-                  'Category classification',
+                  'Super Categories',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Choose whether each category belongs under Income, Expenses, or Both. Your dashboard totals, category sections, reports, and new transactions will follow these choices.',
+                  'Set Income, Expense, or Both on each level-2 category, then enable the level-3 categories you want to use. The parent mode applies to every child.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 if (categoryPreferences.loadError != null) ...[
@@ -229,86 +987,107 @@ class _CategorySettingsPage extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 20),
-                ...TransactionCategory.all.map((category) {
-                  final isExpense = categoryPreferences.isExpense(
-                    category.name,
-                  );
-                  final isDualMode = categoryPreferences.isDualMode(
-                    category.name,
-                  );
+                ...TransactionCategory.hierarchy.entries.map((superCategory) {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Card(
                       margin: EdgeInsets.zero,
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Row(
+                      clipBehavior: Clip.antiAlias,
+                      child: ExpansionTile(
+                        leading: Icon(_iconForSuperCategory(superCategory.key)),
+                        title: Text(
+                          superCategory.key,
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        children: [
+                          for (final parent in superCategory.value.entries)
+                            ExpansionTile(
+                              tilePadding: const EdgeInsets.only(
+                                left: 28,
+                                right: 16,
+                              ),
+                              childrenPadding: EdgeInsets.zero,
+                              leading: Icon(
+                                _getIconForCategory(parent.key),
+                                size: 21,
+                              ),
+                              title: Text(
+                                parent.key,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                               children: [
-                                CircleAvatar(
-                                  backgroundColor: _getColorForCategory(
-                                    category.name,
-                                  ).withValues(alpha: 0.12),
-                                  foregroundColor: _getColorForCategory(
-                                    category.name,
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    4,
+                                    16,
+                                    10,
                                   ),
-                                  child: Icon(
-                                    _getIconForCategory(category.name),
+                                  child: SegmentedButton<CategoryMode>(
+                                    expandedInsets: EdgeInsets.zero,
+                                    showSelectedIcon: false,
+                                    style: const ButtonStyle(
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                    segments: const [
+                                      ButtonSegment(
+                                        value: CategoryMode.income,
+                                        label: Text('Income'),
+                                      ),
+                                      ButtonSegment(
+                                        value: CategoryMode.expense,
+                                        label: Text('Expense'),
+                                      ),
+                                      ButtonSegment(
+                                        value: CategoryMode.both,
+                                        label: Text('Both'),
+                                      ),
+                                    ],
+                                    selected: {
+                                      categoryPreferences.modeForParent(
+                                        parent.key,
+                                      ),
+                                    },
+                                    onSelectionChanged: (selection) =>
+                                        _updateParentMode(
+                                          context,
+                                          parent.key,
+                                          selection.first,
+                                        ),
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    category.name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
+                                for (final category in parent.value)
+                                  SwitchListTile(
+                                    contentPadding: const EdgeInsets.only(
+                                      left: 48,
+                                      right: 16,
+                                    ),
+                                    title: Text(category.name),
+                                    subtitle: Text(
+                                      categoryPreferences.isDualMode(
+                                            category.name,
+                                          )
+                                          ? 'Income or Expense'
+                                          : categoryPreferences.isExpense(
+                                              category.name,
+                                            )
+                                          ? 'Expense'
+                                          : 'Income',
+                                    ),
+                                    value: categoryPreferences.isEnabled(
+                                      category.name,
+                                    ),
+                                    onChanged: (enabled) => _updateEnabled(
+                                      context,
+                                      category.name,
+                                      enabled,
                                     ),
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                const Text('Both'),
-                                Switch(
-                                  value: isDualMode,
-                                  onChanged: (enabled) => _updateDualMode(
-                                    context,
-                                    category.name,
-                                    enabled,
-                                  ),
-                                ),
                               ],
                             ),
-                            const SizedBox(height: 12),
-                            SegmentedButton<bool>(
-                              expandedInsets: EdgeInsets.zero,
-                              segments: const [
-                                ButtonSegment<bool>(
-                                  value: false,
-                                  label: Text('Income'),
-                                  icon: Icon(Icons.arrow_upward),
-                                ),
-                                ButtonSegment<bool>(
-                                  value: true,
-                                  label: Text('Expense'),
-                                  icon: Icon(Icons.arrow_downward),
-                                ),
-                              ],
-                              selected: {isExpense},
-                              onSelectionChanged: isDualMode
-                                  ? null
-                                  : (selection) {
-                                      final newValue = selection.first;
-                                      if (newValue == isExpense) return;
-                                      _updateCategory(
-                                        context,
-                                        category.name,
-                                        newValue,
-                                      );
-                                    },
-                            ),
-                          ],
-                        ),
+                        ],
                       ),
                     ),
                   );
@@ -320,7 +1099,10 @@ class _CategorySettingsPage extends StatelessWidget {
 }
 
 class _ProfilePage extends StatefulWidget {
-  const _ProfilePage();
+  const _ProfilePage({this.notificationCount = 0, this.onNotificationsChanged});
+
+  final int notificationCount;
+  final Future<void> Function()? onNotificationsChanged;
 
   @override
   State<_ProfilePage> createState() => _ProfilePageState();
@@ -731,6 +1513,18 @@ class _ProfilePageState extends State<_ProfilePage>
       appBar: AppBar(
         title: const Text('Profile'),
         actions: [
+          IconButton(
+            tooltip: 'Notifications',
+            icon: _NotificationBadge(count: widget.notificationCount),
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const NotificationTransactionsPage(),
+                ),
+              );
+              await widget.onNotificationsChanged?.call();
+            },
+          ),
           IconButton(
             tooltip: 'Refresh account',
             onPressed: _isUpdatingProfile ? null : _refreshAccount,
@@ -1143,19 +1937,6 @@ class _HomeDashboardState extends State<_HomeDashboard> {
     final user = context.read<AuthService>().currentUser;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Dashboard'),
-        actions: [
-          const _DriveSyncButton(),
-          IconButton(
-            tooltip: 'Sign out',
-            icon: const Icon(Icons.logout),
-            onPressed: () {
-              context.read<AuthService>().signOut();
-            },
-          ),
-        ],
-      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -1268,48 +2049,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    Text(
-                      'Income Categories',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 12),
-                    _CategoryCards(
-                      transactions: visibleTransactions,
-                      isExpense: false,
-                      categoryPreferences: widget.categoryPreferences,
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Expense Categories',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 12),
-                    _CategoryCards(
-                      transactions: visibleTransactions,
-                      isExpense: true,
-                      categoryPreferences: widget.categoryPreferences,
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Both Categories',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 12),
-                    _BothCategoryCards(
-                      transactions: visibleTransactions,
-                      categoryPreferences: widget.categoryPreferences,
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Recent Transactions',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    _TransactionList(
-                      state: state,
-                      currentUserId: currentUserId,
-                      transactions: visibleTransactions,
-                    ),
+                    _TopCategoryCharts(transactions: visibleTransactions),
                   ],
                 );
               },
@@ -1321,8 +2061,50 @@ class _HomeDashboardState extends State<_HomeDashboard> {
   }
 }
 
+class _NotificationBadge extends StatelessWidget {
+  const _NotificationBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        const Icon(Icons.notifications_active_outlined),
+        if (count > 0)
+          Positioned(
+            top: -7,
+            right: -9,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.red.shade700,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.white, width: 1.5),
+              ),
+              child: Text(
+                count > 99 ? '99+' : '$count',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  height: 1,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class _DriveSyncButton extends StatefulWidget {
-  const _DriveSyncButton();
+  const _DriveSyncButton({this.asListTile = false});
+
+  final bool asListTile;
 
   @override
   State<_DriveSyncButton> createState() => _DriveSyncButtonState();
@@ -1427,15 +2209,30 @@ class _DriveSyncButtonState extends State<_DriveSyncButton> {
       tooltip: 'Google Drive backup and restore',
       enabled: !_isWorking,
       onSelected: _runDriveOperation,
-      icon: _isWorking
-          ? const SizedBox.square(
-              dimension: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
+      child: IgnorePointer(
+        child: widget.asListTile
+            ? ListTile(
+                leading: _isWorking
+                    ? const SizedBox.square(
+                        dimension: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.cloud_outlined),
+                title: const Text('Backup & Restore'),
+                trailing: const Icon(Icons.chevron_right),
+              )
+            : FloatingActionButton.extended(
+                heroTag: 'drive-backup-button',
+                onPressed: () {},
+                icon: _isWorking
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.cloud_upload_outlined),
+                label: Text(_isWorking ? 'Working…' : 'Backup'),
               ),
-            )
-          : const Icon(Icons.cloud_sync_outlined),
+      ),
       itemBuilder: (context) => const [
         PopupMenuItem(
           value: _DriveAction.backup,
@@ -1694,277 +2491,307 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-class _CategoryCards extends StatelessWidget {
-  const _CategoryCards({
-    required this.transactions,
-    required this.isExpense,
-    required this.categoryPreferences,
-  });
+class _TopCategoryCharts extends StatelessWidget {
+  const _TopCategoryCharts({required this.transactions});
 
   final List<entity.Transaction> transactions;
-  final bool isExpense;
-  final CategoryPreferencesService categoryPreferences;
 
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const crossAxisCount = 2;
-        final isCompact = constraints.maxWidth < 360;
-
-        final categories = TransactionCategory.all
-            .where(
-              (category) => categoryPreferences.shouldShowCategoryInSection(
-                categoryName: category.name,
-                isExpenseSection: isExpense,
-              ),
-            )
-            .toList();
-
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: categories.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            //mainAxisExtent: isCompact ? 170 : 150,
-            mainAxisExtent: isCompact ? 155 : 150,
-          ),
-          itemBuilder: (context, index) {
-            final category = categories[index];
-            final categoryTransactions = transactions
-                .where((transaction) => transaction.category == category.name)
-                .where(
-                  (transaction) =>
-                      categoryPreferences.shouldShowTransactionInSection(
-                        categoryName: category.name,
-                        isExpenseSection: isExpense,
-                        transactionIsExpense: transaction.isExpense,
-                      ),
-                )
-                .toList();
-            return _CategoryCard(
-              category: category.name,
-              transactions: categoryTransactions,
-              categoryPreferences: categoryPreferences,
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-class _BothCategoryCards extends StatelessWidget {
-  const _BothCategoryCards({
-    required this.transactions,
-    required this.categoryPreferences,
-  });
-
-  final List<entity.Transaction> transactions;
-  final CategoryPreferencesService categoryPreferences;
-
-  @override
-  Widget build(BuildContext context) {
-    final categories = TransactionCategory.all
-        .where((category) => categoryPreferences.isDualMode(category.name))
-        .toList();
-
-    if (categories.isEmpty) {
-      return Card(
-        elevation: 0,
-        color: const Color(0xFFFFF8EF),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        child: const Padding(
-          padding: EdgeInsets.all(16),
-          child: Text(
-            'No categories are set to Both yet. Enable Both from Settings to show them here.',
-          ),
-        ),
+  List<_CategoryTotal> _topCategories({required bool isExpense}) {
+    final totals = <String, double>{};
+    for (final transaction in transactions) {
+      if (transaction.isExpense != isExpense) continue;
+      totals.update(
+        transaction.category,
+        (value) => value + transaction.amount,
+        ifAbsent: () => transaction.amount,
       );
     }
+    final ranked =
+        totals.entries
+            .map((entry) => _CategoryTotal(entry.key, entry.value))
+            .toList()
+          ..sort((a, b) => b.total.compareTo(a.total));
+    return ranked.take(5).toList();
+  }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const crossAxisCount = 2;
-        final isCompact = constraints.maxWidth < 360;
+  @override
+  Widget build(BuildContext context) {
+    final income = _topCategories(isExpense: false);
+    final expenses = _topCategories(isExpense: true);
 
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: categories.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            mainAxisExtent: isCompact ? 180 : 172,
-          ),
-          itemBuilder: (context, index) {
-            final category = categories[index];
-            final categoryTransactions = transactions
-                .where((transaction) => transaction.category == category.name)
-                .toList();
-            return _CategoryCard(
-              category: category.name,
-              transactions: categoryTransactions,
-              categoryPreferences: categoryPreferences,
-              accentColor: const Color(0xFFFFB74D),
-              showBreakdown: true,
-            );
-          },
-        );
-      },
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Top Categories',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Top five categories across income and expenses for the selected period.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 18),
+            _TopCategoryBarChart(incomeItems: income, expenseItems: expenses),
+          ],
+        ),
+      ),
     );
   }
 }
 
-class _CategoryCard extends StatelessWidget {
-  const _CategoryCard({
-    required this.category,
-    required this.transactions,
-    required this.categoryPreferences,
-    this.accentColor,
-    this.showBreakdown = false,
+class _TopCategoryBarChart extends StatelessWidget {
+  const _TopCategoryBarChart({
+    required this.incomeItems,
+    required this.expenseItems,
   });
 
-  final String category;
-  final List<entity.Transaction> transactions;
-  final CategoryPreferencesService categoryPreferences;
-  final Color? accentColor;
-  final bool showBreakdown;
+  final List<_CategoryTotal> incomeItems;
+  final List<_CategoryTotal> expenseItems;
 
   @override
   Widget build(BuildContext context) {
-    final color = accentColor ?? _getColorForCategory(category);
-    final income = transactions
-        .where((transaction) => !transaction.isExpense)
-        .fold<double>(0, (total, transaction) => total + transaction.amount);
-    final expenses = transactions
-        .where((transaction) => transaction.isExpense)
-        .fold<double>(0, (total, transaction) => total + transaction.amount);
-    final latestTransaction = transactions.isEmpty ? null : transactions.first;
+    final rankedItems = <_CategoryChartBar>[
+      for (final item in incomeItems)
+        _CategoryChartBar(
+          category: item.category,
+          total: item.total,
+          isExpense: false,
+        ),
+      for (final item in expenseItems)
+        _CategoryChartBar(
+          category: item.category,
+          total: item.total,
+          isExpense: true,
+        ),
+    ]..sort((a, b) => b.total.compareTo(a.total));
+    final items = rankedItems.take(5).toList();
+    var maximum = 0.0;
+    for (final item in items) {
+      if (item.total > maximum) maximum = item.total;
+    }
+    final maxY = maximum <= 0 ? 1.0 : maximum * 1.18;
+    final incomeColor = Colors.green.shade600;
+    final expenseColor = Colors.red.shade600;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isCompact = constraints.maxWidth < 360;
-
-        return Card(
-          elevation: 1,
-          margin: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(18),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => _CategoryTransactionsPage(
-                    category: category,
-                    categoryPreferences: categoryPreferences,
-                  ),
-                ),
-              );
-            },
-            child: Padding(
-              padding: EdgeInsets.all(isCompact ? 10 : 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      CircleAvatar(
-                        radius: isCompact ? 15 : 18,
-                        backgroundColor: color.withValues(alpha: 0.12),
-                        foregroundColor: color,
-                        child: Icon(
-                          _getIconForCategory(category),
-                          size: isCompact ? 18 : 20,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 14, 12, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _ChartLegend(label: 'Income', color: incomeColor),
+                const SizedBox(width: 20),
+                _ChartLegend(label: 'Expense', color: expenseColor),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (items.isEmpty)
+              const SizedBox(
+                height: 230,
+                child: Center(child: Text('No transactions for this period')),
+              )
+            else
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final spacePerBar = constraints.maxWidth / items.length;
+                  final rodWidth = (spacePerBar * 0.48)
+                      .clamp(10.0, 44.0)
+                      .toDouble();
+                  final labelWidth = spacePerBar.clamp(28.0, 62.0).toDouble();
+                  return SizedBox(
+                    height: 250,
+                    child: BarChart(
+                      BarChartData(
+                        minY: 0,
+                        maxY: maxY,
+                        alignment: BarChartAlignment.spaceAround,
+                        groupsSpace: 12,
+                        barGroups: [
+                          for (var index = 0; index < items.length; index++)
+                            BarChartGroupData(
+                              x: index,
+                              barRods: [
+                                BarChartRodData(
+                                  toY: items[index].total,
+                                  width: rodWidth,
+                                  color: items[index].isExpense
+                                      ? expenseColor
+                                      : incomeColor,
+                                  borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(5),
+                                  ),
+                                ),
+                              ],
+                            ),
+                        ],
+                        barTouchData: BarTouchData(
+                          touchTooltipData: BarTouchTooltipData(
+                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                              final item = items[group.x];
+                              final type = item.isExpense
+                                  ? 'Expense'
+                                  : 'Income';
+                              return BarTooltipItem(
+                                '${item.category}\n$type: ${_formatDashboardMoney(rod.toY)}',
+                                const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              );
+                            },
+                          ),
                         ),
-                      ),
-                      SizedBox(width: isCompact ? 8 : 10),
-                      Expanded(
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            category,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: isCompact ? 13 : 14,
+                        gridData: FlGridData(
+                          drawVerticalLine: false,
+                          horizontalInterval: maxY / 4,
+                        ),
+                        borderData: FlBorderData(show: false),
+                        titlesData: FlTitlesData(
+                          topTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          rightTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 42,
+                              getTitlesWidget: (value, meta) => Text(
+                                _compactChartMoney(value),
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
+                            ),
+                          ),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 38,
+                              getTitlesWidget: (value, meta) {
+                                final index = value.toInt();
+                                if (index < 0 || index >= items.length) {
+                                  return const SizedBox.shrink();
+                                }
+                                return SideTitleWidget(
+                                  axisSide: meta.axisSide,
+                                  space: 7,
+                                  child: SizedBox(
+                                    width: labelWidth,
+                                    child: Text(
+                                      _shortCategoryLabel(
+                                        items[index].category,
+                                      ),
+                                      maxLines: 2,
+                                      textAlign: TextAlign.center,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${transactions.length} transactions',
-                    style: Theme.of(context).textTheme.bodySmall,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    latestTransaction?.title ?? 'No entries yet',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600,
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  if (showBreakdown) ...[
-                    _CategoryAmountRow(
-                      label: 'Income',
-                      value: _formatDashboardMoney(income),
-                      color: Colors.green.shade700,
-                    ),
-                    const SizedBox(height: 3),
-                    _CategoryAmountRow(
-                      label: 'Expense',
-                      value: _formatDashboardMoney(expenses),
-                      color: Colors.red.shade700,
-                    ),
-                  ] else
-                    _CategoryAmountRow(
-                      label: 'Amount',
-                      value: _formatDashboardMoney(
-                        transactions.any((transaction) => transaction.isExpense)
-                            ? expenses
-                            : income,
-                      ),
-                      color:
-                          transactions.any(
-                            (transaction) => transaction.isExpense,
-                          )
-                          ? Colors.red.shade700
-                          : Colors.green.shade700,
-                    ),
-                ],
+                  );
+                },
               ),
-            ),
-          ),
-        );
-      },
+          ],
+        ),
+      ),
     );
   }
+}
+
+class _ChartLegend extends StatelessWidget {
+  const _ChartLegend({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 7),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+      ],
+    );
+  }
+}
+
+class _CategoryChartBar {
+  const _CategoryChartBar({
+    required this.category,
+    required this.total,
+    required this.isExpense,
+  });
+
+  final String category;
+  final double total;
+  final bool isExpense;
+}
+
+class _CategoryTotal {
+  const _CategoryTotal(this.category, this.total);
+
+  final String category;
+  final double total;
+}
+
+String _compactChartMoney(double value) {
+  if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1)}M';
+  if (value >= 1000) return '${(value / 1000).toStringAsFixed(0)}K';
+  return value.toStringAsFixed(0);
+}
+
+String _shortCategoryLabel(String category) {
+  return switch (category) {
+    'Housing & Utils' => 'Housing',
+    'Food & Drinks' => 'Food',
+    'Personal Care' => 'Personal',
+    'Subscriptions' => 'Subs',
+    'Gifts & Rewards' => 'Gifts',
+    _ => category,
+  };
 }
 
 class _CategoryTransactionsPage extends StatelessWidget {
   const _CategoryTransactionsPage({
     required this.category,
     required this.categoryPreferences,
+    this.notificationCount = 0,
+    this.onNotificationsChanged,
   });
 
   final String category;
   final CategoryPreferencesService categoryPreferences;
+  final int notificationCount;
+  final Future<void> Function()? onNotificationsChanged;
 
   void _openAddTransaction(BuildContext context) {
     Navigator.of(context).push(
@@ -1974,6 +2801,20 @@ class _CategoryTransactionsPage extends StatelessWidget {
           initialIsExpense: categoryPreferences.isDualMode(category)
               ? null
               : categoryPreferences.isExpense(category),
+          appBarActions: [
+            IconButton(
+              tooltip: 'Notifications',
+              icon: _NotificationBadge(count: notificationCount),
+              onPressed: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const NotificationTransactionsPage(),
+                  ),
+                );
+                await onNotificationsChanged?.call();
+              },
+            ),
+          ],
         ),
       ),
     );
@@ -1983,7 +2824,23 @@ class _CategoryTransactionsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = _getColorForCategory(category);
     return Scaffold(
-      appBar: AppBar(title: Text(category)),
+      appBar: AppBar(
+        title: Text(category),
+        actions: [
+          IconButton(
+            tooltip: 'Notifications',
+            icon: _NotificationBadge(count: notificationCount),
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const NotificationTransactionsPage(),
+                ),
+              );
+              await onNotificationsChanged?.call();
+            },
+          ),
+        ],
+      ),
       body: BlocBuilder<TransactionBloc, TransactionState>(
         builder: (context, state) {
           if (state is TransactionLoading || state is TransactionInitial) {
@@ -2055,7 +2912,8 @@ class _CategoryTransactionsPage extends StatelessWidget {
               const SizedBox(height: 10),
               _PrintTransactionsButton(
                 transactions: transactions,
-                filterLabel: '$category transactions',
+                filterLabel:
+                    '${TransactionCategory.displayPathFor(category)} transactions',
                 buttonLabel: 'Print $category report',
               ),
               const SizedBox(height: 16),
@@ -2217,37 +3075,6 @@ String _monthName(int month) {
       return 'Nov';
     default:
       return 'Dec';
-  }
-}
-
-class _CategoryAmountRow extends StatelessWidget {
-  const _CategoryAmountRow({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            value,
-            maxLines: 2,
-            textAlign: TextAlign.right,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: color, fontWeight: FontWeight.w700),
-          ),
-        ),
-      ],
-    );
   }
 }
 

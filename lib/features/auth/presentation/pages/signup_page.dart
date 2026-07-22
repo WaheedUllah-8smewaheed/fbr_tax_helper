@@ -1,8 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:fbr_tax_helper/features/auth/presentation/pages/session_router.dart';
-import 'package:fbr_tax_helper/services/auth_service.dart';
-import 'package:fbr_tax_helper/services/signup_bloc.dart';
+import 'package:fbr_tax_helper/features/auth/presentation/bloc/signup/signup_bloc.dart';
+import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -31,7 +31,7 @@ class _SignupFormState extends State<SignupForm>
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
-  final _contactController = TextEditingController();
+  final _contactController = TextEditingController(text: '03');
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
@@ -65,7 +65,7 @@ class _SignupFormState extends State<SignupForm>
     context.read<SignupBloc>().add(
       SignUpButtonPressed(
         name: _nameController.text.trim(),
-        contactNumber: '03${_contactController.text}',
+        contactNumber: _contactController.text.trim(),
         email: _emailController.text.trim(),
         password: _passwordController.text,
       ),
@@ -94,8 +94,8 @@ class _SignupFormState extends State<SignupForm>
 
   String? _validateContact(String? value) {
     final contact = (value ?? '').trim();
-    if (!RegExp(r'^\d{7}$').hasMatch(contact)) {
-      return 'Enter exactly 7 digits after 03';
+    if (!RegExp(r'^03\d{9}$').hasMatch(contact)) {
+      return 'Enter exactly 11 digits starting with 03';
     }
     return null;
   }
@@ -442,25 +442,14 @@ class _SignupPanel extends StatelessWidget {
                     keyboardType: TextInputType.phone,
                     inputFormatters: [
                       FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(07),
+                      LengthLimitingTextInputFormatter(11),
                     ],
                     textInputAction: TextInputAction.next,
                     validator: validateContact,
                     decoration: const InputDecoration(
                       labelText: 'Contact number',
-                      hintText: '123456789',
-                      prefixIcon: SizedBox(
-                        width: 76,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.phone_outlined),
-                            SizedBox(width: 8),
-                            Text('03'),
-                          ],
-                        ),
-                      ),
-                      prefixIconConstraints: BoxConstraints(minWidth: 76),
+                      hintText: '03001234567',
+                      prefixIcon: Icon(Icons.phone_outlined),
                       border: OutlineInputBorder(),
                     ),
                   ),

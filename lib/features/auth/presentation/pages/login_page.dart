@@ -2,8 +2,8 @@ import 'dart:math' as math;
 
 import 'package:fbr_tax_helper/features/auth/presentation/pages/public_calculator_screen.dart';
 import 'package:fbr_tax_helper/features/auth/presentation/pages/signup_page.dart';
-import 'package:fbr_tax_helper/login_bloc.dart';
-import 'package:fbr_tax_helper/services/auth_service.dart';
+import 'package:fbr_tax_helper/features/auth/presentation/bloc/login/login_bloc.dart';
+import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';

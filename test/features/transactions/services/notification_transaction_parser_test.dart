@@ -102,4 +102,26 @@ void main() {
     expect(details!.amount, 5000);
     expect(details.isExpense, isFalse);
   });
+
+  test('parses is-credited alerts as income', () {
+    final details = NotificationTransactionParser.parse(
+      'Your account is credited with PKR 2,400 from Ahmed.',
+    );
+
+    expect(details, isNotNull);
+    expect(details!.amount, 2400);
+    expect(details.isExpense, isFalse);
+    expect(details.beneficiary, 'Ahmed');
+  });
+
+  test('parses transfered spelling as an expense', () {
+    final details = NotificationTransactionParser.parse(
+      'PKR 750 transfered to Bilal.',
+    );
+
+    expect(details, isNotNull);
+    expect(details!.amount, 750);
+    expect(details.isExpense, isTrue);
+    expect(details.beneficiary, 'Bilal');
+  });
 }

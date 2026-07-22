@@ -1,10 +1,10 @@
 import 'package:dio/dio.dart';
 
-import '../../../core/network/api_exceptions.dart';
-import '../../../core/network/dio_client.dart';
-import 'models/atl_status_model.dart';
-import 'models/cpr_status_model.dart';
-import 'models/ntn_profile_model.dart';
+import '../../../../core/network/api_exceptions.dart';
+import '../../../../core/network/dio_client.dart';
+import '../models/atl_status_model.dart';
+import '../models/cpr_status_model.dart';
+import '../models/ntn_profile_model.dart';
 
 class VerificationApiService {
   VerificationApiService({Dio? dio}) : _dio = dio ?? DioClient.create();

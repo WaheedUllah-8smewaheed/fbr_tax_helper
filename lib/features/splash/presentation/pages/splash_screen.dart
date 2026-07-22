@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:fbr_tax_helper/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../services/auth_service.dart';
-import 'tax_calculator_screen.dart';
+import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
+import 'package:fbr_tax_helper/features/tax_calculator/presentation/pages/tax_calculator_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({
@@ -138,7 +138,7 @@ class _SplashScreenState extends State<SplashScreen>
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Pakistan income tax estimator',
+                            'Your Budget and Filing Partner',
                             textAlign: TextAlign.center,
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(

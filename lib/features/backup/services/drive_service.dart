@@ -3,8 +3,8 @@ import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:archive/archive.dart';
-import 'package:fbr_tax_helper/database/tax_db.dart';
-import 'package:fbr_tax_helper/services/auth_service.dart';
+import 'package:fbr_tax_helper/core/database/tax_database.dart';
+import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:fbr_tax_helper/core/platform/app_storage.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:path/path.dart' as path;

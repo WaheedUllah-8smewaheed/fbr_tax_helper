@@ -4,7 +4,7 @@ import 'package:bloc/bloc.dart';
 
 import '../../../../core/network/api_exceptions.dart';
 import '../../data/models/cpr_status_model.dart';
-import '../../data/verification_repository.dart';
+import '../../data/repositories/verification_repository.dart';
 import 'verification_event.dart';
 import 'verification_state.dart';
 

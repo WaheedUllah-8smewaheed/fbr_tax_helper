@@ -1,12 +1,12 @@
-import 'package:fbr_tax_helper/database/tax_db.dart';
+import 'package:fbr_tax_helper/core/database/tax_database.dart';
 import 'package:fbr_tax_helper/core/theme/app_theme.dart';
 import 'package:fbr_tax_helper/features/auth/presentation/pages/session_router.dart';
 import 'dart:io' show Platform;
-import 'package:fbr_tax_helper/features/tax_calculator/presentation/screens/splash_screen.dart';
+import 'package:fbr_tax_helper/features/splash/presentation/pages/splash_screen.dart';
 import 'package:fbr_tax_helper/features/transactions/data/datasources/transaction_local_data_source.dart';
 import 'package:fbr_tax_helper/features/transactions/data/repositories/transaction_repository_impl.dart';
 import 'package:fbr_tax_helper/features/transactions/presentation/bloc/transaction_bloc.dart';
-import 'package:fbr_tax_helper/services/auth_service.dart';
+import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';

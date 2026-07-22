@@ -2,7 +2,7 @@ import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction.dart';
 import 'package:fbr_tax_helper/features/transactions/domain/repositories/transaction_repository.dart';
-import 'package:fbr_tax_helper/services/auth_service.dart';
+import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 
 part 'transaction_event.dart';
 part 'transaction_state.dart';

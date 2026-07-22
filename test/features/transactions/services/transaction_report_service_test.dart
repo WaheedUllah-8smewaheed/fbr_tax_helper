@@ -16,7 +16,7 @@ void main() {
         amount: 2450,
         isExpense: true,
         date: DateTime(2026, 7, 12),
-        category: 'Shopping',
+        category: 'Groceries',
       ),
       Transaction(
         id: 8,
@@ -27,7 +27,7 @@ void main() {
         amount: 150000,
         isExpense: false,
         date: DateTime(2026, 7, 1),
-        category: 'Salary',
+        category: 'Basic Pay',
       ),
     ];
 

@@ -2,12 +2,19 @@ package com.example.fbr_tax_helper
 
 import android.content.ComponentName
 import android.content.Intent
+import android.os.Build
+import android.service.notification.NotificationListenerService
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterFragmentActivity() {
+    override fun onResume() {
+        super.onResume()
+        requestNotificationListenerRebindIfNeeded()
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -25,6 +32,12 @@ class MainActivity : FlutterFragmentActivity() {
                 }
                 "getCapturedNotifications" -> {
                     result.success(NotificationInboxStore.getJson(this))
+                }
+                "refreshNotificationListener" -> {
+                    val connected = NotificationCaptureService
+                        .refreshActiveNotifications()
+                    if (!connected) requestNotificationListenerRebindIfNeeded()
+                    result.success(connected)
                 }
                 "dismissNotification" -> {
                     val id = call.argument<String>("id")
@@ -58,5 +71,16 @@ class MainActivity : FlutterFragmentActivity() {
             it.equals(listener, ignoreCase = true) ||
                 it.contains(packageName, ignoreCase = true)
         }
+    }
+
+    private fun requestNotificationListenerRebindIfNeeded() {
+        if (!isNotificationAccessEnabled() ||
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.N ||
+            NotificationCaptureService.isConnected()
+        ) return
+
+        NotificationListenerService.requestRebind(
+            ComponentName(this, NotificationCaptureService::class.java)
+        )
     }
 }

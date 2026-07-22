@@ -6,7 +6,7 @@ import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction
 import 'package:fbr_tax_helper/features/transactions/presentation/bloc/transaction_bloc.dart';
 import 'package:fbr_tax_helper/features/transactions/services/category_preferences_service.dart';
 import 'package:fbr_tax_helper/features/transactions/services/receipt_scanner_service.dart';
-import 'package:fbr_tax_helper/services/auth_service.dart';
+import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
@@ -17,11 +17,25 @@ class AddTransactionPage extends StatefulWidget {
     this.transaction,
     this.initialCategory,
     this.initialIsExpense,
+    this.initialTitle,
+    this.initialBeneficiary,
+    this.initialPurpose,
+    this.initialAmount,
+    this.initialDate,
+    this.showCategoryPicker = false,
+    this.appBarActions = const [],
   });
 
   final entity.Transaction? transaction;
   final String? initialCategory;
   final bool? initialIsExpense;
+  final String? initialTitle;
+  final String? initialBeneficiary;
+  final String? initialPurpose;
+  final double? initialAmount;
+  final DateTime? initialDate;
+  final bool showCategoryPicker;
+  final List<Widget> appBarActions;
 
   bool get isEditing => transaction != null;
 
@@ -60,6 +74,13 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       _selectedCategory = transaction.category;
       _receiptImagePath = transaction.receiptImagePath;
     } else {
+      _titleController.text = widget.initialTitle ?? '';
+      _beneficiaryController.text = widget.initialBeneficiary ?? '';
+      _purposeController.text = widget.initialPurpose ?? '';
+      if (widget.initialAmount != null) {
+        _amountController.text = _formatAmountInput(widget.initialAmount!);
+      }
+      _selectedDate = widget.initialDate ?? DateTime.now();
       _selectedCategory =
           widget.initialCategory ?? TransactionCategory.misc.name;
       _isExpense =
@@ -228,7 +249,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
           ? UpdateTransaction(transaction)
           : AddTransaction(transaction),
     );
-    Navigator.of(context).pop();
+    Navigator.of(context).pop(true);
   }
 
   @override
@@ -243,8 +264,11 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         title: Text(
           widget.isEditing
               ? 'Edit Transaction'
+              : widget.showCategoryPicker
+              ? 'Review Transaction'
               : 'Add ${_selectedCategory ?? ''} Transaction',
         ),
+        actions: widget.appBarActions,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -325,8 +349,45 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
+                    if (widget.showCategoryPicker) ...[
+                      DropdownButtonFormField<String>(
+                        initialValue: _selectedCategory,
+                        decoration: const InputDecoration(
+                          labelText: 'Category',
+                          prefixIcon: Icon(Icons.category_outlined),
+                        ),
+                        items: TransactionCategory.all
+                            .where(
+                              (category) =>
+                                  _categoryPreferences.isEnabled(
+                                    category.name,
+                                  ) ||
+                                  category.name == _selectedCategory,
+                            )
+                            .map(
+                              (category) => DropdownMenuItem<String>(
+                                value: category.name,
+                                child: Text(category.name),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() {
+                            _selectedCategory = value;
+                            if (!_categoryPreferences.isDualMode(value)) {
+                              _isExpense = _categoryPreferences.isExpense(
+                                value,
+                              );
+                            }
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     SegmentedButton<bool>(
                       expandedInsets: EdgeInsets.zero,
+                      showSelectedIcon: false,
                       segments: const [
                         ButtonSegment<bool>(
                           value: false,
