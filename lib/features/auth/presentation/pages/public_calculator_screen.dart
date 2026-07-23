@@ -29,7 +29,7 @@ class PublicCalculatorScreen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           const Text(
-            "Create a free account to capture bank notifications offline and backup records directly inside your private Google Drive vault.",
+            "Create a free account to save transactions and back up records directly inside your private Google Drive vault.",
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 12),

@@ -1,17 +1,14 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:fbr_tax_helper/features/tax_calculator/presentation/pages/tax_calculator_screen.dart';
 import 'package:fbr_tax_helper/features/transactions/presentation/pages/add_transaction_page.dart';
-import 'package:fbr_tax_helper/features/transactions/presentation/pages/notification_transactions_page.dart';
 import 'package:fbr_tax_helper/features/transactions/presentation/bloc/transaction_bloc.dart';
 import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction.dart'
     as entity;
 import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction_category.dart';
 import 'package:fbr_tax_helper/features/transactions/services/transaction_report_service.dart';
 import 'package:fbr_tax_helper/features/transactions/services/category_preferences_service.dart';
-import 'package:fbr_tax_helper/features/transactions/services/push_notification_import_service.dart';
 
 import 'package:fbr_tax_helper/core/platform/app_storage.dart';
 import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
@@ -32,17 +29,13 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen>
-    with WidgetsBindingObserver {
+class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
-  int _notificationCount = 0;
-  Timer? _notificationTimer;
   late final CategoryPreferencesService _categoryPreferences;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     context.read<TransactionBloc>().add(const LoadTransactions());
     _categoryPreferences = CategoryPreferencesService();
     final userId = context.read<AuthService>().currentUser?.uid;
@@ -51,38 +44,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showBiometricReminderIfNeeded();
-      _refreshNotificationCount();
     });
-    _notificationTimer = Timer.periodic(
-      const Duration(seconds: 4),
-      (_) => _refreshNotificationCount(),
-    );
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _refreshNotificationCount();
-    }
-  }
-
-  Future<void> _refreshNotificationCount() async {
-    if (kIsWeb || !Platform.isAndroid) return;
-    try {
-      const service = PushNotificationImportService();
-      if (!await service.isNotificationAccessEnabled()) {
-        if (mounted && _notificationCount != 0) {
-          setState(() => _notificationCount = 0);
-        }
-        return;
-      }
-      await service.refreshNotificationListener();
-      final count = (await service.getCapturedNotifications()).length;
-      if (!mounted || count == _notificationCount) return;
-      setState(() => _notificationCount = count);
-    } catch (_) {
-      // Badge refresh must never interrupt dashboard use.
-    }
   }
 
   Future<void> _showBiometricReminderIfNeeded() async {
@@ -113,8 +75,6 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _notificationTimer?.cancel();
     _categoryPreferences.dispose();
     super.dispose();
   }
@@ -129,39 +89,16 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget build(BuildContext context) {
     const titles = ['Dashboard', 'Transactions', 'Settings', 'More'];
     return Scaffold(
-      appBar: AppBar(
-        title: Text(titles[_selectedIndex]),
-        actions: [
-          IconButton(
-            tooltip: 'Notifications',
-            icon: _NotificationBadge(count: _notificationCount),
-            onPressed: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const NotificationTransactionsPage(),
-                ),
-              );
-              await _refreshNotificationCount();
-            },
-          ),
-        ],
-      ),
+      appBar: AppBar(title: Text(titles[_selectedIndex])),
       body: ListenableBuilder(
         listenable: _categoryPreferences,
         builder: (context, _) => IndexedStack(
           index: _selectedIndex,
           children: [
             _HomeDashboard(categoryPreferences: _categoryPreferences),
-            _TransactionsPage(
-              categoryPreferences: _categoryPreferences,
-              notificationCount: _notificationCount,
-              onNotificationsChanged: _refreshNotificationCount,
-            ),
+            _TransactionsPage(categoryPreferences: _categoryPreferences),
             _CategorySettingsPage(categoryPreferences: _categoryPreferences),
-            _MorePage(
-              notificationCount: _notificationCount,
-              onNotificationsChanged: _refreshNotificationCount,
-            ),
+            const _MorePage(),
           ],
         ),
       ),
@@ -192,15 +129,9 @@ class _DashboardScreenState extends State<DashboardScreen>
 enum _TransactionFilter { income, expense, both }
 
 class _TransactionsPage extends StatefulWidget {
-  const _TransactionsPage({
-    required this.categoryPreferences,
-    required this.notificationCount,
-    required this.onNotificationsChanged,
-  });
+  const _TransactionsPage({required this.categoryPreferences});
 
   final CategoryPreferencesService categoryPreferences;
-  final int notificationCount;
-  final Future<void> Function() onNotificationsChanged;
 
   @override
   State<_TransactionsPage> createState() => _TransactionsPageState();
@@ -263,8 +194,6 @@ class _TransactionsPageState extends State<_TransactionsPage> {
                 MaterialPageRoute(
                   builder: (context) => _AllTransactionsPage(
                     categoryPreferences: widget.categoryPreferences,
-                    notificationCount: widget.notificationCount,
-                    onNotificationsChanged: widget.onNotificationsChanged,
                   ),
                 ),
               );
@@ -350,10 +279,6 @@ class _TransactionsPageState extends State<_TransactionsPage> {
                                           category: category.name,
                                           categoryPreferences:
                                               widget.categoryPreferences,
-                                          notificationCount:
-                                              widget.notificationCount,
-                                          onNotificationsChanged:
-                                              widget.onNotificationsChanged,
                                         ),
                                   ),
                                 );
@@ -382,15 +307,9 @@ class _TransactionsPageState extends State<_TransactionsPage> {
 enum _TransactionDateFilter { all, month, range }
 
 class _AllTransactionsPage extends StatefulWidget {
-  const _AllTransactionsPage({
-    required this.categoryPreferences,
-    required this.notificationCount,
-    required this.onNotificationsChanged,
-  });
+  const _AllTransactionsPage({required this.categoryPreferences});
 
   final CategoryPreferencesService categoryPreferences;
-  final int notificationCount;
-  final Future<void> Function() onNotificationsChanged;
 
   @override
   State<_AllTransactionsPage> createState() => _AllTransactionsPageState();
@@ -473,23 +392,7 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
   Widget build(BuildContext context) {
     final currentUserId = context.read<AuthService>().currentUser?.uid ?? '';
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('All Transactions'),
-        actions: [
-          IconButton(
-            tooltip: 'Notifications',
-            icon: _NotificationBadge(count: widget.notificationCount),
-            onPressed: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const NotificationTransactionsPage(),
-                ),
-              );
-              await widget.onNotificationsChanged();
-            },
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('All Transactions')),
       body: BlocBuilder<TransactionBloc, TransactionState>(
         builder: (context, state) {
           final storedTransactions =
@@ -639,13 +542,7 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
 }
 
 class _MorePage extends StatelessWidget {
-  const _MorePage({
-    required this.notificationCount,
-    required this.onNotificationsChanged,
-  });
-
-  final int notificationCount;
-  final Future<void> Function() onNotificationsChanged;
+  const _MorePage();
 
   Future<void> _confirmLogout(BuildContext context) async {
     final confirmed =
@@ -701,12 +598,7 @@ class _MorePage extends StatelessWidget {
               trailing: const Icon(Icons.chevron_right),
               onTap: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => _ProfilePage(
-                      notificationCount: notificationCount,
-                      onNotificationsChanged: onNotificationsChanged,
-                    ),
-                  ),
+                  MaterialPageRoute(builder: (context) => const _ProfilePage()),
                 );
               },
             ),
@@ -722,26 +614,8 @@ class _MorePage extends StatelessWidget {
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (context) => TaxCalculatorScreen(
-                          appBarTitle: 'Tax Calculator',
-                          appBarActions: [
-                            IconButton(
-                              tooltip: 'Notifications',
-                              icon: _NotificationBadge(
-                                count: notificationCount,
-                              ),
-                              onPressed: () async {
-                                await Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        const NotificationTransactionsPage(),
-                                  ),
-                                );
-                                await onNotificationsChanged();
-                              },
-                            ),
-                          ],
-                        ),
+                        builder: (context) =>
+                            TaxCalculatorScreen(appBarTitle: 'Tax Calculator'),
                       ),
                     );
                   },
@@ -760,8 +634,6 @@ class _MorePage extends StatelessWidget {
                         icon: Icons.help_outline,
                         message:
                             'For help with transactions, backup, tax calculations, or account access, contact the Filer Flow support team.',
-                        notificationCount: notificationCount,
-                        onNotificationsChanged: onNotificationsChanged,
                       ),
                     ),
                   ),
@@ -782,7 +654,7 @@ class _MorePage extends StatelessWidget {
 Key Features:
 
 📊 Visual dashboard with income, expense & balance overview
-💳 Quick transaction entry — manually, via receipt scan, or auto-captured from notifications
+💳 Quick transaction entry — manually or via receipt scan
 ⚙️ Customizable income/expense categories
 🧮 Built-in tax calculator (Salary, PSEB Export, WHT)
 ☁️ Secure backup & restore via Google Drive
@@ -794,8 +666,6 @@ Version: 1.0.0
 Developed by: Graphie-Code Solutions''',
                         messageTextAlign: TextAlign.left,
                         useSmallMessageText: true,
-                        notificationCount: notificationCount,
-                        onNotificationsChanged: onNotificationsChanged,
                       ),
                     ),
                   ),
@@ -828,8 +698,6 @@ class _InformationPage extends StatelessWidget {
     required this.title,
     required this.icon,
     required this.message,
-    required this.notificationCount,
-    required this.onNotificationsChanged,
     this.messageTextAlign = TextAlign.center,
     this.useSmallMessageText = false,
   });
@@ -837,31 +705,13 @@ class _InformationPage extends StatelessWidget {
   final String title;
   final IconData icon;
   final String message;
-  final int notificationCount;
-  final Future<void> Function() onNotificationsChanged;
   final TextAlign messageTextAlign;
   final bool useSmallMessageText;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        actions: [
-          IconButton(
-            tooltip: 'Notifications',
-            icon: _NotificationBadge(count: notificationCount),
-            onPressed: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const NotificationTransactionsPage(),
-                ),
-              );
-              await onNotificationsChanged();
-            },
-          ),
-        ],
-      ),
+      appBar: AppBar(title: Text(title)),
       body: SingleChildScrollView(
         child: Center(
           child: ConstrainedBox(
@@ -1099,10 +949,7 @@ class _CategorySettingsPage extends StatelessWidget {
 }
 
 class _ProfilePage extends StatefulWidget {
-  const _ProfilePage({this.notificationCount = 0, this.onNotificationsChanged});
-
-  final int notificationCount;
-  final Future<void> Function()? onNotificationsChanged;
+  const _ProfilePage();
 
   @override
   State<_ProfilePage> createState() => _ProfilePageState();
@@ -1513,18 +1360,6 @@ class _ProfilePageState extends State<_ProfilePage>
       appBar: AppBar(
         title: const Text('Profile'),
         actions: [
-          IconButton(
-            tooltip: 'Notifications',
-            icon: _NotificationBadge(count: widget.notificationCount),
-            onPressed: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const NotificationTransactionsPage(),
-                ),
-              );
-              await widget.onNotificationsChanged?.call();
-            },
-          ),
           IconButton(
             tooltip: 'Refresh account',
             onPressed: _isUpdatingProfile ? null : _refreshAccount,
@@ -2057,46 +1892,6 @@ class _HomeDashboardState extends State<_HomeDashboard> {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _NotificationBadge extends StatelessWidget {
-  const _NotificationBadge({required this.count});
-
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        const Icon(Icons.notifications_active_outlined),
-        if (count > 0)
-          Positioned(
-            top: -7,
-            right: -9,
-            child: Container(
-              constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.red.shade700,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.white, width: 1.5),
-              ),
-              child: Text(
-                count > 99 ? '99+' : '$count',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 9,
-                  height: 1,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ),
-      ],
     );
   }
 }
@@ -2784,14 +2579,10 @@ class _CategoryTransactionsPage extends StatelessWidget {
   const _CategoryTransactionsPage({
     required this.category,
     required this.categoryPreferences,
-    this.notificationCount = 0,
-    this.onNotificationsChanged,
   });
 
   final String category;
   final CategoryPreferencesService categoryPreferences;
-  final int notificationCount;
-  final Future<void> Function()? onNotificationsChanged;
 
   void _openAddTransaction(BuildContext context) {
     Navigator.of(context).push(
@@ -2801,20 +2592,6 @@ class _CategoryTransactionsPage extends StatelessWidget {
           initialIsExpense: categoryPreferences.isDualMode(category)
               ? null
               : categoryPreferences.isExpense(category),
-          appBarActions: [
-            IconButton(
-              tooltip: 'Notifications',
-              icon: _NotificationBadge(count: notificationCount),
-              onPressed: () async {
-                await Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const NotificationTransactionsPage(),
-                  ),
-                );
-                await onNotificationsChanged?.call();
-              },
-            ),
-          ],
         ),
       ),
     );
@@ -2824,23 +2601,7 @@ class _CategoryTransactionsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = _getColorForCategory(category);
     return Scaffold(
-      appBar: AppBar(
-        title: Text(category),
-        actions: [
-          IconButton(
-            tooltip: 'Notifications',
-            icon: _NotificationBadge(count: notificationCount),
-            onPressed: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const NotificationTransactionsPage(),
-                ),
-              );
-              await onNotificationsChanged?.call();
-            },
-          ),
-        ],
-      ),
+      appBar: AppBar(title: Text(category)),
       body: BlocBuilder<TransactionBloc, TransactionState>(
         builder: (context, state) {
           if (state is TransactionLoading || state is TransactionInitial) {
