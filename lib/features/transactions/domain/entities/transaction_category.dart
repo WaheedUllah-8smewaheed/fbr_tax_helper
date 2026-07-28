@@ -48,7 +48,7 @@ class TransactionCategory {
     isExpense: true,
   );
   static const misc = TransactionCategory(
-    name: 'Uncategorized',
+    name: 'Other',
     isExpense: true,
   );
 
@@ -72,6 +72,7 @@ class TransactionCategory {
         housingAndUtils,
         TransactionCategory(name: 'Gas', isExpense: true),
         TransactionCategory(name: 'Water', isExpense: true),
+        TransactionCategory(name: 'Mobile Package', isExpense: true),
         TransactionCategory(name: 'Internet & Cable', isExpense: true),
         TransactionCategory(name: 'Maintenance/Repairs', isExpense: true),
       ],
@@ -200,6 +201,7 @@ class TransactionCategory {
     TransactionCategory(name: 'Gifts & Rewards', isExpense: true),
     TransactionCategory(name: 'Zakat', isExpense: true),
     TransactionCategory(name: 'Misc', isExpense: true),
+    TransactionCategory(name: 'Uncategorized', isExpense: true),
   ];
 
   static TransactionCategory fromName(String name) {

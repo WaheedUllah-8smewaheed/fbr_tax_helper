@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:fbr_tax_helper/main.dart';
+import 'package:fbr_tax_helper/features/auth/presentation/pages/login_page.dart';
 import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:fbr_tax_helper/features/tax_calculator/data/datasources/tax_local_data_source.dart';
 import 'package:fbr_tax_helper/features/tax_calculator/data/models/tax_profile_model.dart';
@@ -65,10 +67,41 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('calculator scrolls without overflow on short narrow screens', (
+    tester,
+  ) async {
+    await _pumpAppAtSize(tester, const Size(320, 480));
+
+    expect(find.byType(SingleChildScrollView), findsOneWidget);
+    expect(find.text('Calculate'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('builds on tablet width screens', (tester) async {
     await _pumpAppAtSize(tester, const Size(900, 700));
 
     expect(find.text('Filer Flow'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('login card fits short phone screens without scrolling', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 480);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      RepositoryProvider<AuthService>.value(
+        value: AuthService(),
+        child: const MaterialApp(home: LoginPage()),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Sign in'), findsWidgets);
+    expect(find.byType(SingleChildScrollView), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -87,6 +120,10 @@ void main() {
 
     expect(find.text('Estimate ready'), findsOneWidget);
     expect(find.text('Filing Receipt'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
     var incomeField = tester.widget<TextField>(find.byType(TextField));
     expect(incomeField.controller?.text, '150000');
 

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:fbr_tax_helper/core/widgets/filer_flow_logo.dart';
 import 'package:fbr_tax_helper/features/auth/presentation/pages/public_calculator_screen.dart';
 import 'package:fbr_tax_helper/features/auth/presentation/pages/signup_page.dart';
 import 'package:fbr_tax_helper/features/auth/presentation/bloc/login/login_bloc.dart';
@@ -106,8 +107,7 @@ class _LoginFormState extends State<LoginForm>
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-    final isCompact = size.width < 560;
+    final canPop = Navigator.of(context).canPop();
 
     return BlocListener<LoginBloc, LoginState>(
       listener: (context, state) {
@@ -129,6 +129,7 @@ class _LoginFormState extends State<LoginForm>
         }
       },
       child: Scaffold(
+        resizeToAvoidBottomInset: false,
         body: AnimatedBuilder(
           animation: _animationController,
           builder: (context, child) {
@@ -140,7 +141,10 @@ class _LoginFormState extends State<LoginForm>
           child: SafeArea(
             child: Stack(
               children: [
-                if (Navigator.of(context).canPop())
+                const Positioned.fill(
+                  child: IgnorePointer(child: _LoginBackgroundContent()),
+                ),
+                if (canPop)
                   Positioned(
                     top: 8,
                     left: 8,
@@ -151,102 +155,55 @@ class _LoginFormState extends State<LoginForm>
                     ),
                   ),
                 Center(
-                  child: SingleChildScrollView(
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: EdgeInsets.fromLTRB(
-                      isCompact ? 16 : 32,
-                      72,
-                      isCompact ? 16 : 32,
-                      24 + MediaQuery.viewInsetsOf(context).bottom,
-                    ),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 920),
-                      child: isCompact
-                          ? Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                _AnimatedLoginHeader(
-                                  progress: _animationController.value,
-                                ),
-                                const SizedBox(height: 22),
-                                _LoginPanel(
-                                  formKey: _formKey,
-                                  emailController: _emailController,
-                                  passwordController: _passwordController,
-                                  obscurePassword: _obscurePassword,
-                                  onTogglePassword: () {
-                                    setState(() {
-                                      _obscurePassword = !_obscurePassword;
-                                    });
-                                  },
-                                  onEmailLogin: _submitEmailLogin,
-                                  onGoogleLogin: _submitGoogleLogin,
-                                  onCreateAccount: () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            const SignupPage(),
-                                      ),
-                                    );
-                                  },
-                                  onTaxCalculator: () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            const PublicCalculatorScreen(),
-                                      ),
-                                    );
-                                  },
-                                  validateEmail: _validateEmail,
-                                  validatePassword: _validatePassword,
-                                ),
-                              ],
-                            )
-                          : Row(
-                              children: [
-                                Expanded(
-                                  child: _AnimatedLoginHeader(
-                                    progress: _animationController.value,
-                                  ),
-                                ),
-                                const SizedBox(width: 28),
-                                Expanded(
-                                  child: _LoginPanel(
-                                    formKey: _formKey,
-                                    emailController: _emailController,
-                                    passwordController: _passwordController,
-                                    obscurePassword: _obscurePassword,
-                                    onTogglePassword: () {
-                                      setState(() {
-                                        _obscurePassword = !_obscurePassword;
-                                      });
-                                    },
-                                    onEmailLogin: _submitEmailLogin,
-                                    onGoogleLogin: _submitGoogleLogin,
-                                    onCreateAccount: () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              const SignupPage(),
-                                        ),
-                                      );
-                                    },
-                                    onTaxCalculator: () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              const PublicCalculatorScreen(),
-                                        ),
-                                      );
-                                    },
-                                    validateEmail: _validateEmail,
-                                    validatePassword: _validatePassword,
-                                  ),
-                                ),
-                              ],
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          canPop ? 64 : 16,
+                          16,
+                          16,
+                        ),
+                        child: Center(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: SizedBox(
+                              width: 460,
+                              child: _LoginPanel(
+                                formKey: _formKey,
+                                emailController: _emailController,
+                                passwordController: _passwordController,
+                                obscurePassword: _obscurePassword,
+                                onTogglePassword: () {
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                },
+                                onEmailLogin: _submitEmailLogin,
+                                onGoogleLogin: _submitGoogleLogin,
+                                onCreateAccount: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) => const SignupPage(),
+                                    ),
+                                  );
+                                },
+                                onTaxCalculator: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const PublicCalculatorScreen(),
+                                    ),
+                                  );
+                                },
+                                validateEmail: _validateEmail,
+                                validatePassword: _validatePassword,
+                              ),
                             ),
-                    ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ],
@@ -359,98 +316,6 @@ class _TotpSignInDialogState extends State<_TotpSignInDialog> {
   }
 }
 
-class _AnimatedLoginHeader extends StatelessWidget {
-  const _AnimatedLoginHeader({required this.progress});
-
-  final double progress;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final pulse = math.sin(progress * 2 * math.pi);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 76,
-          height: 76,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.14),
-                blurRadius: 24,
-                offset: const Offset(0, 14),
-              ),
-            ],
-          ),
-          child: const Icon(
-            Icons.account_balance_wallet_outlined,
-            color: Color(0xFF00796B),
-            size: 38,
-          ),
-        ),
-        const SizedBox(height: 28),
-        Text(
-          'Welcome back',
-          style: theme.textTheme.displaySmall?.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'Sign in to keep your tax estimates, expenses, and Drive backup in sync.',
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: Colors.white.withValues(alpha: 0.86),
-            height: 1.35,
-          ),
-        ),
-        const SizedBox(height: 28),
-        SizedBox(
-          height: 160,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Positioned(
-                left: 0,
-                right: 64,
-                top: 18 + pulse * 4,
-                child: const _FloatingStatCard(
-                  icon: Icons.trending_up,
-                  label: 'Income',
-                  value: 'PKR 150k',
-                  color: Color(0xFF40C4A3),
-                ),
-              ),
-              Positioned(
-                right: 0,
-                top: 82 - pulse * 5,
-                child: const _FloatingStatCard(
-                  icon: Icons.receipt_long_outlined,
-                  label: 'Expense',
-                  value: 'PKR 85k',
-                  color: Color(0xFFFFC857),
-                ),
-              ),
-              Positioned(
-                left: 34,
-                bottom: 0,
-                child: Transform.rotate(
-                  angle: -0.08 + pulse * 0.02,
-                  child: const _TaxBadge(),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _LoginPanel extends StatelessWidget {
   const _LoginPanel({
     required this.formKey,
@@ -486,134 +351,256 @@ class _LoginPanel extends StatelessWidget {
       builder: (context, state) {
         final isLoading = state is LoginLoading;
 
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.16),
-                blurRadius: 34,
-                offset: const Offset(0, 22),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Sign in',
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF123D36),
+        return Padding(
+          padding: const EdgeInsets.only(top:10, bottom: 24, right: 24, left: 24),
+          child: Form(
+            key: formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Center(child: FilerFlowLogo(size: 120)),
+                
+                const SizedBox(height: 20),
+                
+                Text(
+                  'Filer Flow',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    fontSize: 40,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 15),
+                Text(
+                  'Welcome',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Sign in to manage your finances with confidence.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.85),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                TextFormField(
+                  controller: emailController,
+                  enabled: !isLoading,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  validator: validateEmail,
+                  decoration: InputDecoration(
+                    hintText: 'Email address',
+                    floatingLabelBehavior: FloatingLabelBehavior.never,
+                    prefixIcon: const Icon(Icons.alternate_email),
+                    filled: true,
+                    fillColor: Colors.white.withValues(alpha: 0.96),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Your account dashboard is ready.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFF65716C),
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: passwordController,
+                  enabled: !isLoading,
+                  obscureText: obscurePassword,
+                  validator: validatePassword,
+                  onFieldSubmitted: (_) {
+                    if (!isLoading) onEmailLogin();
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'Password',
+                    floatingLabelBehavior: FloatingLabelBehavior.never,
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    filled: true,
+                    fillColor: Colors.white.withValues(alpha: 0.96),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  TextFormField(
-                    controller: emailController,
-                    enabled: !isLoading,
-                    keyboardType: TextInputType.emailAddress,
-                    textInputAction: TextInputAction.next,
-                    validator: validateEmail,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      prefixIcon: Icon(Icons.alternate_email),
-                      border: OutlineInputBorder(),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: passwordController,
-                    enabled: !isLoading,
-                    obscureText: obscurePassword,
-                    validator: validatePassword,
-                    onFieldSubmitted: (_) {
-                      if (!isLoading) onEmailLogin();
-                    },
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        tooltip: obscurePassword
-                            ? 'Show password'
-                            : 'Hide password',
-                        onPressed: isLoading ? null : onTogglePassword,
-                        icon: Icon(
-                          obscurePassword
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                        ),
+                    suffixIcon: IconButton(
+                      tooltip: obscurePassword
+                          ? 'Show password'
+                          : 'Hide password',
+                      onPressed: isLoading ? null : onTogglePassword,
+                      icon: Icon(
+                        obscurePassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 22),
-                  SizedBox(
-                    height: 52,
-                    child: FilledButton.icon(
-                      onPressed: isLoading ? null : onEmailLogin,
-                      icon: isLoading
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(Icons.login),
-                      label: const Text('Sign in'),
+                ),
+                const SizedBox(height: 22),
+                SizedBox(
+                  height: 52,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFFFC857),
+                      foregroundColor: const Color(0xFF092B29),
+                      elevation: 3,
+                      shadowColor: Colors.black.withValues(alpha: 0.35),
+                      textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
+                    onPressed: isLoading ? null : onEmailLogin,
+                    icon: isLoading
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.arrow_forward_rounded),
+                    label: const Text('Sign in'),
                   ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Divider(
+                          color: Colors.white.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'OR',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Divider(
+                          color: Colors.white.withValues(alpha: 0.3),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  height: 50,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF183A5A),
+                      side: BorderSide.none,
+                      textStyle: const TextStyle(fontWeight: FontWeight.w700),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
                     onPressed: isLoading ? null : onGoogleLogin,
-                    icon: const Icon(Icons.g_mobiledata, size: 28),
+                    icon: Container(
+                      width: 25,
+                      height: 25,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: const Color(0xFF183A5A).withValues(alpha: 0.2),
+                        ),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Text(
+                        'G',
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                    ),
                     label: const Text('Continue with Google'),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Google accounts are already email-verified and can enable authenticator 2FA without an email link.',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFF65716C),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  height: 48,
+                  padding: const EdgeInsets.only(left: 16, right: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF092B29).withValues(alpha: 0.82),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.18),
                     ),
                   ),
-                  const SizedBox(height: 18),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  child: Row(
                     children: [
-                      Text(
-                        'New here?',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFF65716C),
+                      const Icon(
+                        Icons.person_add_alt_1_outlined,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'New to Filer Flow?',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                       TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFFFFC857),
+                          textStyle: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
                         onPressed: isLoading ? null : onCreateAccount,
                         child: const Text('Create account'),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: const Color(
+                        0xFF092B29,
+                      ).withValues(alpha: 0.82),
+                      foregroundColor: Colors.white,
+                      side: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.18),
+                      ),
+                      textStyle: const TextStyle(fontWeight: FontWeight.w700),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
                     onPressed: isLoading ? null : onTaxCalculator,
-                    icon: const Icon(Icons.calculate_outlined),
-                    label: const Text('Tax Calculator'),
+                    icon: const Icon(
+                      Icons.calculate_outlined,
+                      color: Color(0xFFFFC857),
+                    ),
+                    label: const Text('Open Tax Calculator'),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         );
@@ -622,87 +609,110 @@ class _LoginPanel extends StatelessWidget {
   }
 }
 
-class _FloatingStatCard extends StatelessWidget {
-  const _FloatingStatCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
+class _LoginBackgroundContent extends StatelessWidget {
+  const _LoginBackgroundContent();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.95),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(10),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 900;
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              top: isWide ? 54 : 20,
+              right: isWide ? 54 : -18,
+              child: Transform.rotate(
+                angle: 0.08,
+                child: _BackgroundBadge(
+                  icon: Icons.receipt_long_outlined,
+                  label: isWide ? 'Organized records' : null,
+                ),
+              ),
             ),
-            child: Icon(icon, color: color),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Color(0xFF65716C),
-                  fontWeight: FontWeight.w600,
+            Positioned(
+              bottom: isWide ? 58 : 26,
+              left: isWide ? 58 : -14,
+              child: Transform.rotate(
+                angle: -0.08,
+                child: _BackgroundBadge(
+                  icon: Icons.calculate_outlined,
+                  label: isWide ? 'Tax made simple' : null,
                 ),
               ),
-              Text(
-                value,
-                style: const TextStyle(
-                  color: Color(0xFF123D36),
-                  fontWeight: FontWeight.w800,
+            ),
+            if (isWide)
+              Positioned(
+                left: 64,
+                top: constraints.maxHeight * 0.31,
+                width: 250,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.insights_rounded,
+                      color: Color(0xFFFFC857),
+                      size: 42,
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'A clearer view of\nyour financial life.',
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            height: 1.25,
+                          ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Track income, expenses and tax information in one secure place.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.76),
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ],
-      ),
+          ],
+        );
+      },
     );
   }
 }
 
-class _TaxBadge extends StatelessWidget {
-  const _TaxBadge();
+class _BackgroundBadge extends StatelessWidget {
+  const _BackgroundBadge({required this.icon, this.label});
+
+  final IconData icon;
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      padding: EdgeInsets.all(label == null ? 18 : 14),
       decoration: BoxDecoration(
-        color: const Color(0xFF123D36),
+        color: Colors.white.withValues(alpha: label == null ? 0.1 : 0.13),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.verified_outlined, color: Color(0xFFFFC857), size: 20),
-          SizedBox(width: 8),
-          Text(
-            'Filer Flow',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
-          ),
+          Icon(icon, color: Colors.white.withValues(alpha: 0.8), size: 28),
+          if (label != null) ...[
+            const SizedBox(width: 10),
+            Text(
+              label!,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
         ],
       ),
     );

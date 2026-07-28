@@ -74,7 +74,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       _selectedCategory = transaction.category;
       _receiptImagePath = transaction.receiptImagePath;
     } else {
-      _titleController.text = widget.initialTitle ?? '';
+      _titleController.text =
+          widget.initialTitle ?? widget.initialCategory ?? '';
       _beneficiaryController.text = widget.initialBeneficiary ?? '';
       _purposeController.text = widget.initialPurpose ?? '';
       if (widget.initialAmount != null) {

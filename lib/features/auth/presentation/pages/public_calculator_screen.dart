@@ -14,8 +14,7 @@ class PublicCalculatorScreen extends StatelessWidget {
 
   Widget _buildUpsellBanner(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.all(16.0),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.primaryContainer,
         borderRadius: BorderRadius.circular(18),
@@ -27,12 +26,12 @@ class PublicCalculatorScreen extends StatelessWidget {
             "Want to automatically track expenses?",
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           const Text(
             "Create a free account to save transactions and back up records directly inside your private Google Drive vault.",
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           ElevatedButton.icon(
             onPressed: () {
               Navigator.of(context).maybePop();

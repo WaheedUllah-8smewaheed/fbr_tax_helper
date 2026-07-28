@@ -48,6 +48,7 @@ abstract final class AppTheme {
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
+        toolbarHeight: 64,
         centerTitle: false,
         elevation: 0,
         scrolledUnderElevation: 2,
@@ -61,7 +62,8 @@ abstract final class AppTheme {
       cardTheme: const CardThemeData(
         color: Colors.white,
         surfaceTintColor: Colors.transparent,
-        elevation: 0,
+        shadowColor: Color(0x22092B29),
+        elevation: 1,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(18)),
@@ -70,21 +72,29 @@ abstract final class AppTheme {
       ),
       inputDecorationTheme: const InputDecorationTheme(
         filled: true,
-        fillColor: Color(0xFFFBFDFC),
+        fillColor: Colors.white,
         contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         prefixIconColor: AppColors.primary,
         suffixIconColor: AppColors.muted,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           borderSide: BorderSide(color: AppColors.border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           borderSide: BorderSide(color: AppColors.border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           borderSide: BorderSide(color: AppColors.primary, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(14)),
+          borderSide: BorderSide(color: Color(0xFFB3261E)),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(14)),
+          borderSide: BorderSide(color: Color(0xFFB3261E), width: 2),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
@@ -93,7 +103,7 @@ abstract final class AppTheme {
           foregroundColor: Colors.white,
           minimumSize: const Size(48, 50),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
           ),
           textStyle: const TextStyle(fontWeight: FontWeight.w700),
         ),
@@ -105,7 +115,7 @@ abstract final class AppTheme {
           minimumSize: const Size(48, 50),
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
           ),
           textStyle: const TextStyle(fontWeight: FontWeight.w700),
         ),
@@ -116,7 +126,7 @@ abstract final class AppTheme {
           minimumSize: const Size(48, 50),
           side: const BorderSide(color: AppColors.primary),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
           ),
           textStyle: const TextStyle(fontWeight: FontWeight.w700),
         ),
@@ -137,7 +147,12 @@ abstract final class AppTheme {
       ),
       navigationBarTheme: const NavigationBarThemeData(
         backgroundColor: Colors.white,
+        elevation: 2,
+        height: 72,
         indicatorColor: AppColors.mintSurface,
+        indicatorShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(14)),
+        ),
         surfaceTintColor: Colors.transparent,
         labelTextStyle: WidgetStatePropertyAll(
           TextStyle(color: AppColors.ink, fontWeight: FontWeight.w600),

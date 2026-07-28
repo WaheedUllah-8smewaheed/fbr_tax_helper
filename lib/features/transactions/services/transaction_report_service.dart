@@ -106,11 +106,7 @@ class TransactionReportService {
         build: (context) => [
           _buildHeader(filterLabel, generatedAt),
           pw.SizedBox(height: 18),
-          _buildSummary(
-            transactionCount: transactions.length,
-            income: income,
-            expenses: expenses,
-          ),
+          _buildSummary(income: income, expenses: expenses),
           pw.SizedBox(height: 20),
           pw.Text(
             'Transaction details',
@@ -188,17 +184,9 @@ class TransactionReportService {
     );
   }
 
-  pw.Widget _buildSummary({
-    required int transactionCount,
-    required double income,
-    required double expenses,
-  }) {
+  pw.Widget _buildSummary({required double income, required double expenses}) {
     return pw.Row(
       children: [
-        pw.Expanded(
-          child: _summaryCell('Transactions', transactionCount.toString()),
-        ),
-        pw.SizedBox(width: 8),
         pw.Expanded(child: _summaryCell('Income', _formatMoney(income))),
         pw.SizedBox(width: 8),
         pw.Expanded(child: _summaryCell('Expenses', _formatMoney(expenses))),
@@ -302,7 +290,7 @@ class TransactionReportService {
   }) {
     final categoryPath = TransactionCategory.hierarchyPathFor(
       transaction.category,
-    );
+    ).take(3).join(' > ');
     final amountColor = transaction.isExpense
         ? PdfColor.fromHex('#B3261E')
         : PdfColor.fromHex('#0F6B57');
@@ -353,19 +341,9 @@ class TransactionReportService {
                   'Type',
                   transaction.isExpense ? 'Expense' : 'Income',
                 ),
-                if (categoryPath.length >= 2)
-                  _detailRow('Super Category', categoryPath[0]),
-                if (categoryPath.length >= 3) ...[
-                  _detailRow('Category', categoryPath[1]),
-                  _detailRow('Subcategory', categoryPath[2]),
-                ] else
-                  _detailRow('Category', categoryPath.last),
+                _detailRow('Category', categoryPath),
                 _detailRow('Beneficiary', transaction.beneficiary),
                 _detailRow('Purpose', transaction.purpose),
-                _detailRow(
-                  'Record ID',
-                  transaction.id?.toString() ?? 'Not assigned',
-                ),
               ],
             ),
           ),

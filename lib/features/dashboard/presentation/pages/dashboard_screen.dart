@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:fl_chart/fl_chart.dart';
+import 'package:fbr_tax_helper/core/theme/app_theme.dart';
 import 'package:fbr_tax_helper/features/tax_calculator/presentation/pages/tax_calculator_screen.dart';
 import 'package:fbr_tax_helper/features/transactions/presentation/pages/add_transaction_page.dart';
 import 'package:fbr_tax_helper/features/transactions/presentation/bloc/transaction_bloc.dart';
@@ -633,7 +634,11 @@ class _MorePage extends StatelessWidget {
                         title: 'Help & Support',
                         icon: Icons.help_outline,
                         message:
-                            'For help with transactions, backup, tax calculations, or account access, contact the Filer Flow support team.',
+                            'If you experience any issues or have questions about using the application, please reach out to our support team at:',
+                        supportEmail: 'graphie-codesolutions@gmail.com',
+                        footerMessage:
+                            "We're here to assist you and will respond as soon as possible.",
+                        messageTextAlign: TextAlign.left,
                       ),
                     ),
                   ),
@@ -653,16 +658,16 @@ class _MorePage extends StatelessWidget {
 
 Key Features:
 
-📊 Visual dashboard with income, expense & balance overview
-💳 Quick transaction entry — manually or via receipt scan
-⚙️ Customizable income/expense categories
-🧮 Built-in tax calculator (Salary, PSEB Export, WHT)
-☁️ Secure backup & restore via Google Drive
-🔒 Fingerprint-secured profile with 2FA
+• Visual dashboard with income, expense & balance overview
+• Quick transaction entry — manually or via receipt scan
+• Customizable income/expense categories
+• Built-in tax calculator (Salary, PSEB Export, WHT)
+• Secure backup & restore via Google Drive
+• Fingerprint-secured profile with 2FA
 
-Your data stays on your device — you control when and where it's backed up.
+Your data stays on your device , you control when and where it's backed up.
 
-Version: 1.0.0
+Version: 1.0
 Developed by: Graphie-Code Solutions''',
                         messageTextAlign: TextAlign.left,
                         useSmallMessageText: true,
@@ -700,6 +705,8 @@ class _InformationPage extends StatelessWidget {
     required this.message,
     this.messageTextAlign = TextAlign.center,
     this.useSmallMessageText = false,
+    this.supportEmail,
+    this.footerMessage,
   });
 
   final String title;
@@ -707,6 +714,8 @@ class _InformationPage extends StatelessWidget {
   final String message;
   final TextAlign messageTextAlign;
   final bool useSmallMessageText;
+  final String? supportEmail;
+  final String? footerMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -744,6 +753,43 @@ class _InformationPage extends StatelessWidget {
                               : null,
                         ),
                       ),
+                      if (supportEmail != null) ...[
+                        const SizedBox(height: 18),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.email_outlined,
+                              color: AppColors.primary,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: SelectableText(
+                                  supportEmail!,
+                                  maxLines: 1,
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (footerMessage != null) ...[
+                        const SizedBox(height: 18),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            footerMessage!,
+                            textAlign: TextAlign.left,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

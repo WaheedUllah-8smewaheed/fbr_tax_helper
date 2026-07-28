@@ -12,6 +12,17 @@ void main() {
   test('unknown categories safely fall back to miscellaneous expense', () {
     expect(TransactionCategory.fromName('Unknown'), TransactionCategory.misc);
     expect(TransactionCategory.fromName('Unknown').isExpense, isTrue);
+    expect(TransactionCategory.misc.name, 'Other Expenses');
+    expect(TransactionCategory.fromName('Uncategorized').name, 'Uncategorized');
+  });
+
+  test('housing utilities includes mobile packages', () {
+    expect(
+      TransactionCategory.childrenOf(
+        'Housing & Utils',
+      ).map((category) => category.name),
+      contains('Mobile Package'),
+    );
   });
 
   test('builds printable paths for new and legacy categories', () {
