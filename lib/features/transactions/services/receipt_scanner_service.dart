@@ -173,6 +173,18 @@ class ReceiptScannerService {
     if (_containsAny(lower, ['hospital', 'clinic', 'pharmacy', 'medical'])) {
       return 'Health';
     }
+    if (_containsAny(lower, [
+      'school',
+      'college',
+      'university',
+      'tuition',
+      'academy',
+      'course fee',
+      'training fee',
+      'exam fee',
+    ])) {
+      return 'Tuition & Fees';
+    }
     if (_containsAny(lower, ['rent', 'landlord', 'tenant'])) {
       return 'Rent';
     }

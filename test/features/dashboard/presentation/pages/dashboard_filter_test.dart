@@ -45,4 +45,14 @@ void main() {
       isTrue,
     );
   });
+
+  test(
+    'category percentage uses total activity instead of the largest bar',
+    () {
+      expect(categoryShareOfActivity(200, 1000), closeTo(0.2, 0.0001));
+      expect(categoryShareOfActivity(600, 1000), closeTo(0.6, 0.0001));
+      expect(categoryShareOfActivity(0, 1000), 0);
+      expect(categoryShareOfActivity(100, 0), 0);
+    },
+  );
 }

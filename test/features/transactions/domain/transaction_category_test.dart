@@ -12,7 +12,7 @@ void main() {
   test('unknown categories safely fall back to miscellaneous expense', () {
     expect(TransactionCategory.fromName('Unknown'), TransactionCategory.misc);
     expect(TransactionCategory.fromName('Unknown').isExpense, isTrue);
-    expect(TransactionCategory.misc.name, 'Other Expenses');
+    expect(TransactionCategory.misc.name, 'Other');
     expect(TransactionCategory.fromName('Uncategorized').name, 'Uncategorized');
   });
 
@@ -23,6 +23,27 @@ void main() {
       ).map((category) => category.name),
       contains('Mobile Package'),
     );
+  });
+
+  test('education categories are available as expenses', () {
+    final educationCategories = TransactionCategory.childrenOf('Education');
+
+    expect(
+      educationCategories.map((category) => category.name),
+      containsAll([
+        'Tuition & Fees',
+        'Books & Supplies',
+        'Courses & Training',
+        'Exam Fees',
+        'School Transport',
+      ]),
+    );
+    expect(educationCategories.every((category) => category.isExpense), isTrue);
+    expect(TransactionCategory.hierarchyPathFor('Tuition & Fees'), [
+      'Education & Learning',
+      'Education',
+      'Tuition & Fees',
+    ]);
   });
 
   test('builds printable paths for new and legacy categories', () {

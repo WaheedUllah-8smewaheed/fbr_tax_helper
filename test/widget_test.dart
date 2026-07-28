@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:fbr_tax_helper/main.dart';
 import 'package:fbr_tax_helper/features/auth/presentation/pages/login_page.dart';
+import 'package:fbr_tax_helper/features/auth/presentation/pages/public_calculator_screen.dart';
 import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:fbr_tax_helper/features/tax_calculator/data/datasources/tax_local_data_source.dart';
 import 'package:fbr_tax_helper/features/tax_calculator/data/models/tax_profile_model.dart';
@@ -77,10 +78,42 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('public calculator fits a short phone without scrolling', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 480);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(const MaterialApp(home: PublicCalculatorScreen()));
+    await tester.pump();
+
+    expect(find.text('Tax Calculator'), findsOneWidget);
+    expect(find.text('Calculate'), findsOneWidget);
+    expect(find.byType(SingleChildScrollView), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('builds on tablet width screens', (tester) async {
     await _pumpAppAtSize(tester, const Size(900, 700));
 
     expect(find.text('Filer Flow'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('stacks calculator inputs when the card width is constrained', (
+    tester,
+  ) async {
+    await _pumpAppAtSize(tester, const Size(720, 1280));
+
+    final taxYearTop = tester.getTopLeft(
+      find.byType(DropdownButtonFormField<String>),
+    );
+    final incomeTop = tester.getTopLeft(find.byType(TextField));
+
+    expect(incomeTop.dy, greaterThan(taxYearTop.dy + 50));
+    expect(find.text('Calculate'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

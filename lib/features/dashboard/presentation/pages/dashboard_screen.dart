@@ -88,7 +88,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const titles = ['Dashboard', 'Transactions', 'Settings', 'More'];
+    const titles = ['DASHBOARD', 'TRANSACTIONS', 'SETTINGS', 'MORE'];
     return Scaffold(
       appBar: AppBar(title: Text(titles[_selectedIndex])),
       body: ListenableBuilder(
@@ -841,12 +841,31 @@ class _CategorySettingsPage extends StatelessWidget {
     }
   }
 
+  Future<void> _updateParentEnabled(
+    BuildContext context,
+    String parentName,
+    bool enabled,
+  ) async {
+    try {
+      await categoryPreferences.setParentEnabled(parentName, enabled: enabled);
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('Could not save category setting: $error')),
+        );
+    }
+  }
+
   IconData _iconForSuperCategory(String name) {
     return switch (name) {
       'Income' => Icons.account_balance_wallet_outlined,
       'Housing & Transport' => Icons.home_work_outlined,
       'Food & Lifestyle' => Icons.restaurant_outlined,
+      'Education & Learning' => Icons.school_outlined,
       'Wellness & Giving' => Icons.favorite_outline,
+      'Financial Obligations' => Icons.request_quote_outlined,
       _ => Icons.receipt_long_outlined,
     };
   }
@@ -860,14 +879,14 @@ class _CategorySettingsPage extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               children: [
                 Text(
-                  'Super Categories',
+                  'CATEGORY SETTINGS',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Set Income, Expense, or Both on each level-2 category, then enable the level-3 categories you want to use. The parent mode applies to every child.',
+                  'Toggle a category to show or hide all its items. You can also turn on individual items and set each as Income, Expense, or Both.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 if (categoryPreferences.loadError != null) ...[
@@ -907,11 +926,28 @@ class _CategorySettingsPage extends StatelessWidget {
                                 _getIconForCategory(parent.key),
                                 size: 21,
                               ),
-                              title: Text(
-                                parent.key,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                ),
+                              title: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      parent.key,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  Switch(
+                                    value: categoryPreferences.isParentEnabled(
+                                      parent.key,
+                                    ),
+                                    onChanged: (enabled) =>
+                                        _updateParentEnabled(
+                                          context,
+                                          parent.key,
+                                          enabled,
+                                        ),
+                                  ),
+                                ],
                               ),
                               children: [
                                 Padding(
@@ -2107,7 +2143,11 @@ IconData _getIconForCategory(String category) {
     case 'investment':
       return Icons.trending_up;
     case 'tax':
-      return Icons.receipt_long;
+    case 'income tax':
+    case 'property tax':
+    case 'salary tax (withholding)':
+    case 'sales tax/gst':
+      return Icons.payments;
     case 'health':
       return Icons.local_hospital;
     case 'food & drinks':
@@ -2124,6 +2164,17 @@ IconData _getIconForCategory(String category) {
       return Icons.spa;
     case 'subscriptions':
       return Icons.subscriptions;
+    case 'education':
+      return Icons.local_library;
+    case 'tuition & fees':
+    case 'exam fees':
+      return Icons.assignment_outlined;
+    case 'courses & training':
+      return Icons.workspace_premium_outlined;
+    case 'books & supplies':
+      return Icons.menu_book_outlined;
+    case 'school transport':
+      return Icons.directions_bus_outlined;
     case 'gifts & rewards':
       return Icons.card_giftcard;
     case 'zakat':
@@ -2359,6 +2410,10 @@ class _TopCategoryCharts extends StatelessWidget {
   Widget build(BuildContext context) {
     final income = _topCategories(isExpense: false);
     final expenses = _topCategories(isExpense: true);
+    final totalActivity = transactions.fold<double>(
+      0,
+      (sum, transaction) => sum + transaction.amount.abs(),
+    );
 
     return Card(
       child: Padding(
@@ -2374,11 +2429,15 @@ class _TopCategoryCharts extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Top five categories across income and expenses for the selected period.',
+              'Top five categories based on range. Percentages show each category’s share of total activity.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 18),
-            _TopCategoryBarChart(incomeItems: income, expenseItems: expenses),
+            _TopCategoryLollipopChart(
+              incomeItems: income,
+              expenseItems: expenses,
+              totalActivity: totalActivity,
+            ),
           ],
         ),
       ),
@@ -2386,14 +2445,16 @@ class _TopCategoryCharts extends StatelessWidget {
   }
 }
 
-class _TopCategoryBarChart extends StatelessWidget {
-  const _TopCategoryBarChart({
+class _TopCategoryLollipopChart extends StatelessWidget {
+  const _TopCategoryLollipopChart({
     required this.incomeItems,
     required this.expenseItems,
+    required this.totalActivity,
   });
 
   final List<_CategoryTotal> incomeItems;
   final List<_CategoryTotal> expenseItems;
+  final double totalActivity;
 
   @override
   Widget build(BuildContext context) {
@@ -2412,11 +2473,6 @@ class _TopCategoryBarChart extends StatelessWidget {
         ),
     ]..sort((a, b) => b.total.compareTo(a.total));
     final items = rankedItems.take(5).toList();
-    var maximum = 0.0;
-    for (final item in items) {
-      if (item.total > maximum) maximum = item.total;
-    }
-    final maxY = maximum <= 0 ? 1.0 : maximum * 1.18;
     final incomeColor = Colors.green.shade600;
     final expenseColor = Colors.red.shade600;
 
@@ -2431,132 +2487,177 @@ class _TopCategoryBarChart extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 20,
+              runSpacing: 8,
               children: [
                 _ChartLegend(label: 'Income', color: incomeColor),
-                const SizedBox(width: 20),
                 _ChartLegend(label: 'Expense', color: expenseColor),
               ],
             ),
             const SizedBox(height: 12),
             if (items.isEmpty)
               const SizedBox(
-                height: 230,
+                height: 160,
                 child: Center(child: Text('No transactions for this period')),
               )
             else
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final spacePerBar = constraints.maxWidth / items.length;
-                  final rodWidth = (spacePerBar * 0.48)
-                      .clamp(10.0, 44.0)
-                      .toDouble();
-                  final labelWidth = spacePerBar.clamp(28.0, 62.0).toDouble();
-                  return SizedBox(
-                    height: 250,
-                    child: BarChart(
-                      BarChartData(
-                        minY: 0,
-                        maxY: maxY,
-                        alignment: BarChartAlignment.spaceAround,
-                        groupsSpace: 12,
-                        barGroups: [
-                          for (var index = 0; index < items.length; index++)
-                            BarChartGroupData(
-                              x: index,
-                              barRods: [
-                                BarChartRodData(
-                                  toY: items[index].total,
-                                  width: rodWidth,
-                                  color: items[index].isExpense
-                                      ? expenseColor
-                                      : incomeColor,
-                                  borderRadius: const BorderRadius.vertical(
-                                    top: Radius.circular(5),
-                                  ),
-                                ),
-                              ],
+              Column(
+                children: [
+                  for (var index = 0; index < items.length; index++)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        bottom: index == items.length - 1 ? 0 : 14,
+                      ),
+                      child: _HorizontalCategoryLollipop(
+                        item: items[index],
+                        totalActivity: totalActivity,
+                        color: items[index].isExpense
+                            ? expenseColor
+                            : incomeColor,
+                      ),
+                    ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HorizontalCategoryLollipop extends StatelessWidget {
+  const _HorizontalCategoryLollipop({
+    required this.item,
+    required this.totalActivity,
+    required this.color,
+  });
+
+  final _CategoryChartBar item;
+  final double totalActivity;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final fraction = categoryShareOfActivity(item.total, totalActivity);
+    final percentage = fraction * 100;
+    final percentageLabel = _formatChartPercentage(percentage);
+    final type = item.isExpense ? 'Expense' : 'Income';
+
+    return Semantics(
+      label:
+          '${item.category}, $type, ${_formatDashboardMoney(item.total)}, $percentageLabel of total activity',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  item.category,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    _formatDashboardMoney(item.total),
+                    maxLines: 1,
+                    style: TextStyle(color: color, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const markerSize = 36.0;
+              final markerCenter = constraints.maxWidth * fraction;
+              final markerLeft = (markerCenter - markerSize / 2)
+                  .clamp(0.0, constraints.maxWidth - markerSize)
+                  .toDouble();
+              final activeLineWidth = markerCenter
+                  .clamp(item.total > 0 ? 1.0 : 0.0, constraints.maxWidth)
+                  .toDouble();
+
+              return SizedBox(
+                height: markerSize,
+                child: Stack(
+                  children: [
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: 16,
+                      height: 4,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 0,
+                      top: 16,
+                      width: activeLineWidth,
+                      height: 4,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: color,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: markerLeft,
+                      top: 0,
+                      width: markerSize,
+                      height: markerSize,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: color.withValues(alpha: 0.24),
+                              blurRadius: 5,
+                              offset: const Offset(0, 2),
                             ),
-                        ],
-                        barTouchData: BarTouchData(
-                          touchTooltipData: BarTouchTooltipData(
-                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                              final item = items[group.x];
-                              final type = item.isExpense
-                                  ? 'Expense'
-                                  : 'Income';
-                              return BarTooltipItem(
-                                '${item.category}\n$type: ${_formatDashboardMoney(rod.toY)}',
-                                const TextStyle(
+                          ],
+                        ),
+                        child: Center(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Padding(
+                              padding: const EdgeInsets.all(4),
+                              child: Text(
+                                percentageLabel,
+                                maxLines: 1,
+                                style: const TextStyle(
                                   color: Colors.white,
-                                  fontWeight: FontWeight.w700,
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w900,
                                 ),
-                              );
-                            },
-                          ),
-                        ),
-                        gridData: FlGridData(
-                          drawVerticalLine: false,
-                          horizontalInterval: maxY / 4,
-                        ),
-                        borderData: FlBorderData(show: false),
-                        titlesData: FlTitlesData(
-                          topTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          rightTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          leftTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              reservedSize: 42,
-                              getTitlesWidget: (value, meta) => Text(
-                                _compactChartMoney(value),
-                                style: Theme.of(context).textTheme.labelSmall,
                               ),
-                            ),
-                          ),
-                          bottomTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              reservedSize: 38,
-                              getTitlesWidget: (value, meta) {
-                                final index = value.toInt();
-                                if (index < 0 || index >= items.length) {
-                                  return const SizedBox.shrink();
-                                }
-                                return SideTitleWidget(
-                                  axisSide: meta.axisSide,
-                                  space: 7,
-                                  child: SizedBox(
-                                    width: labelWidth,
-                                    child: Text(
-                                      _shortCategoryLabel(
-                                        items[index].category,
-                                      ),
-                                      maxLines: 2,
-                                      textAlign: TextAlign.center,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
                             ),
                           ),
                         ),
                       ),
                     ),
-                  );
-                },
-              ),
-          ],
-        ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -2604,21 +2705,15 @@ class _CategoryTotal {
   final double total;
 }
 
-String _compactChartMoney(double value) {
-  if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1)}M';
-  if (value >= 1000) return '${(value / 1000).toStringAsFixed(0)}K';
-  return value.toStringAsFixed(0);
+double categoryShareOfActivity(double categoryTotal, double totalActivity) {
+  if (categoryTotal <= 0 || totalActivity <= 0) return 0;
+  return (categoryTotal / totalActivity).clamp(0.0, 1.0).toDouble();
 }
 
-String _shortCategoryLabel(String category) {
-  return switch (category) {
-    'Housing & Utils' => 'Housing',
-    'Food & Drinks' => 'Food',
-    'Personal Care' => 'Personal',
-    'Subscriptions' => 'Subs',
-    'Gifts & Rewards' => 'Gifts',
-    _ => category,
-  };
+String _formatChartPercentage(double percentage) {
+  if (percentage > 0 && percentage < 0.1) return '<0.1%';
+  if (percentage < 10) return '${percentage.toStringAsFixed(1)}%';
+  return '${percentage.toStringAsFixed(0)}%';
 }
 
 class _CategoryTransactionsPage extends StatelessWidget {
@@ -2719,8 +2814,7 @@ class _CategoryTransactionsPage extends StatelessWidget {
               const SizedBox(height: 10),
               _PrintTransactionsButton(
                 transactions: transactions,
-                filterLabel:
-                    '${TransactionCategory.displayPathFor(category)} transactions',
+                filterLabel: 'Selected transactions',
                 buttonLabel: 'Print $category report',
               ),
               const SizedBox(height: 16),

@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction.dart';
-import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction_category.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -288,9 +287,6 @@ class TransactionReportService {
     Transaction transaction, {
     pw.MemoryImage? receiptImage,
   }) {
-    final categoryPath = TransactionCategory.hierarchyPathFor(
-      transaction.category,
-    ).take(3).join(' > ');
     final amountColor = transaction.isExpense
         ? PdfColor.fromHex('#B3261E')
         : PdfColor.fromHex('#0F6B57');
@@ -341,7 +337,6 @@ class TransactionReportService {
                   'Type',
                   transaction.isExpense ? 'Expense' : 'Income',
                 ),
-                _detailRow('Category', categoryPath),
                 _detailRow('Beneficiary', transaction.beneficiary),
                 _detailRow('Purpose', transaction.purpose),
               ],

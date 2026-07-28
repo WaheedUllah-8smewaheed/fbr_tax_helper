@@ -56,6 +56,12 @@ class CategoryPreferencesService extends ChangeNotifier {
     return !_disabledCategories.contains(categoryName);
   }
 
+  bool isParentEnabled(String parentName) {
+    final children = TransactionCategory.childrenOf(parentName);
+    return children.isNotEmpty &&
+        children.any((category) => isEnabled(category.name));
+  }
+
   bool resolveTransactionTypeForCategory({
     required String categoryName,
     required bool transactionIsExpense,
@@ -280,6 +286,40 @@ class CategoryPreferencesService extends ChangeNotifier {
       } else {
         _disabledCategories.remove(categoryName);
       }
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> setParentEnabled(
+    String parentName, {
+    required bool enabled,
+  }) async {
+    final userId = _userId;
+    if (userId == null || userId.isEmpty) {
+      throw StateError('Sign in before changing category settings.');
+    }
+
+    final children = TransactionCategory.childrenOf(parentName);
+    final previousDisabledCategories = Set<String>.of(_disabledCategories);
+    for (final category in children) {
+      if (enabled) {
+        _disabledCategories.remove(category.name);
+      } else {
+        _disabledCategories.add(category.name);
+      }
+    }
+    notifyListeners();
+
+    try {
+      await _storage.write(
+        key: _storageKey(userId),
+        value: jsonEncode(_persistedState),
+      );
+    } catch (_) {
+      _disabledCategories
+        ..clear()
+        ..addAll(previousDisabledCategories);
       notifyListeners();
       rethrow;
     }

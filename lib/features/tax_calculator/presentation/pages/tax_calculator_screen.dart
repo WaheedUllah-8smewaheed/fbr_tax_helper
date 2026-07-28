@@ -24,6 +24,7 @@ class TaxCalculatorScreen extends StatefulWidget {
   final VoidCallback? onLogin;
   final String appBarTitle;
   final List<Widget> appBarActions;
+  final bool fitToViewport;
 
   const TaxCalculatorScreen({
     super.key,
@@ -32,6 +33,7 @@ class TaxCalculatorScreen extends StatefulWidget {
     this.onLogin,
     this.appBarTitle = 'Filer Flow',
     this.appBarActions = const [],
+    this.fitToViewport = false,
   });
 
   @override
@@ -196,6 +198,49 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
   Widget build(BuildContext context) {
     final metrics = _AdaptiveMetrics.of(context);
     final stateContent = _buildStateContent(_state);
+    final calculatorContent = ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: metrics.maxContentWidth),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _HeaderBand(
+            state: _state,
+            metrics: metrics,
+            taxYear: _selectedTaxYear,
+          ),
+          SizedBox(height: metrics.sectionSpacing),
+          _CalculatorForm(
+            metrics: metrics,
+            controller: _monthlyIncomeController,
+            focusNode: _monthlyIncomeFocusNode,
+            selectedType: _selectedType,
+            selectedTaxYear: _selectedTaxYear,
+            deductionValues: _deductionValues,
+            incomeErrorText: _incomeErrorText,
+            isLoading: _state is TaxCalculatorLoading,
+            onTypeChanged: (type) {
+              setState(() {
+                _selectedType = type;
+              });
+            },
+            onCalculate: _calculateTax,
+            onTaxYearChanged: (taxYear) {
+              setState(() {
+                _selectedTaxYear = taxYear;
+              });
+            },
+          ),
+          if (stateContent != null) ...[
+            SizedBox(height: metrics.sectionSpacing),
+            stateContent,
+          ],
+          if (widget.footer != null) ...[
+            SizedBox(height: metrics.sectionSpacing),
+            widget.footer!,
+          ],
+        ],
+      ),
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -242,59 +287,20 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
         child: const Icon(Icons.receipt_long_outlined),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(
-            metrics.horizontalPadding,
-            metrics.verticalPadding,
-            metrics.horizontalPadding,
-            metrics.verticalPadding + 72,
-          ),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: metrics.maxContentWidth),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _HeaderBand(
-                    state: _state,
-                    metrics: metrics,
-                    taxYear: _selectedTaxYear,
-                  ),
-                  SizedBox(height: metrics.sectionSpacing),
-                  _CalculatorForm(
-                    metrics: metrics,
-                    controller: _monthlyIncomeController,
-                    focusNode: _monthlyIncomeFocusNode,
-                    selectedType: _selectedType,
-                    selectedTaxYear: _selectedTaxYear,
-                    deductionValues: _deductionValues,
-                    incomeErrorText: _incomeErrorText,
-                    isLoading: _state is TaxCalculatorLoading,
-                    onTypeChanged: (type) {
-                      setState(() {
-                        _selectedType = type;
-                      });
-                    },
-                    onCalculate: _calculateTax,
-                    onTaxYearChanged: (taxYear) {
-                      setState(() {
-                        _selectedTaxYear = taxYear;
-                      });
-                    },
-                  ),
-                  if (stateContent != null) ...[
-                    SizedBox(height: metrics.sectionSpacing),
-                    stateContent,
-                  ],
-                  if (widget.footer != null) ...[
-                    SizedBox(height: metrics.sectionSpacing),
-                    widget.footer!,
-                  ],
-                ],
+        child: widget.fitToViewport
+            ? _ViewportFittedCalculator(
+                metrics: metrics,
+                child: calculatorContent,
+              )
+            : SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  metrics.horizontalPadding,
+                  metrics.verticalPadding,
+                  metrics.horizontalPadding,
+                  metrics.verticalPadding + 72,
+                ),
+                child: Center(child: calculatorContent),
               ),
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -313,6 +319,44 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
     }
 
     return null;
+  }
+}
+
+class _ViewportFittedCalculator extends StatelessWidget {
+  const _ViewportFittedCalculator({required this.metrics, required this.child});
+
+  final _AdaptiveMetrics metrics;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final horizontalPadding = metrics.horizontalPadding;
+        final verticalPadding = metrics.verticalPadding;
+        final availableWidth = (constraints.maxWidth - horizontalPadding * 2)
+            .clamp(1.0, double.infinity);
+        final contentWidth = availableWidth
+            .clamp(280.0, metrics.maxContentWidth)
+            .toDouble();
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            horizontalPadding,
+            verticalPadding,
+            horizontalPadding,
+            verticalPadding + 72,
+          ),
+          child: SizedBox.expand(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.topCenter,
+              child: SizedBox(width: contentWidth, child: child),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -815,74 +859,42 @@ class _IncomeInputRow extends StatelessWidget {
       label: const Text('Calculate'),
     );
 
-    if (metrics.width < 380) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          taxYearDropdown,
-          const SizedBox(height: 10),
-          input,
-          const SizedBox(height: 10),
-          SizedBox(height: 46, child: button),
-        ],
-      );
-    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Use the form's actual width instead of the full screen width. Some
+        // devices report a wide logical screen even though padding and text
+        // scaling leave too little room for three controls in one row.
+        if (constraints.maxWidth < 700) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              taxYearDropdown,
+              const SizedBox(height: 12),
+              input,
+              const SizedBox(height: 12),
+              SizedBox(height: 48, child: button),
+            ],
+          );
+        }
 
-    if (metrics.isCompact) {
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(width: metrics.isNarrow ? 92 : 104, child: taxYearDropdown),
-          const SizedBox(width: 8),
-          Expanded(child: input),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 48,
-            height: 56,
-            child: IconButton.filled(
-              tooltip: 'Calculate',
-              onPressed: isLoading ? null : onCalculate,
-              icon: isLoading
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.calculate_outlined),
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: metrics.isLandscapePhone ? 180 : 210,
+              child: taxYearDropdown,
             ),
-          ),
-        ],
-      );
-    }
-
-    if (!metrics.useWideForm) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          taxYearDropdown,
-          const SizedBox(height: 12),
-          input,
-          const SizedBox(height: 12),
-          SizedBox(height: 48, child: button),
-        ],
-      );
-    }
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: metrics.isLandscapePhone ? 180 : 210,
-          child: taxYearDropdown,
-        ),
-        const SizedBox(width: 12),
-        Expanded(child: input),
-        const SizedBox(width: 12),
-        SizedBox(
-          width: metrics.isLandscapePhone ? 140 : 160,
-          height: 56,
-          child: button,
-        ),
-      ],
+            const SizedBox(width: 12),
+            Expanded(child: input),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: metrics.isLandscapePhone ? 140 : 160,
+              height: 56,
+              child: button,
+            ),
+          ],
+        );
+      },
     );
   }
 }

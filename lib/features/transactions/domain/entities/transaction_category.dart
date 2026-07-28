@@ -47,10 +47,7 @@ class TransactionCategory {
     name: 'Zakat on Savings',
     isExpense: true,
   );
-  static const misc = TransactionCategory(
-    name: 'Other',
-    isExpense: true,
-  );
+  static const misc = TransactionCategory(name: 'Other', isExpense: true);
 
   static const hierarchy = <String, Map<String, List<TransactionCategory>>>{
     'Income': {
@@ -109,6 +106,15 @@ class TransactionCategory {
         subscriptions,
         TransactionCategory(name: 'Software/Apps', isExpense: true),
         TransactionCategory(name: 'Memberships', isExpense: true),
+      ],
+    },
+    'Education & Learning': {
+      'Education': [
+        TransactionCategory(name: 'Tuition & Fees', isExpense: true),
+        TransactionCategory(name: 'Books & Supplies', isExpense: true),
+        TransactionCategory(name: 'Courses & Training', isExpense: true),
+        TransactionCategory(name: 'Exam Fees', isExpense: true),
+        TransactionCategory(name: 'School Transport', isExpense: true),
       ],
     },
     'Wellness & Giving': {
