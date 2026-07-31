@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:fbr_tax_helper/core/widgets/filer_flow_logo.dart';
 import 'package:fbr_tax_helper/features/auth/presentation/pages/session_router.dart';
 import 'package:fbr_tax_helper/features/auth/presentation/bloc/signup/signup_bloc.dart';
 import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
@@ -325,48 +326,45 @@ class _SignupPanel extends StatelessWidget {
         final isLoading = state is SignupLoading;
 
         return Padding(
-          padding: const EdgeInsets.all(22),
+          padding: const EdgeInsets.only(
+            top: 8,
+            bottom: 24,
+            right: 24,
+            left: 24,
+          ),
           child: Form(
             key: formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.asset(
-                        'assets/tax.png',
-                        width: 44,
-                        height: 44,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'FILER FLOW',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.8,
-                      ),
-                    ),
-                  ],
+                const Center(child: FilerFlowLogo(size: 120)),
+                const SizedBox(height: 15),
+                Text(
+                  'Filer Flow',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    fontSize: 40,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
+                    color: Colors.white,
+                  ),
                 ),
-                const SizedBox(height: 22),
+                const SizedBox(height: 10),
                 Text(
                   'Create your account',
+                  textAlign: TextAlign.center,
                   style: theme.textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w800,
                     color: Colors.white,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 10),
                 Text(
                   'Start managing your finances with confidence.',
+                  textAlign: TextAlign.center,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.82),
+                    color: Colors.white.withValues(alpha: 0.85),
                   ),
                 ),
                 const SizedBox(height: 18),
@@ -381,7 +379,7 @@ class _SignupPanel extends StatelessWidget {
                     icon: Icons.person_outline,
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 10),
                 TextFormField(
                   controller: emailController,
                   enabled: !isLoading,
@@ -393,7 +391,7 @@ class _SignupPanel extends StatelessWidget {
                     icon: Icons.mail_outline,
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 10),
                 TextFormField(
                   controller: contactController,
                   enabled: !isLoading,
@@ -409,7 +407,7 @@ class _SignupPanel extends StatelessWidget {
                     icon: Icons.phone_outlined,
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 10),
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 14,

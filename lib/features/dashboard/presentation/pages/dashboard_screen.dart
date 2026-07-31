@@ -542,8 +542,38 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
   }
 }
 
-class _MorePage extends StatelessWidget {
+class _MorePage extends StatefulWidget {
   const _MorePage();
+
+  @override
+  State<_MorePage> createState() => _MorePageState();
+}
+
+class _MorePageState extends State<_MorePage> {
+  static const _profileStorage = FlutterSecureStorage();
+  String? _profileImagePath;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfileImage();
+  }
+
+  String _profileImageKey(String? userId) =>
+      'profile_image_${userId ?? 'signed_out'}';
+
+  Future<void> _loadProfileImage() async {
+    final userId = context.read<AuthService>().currentUser?.uid;
+    final storedPath = await _profileStorage.read(
+      key: _profileImageKey(userId),
+    );
+    if (!mounted) return;
+    setState(() {
+      _profileImagePath = storedPath != null && File(storedPath).existsSync()
+          ? storedPath
+          : null;
+    });
+  }
 
   Future<void> _confirmLogout(BuildContext context) async {
     final confirmed =
@@ -574,6 +604,13 @@ class _MorePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = context.read<AuthService>().currentUser;
     final photoUrl = user?.photoURL;
+    final hasLocalProfileImage =
+        _profileImagePath != null && File(_profileImagePath!).existsSync();
+    final ImageProvider<Object>? profileImage = hasLocalProfileImage
+        ? FileImage(File(_profileImagePath!))
+        : photoUrl != null && photoUrl.isNotEmpty
+        ? NetworkImage(photoUrl)
+        : null;
 
     return Scaffold(
       body: ListView(
@@ -584,10 +621,8 @@ class _MorePage extends StatelessWidget {
               contentPadding: const EdgeInsets.all(14),
               leading: CircleAvatar(
                 radius: 28,
-                backgroundImage: photoUrl == null
-                    ? null
-                    : NetworkImage(photoUrl),
-                child: photoUrl == null
+                backgroundImage: profileImage,
+                child: profileImage == null
                     ? const Icon(Icons.person_outline, size: 30)
                     : null,
               ),
@@ -597,10 +632,11 @@ class _MorePage extends StatelessWidget {
               ),
               subtitle: Text(user?.email ?? ''),
               trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                Navigator.of(context).push(
+              onTap: () async {
+                await Navigator.of(context).push(
                   MaterialPageRoute(builder: (context) => const _ProfilePage()),
                 );
+                if (context.mounted) await _loadProfileImage();
               },
             ),
           ),
@@ -1435,8 +1471,14 @@ class _ProfilePageState extends State<_ProfilePage>
   @override
   Widget build(BuildContext context) {
     final user = _authService.currentUser;
+    final photoUrl = user?.photoURL;
     final hasProfileImage =
         _profileImagePath != null && File(_profileImagePath!).existsSync();
+    final ImageProvider<Object>? profileImage = hasProfileImage
+        ? FileImage(File(_profileImagePath!))
+        : photoUrl != null && photoUrl.isNotEmpty
+        ? NetworkImage(photoUrl)
+        : null;
 
     return Scaffold(
       appBar: AppBar(
@@ -1467,10 +1509,8 @@ class _ProfilePageState extends State<_ProfilePage>
                     children: [
                       CircleAvatar(
                         radius: 44,
-                        backgroundImage: hasProfileImage
-                            ? FileImage(File(_profileImagePath!))
-                            : null,
-                        child: hasProfileImage
+                        backgroundImage: profileImage,
+                        child: profileImage != null
                             ? null
                             : const Icon(Icons.person_outline, size: 42),
                       ),
