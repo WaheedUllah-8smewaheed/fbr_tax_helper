@@ -16,12 +16,10 @@ void main() {
     expect(TransactionCategory.fromName('Uncategorized').name, 'Uncategorized');
   });
 
-  test('housing utilities includes mobile packages', () {
+  test('home bills include mobile', () {
     expect(
-      TransactionCategory.childrenOf(
-        'Housing & Utils',
-      ).map((category) => category.name),
-      contains('Mobile Package'),
+      TransactionCategory.childrenOf('Bills').map((category) => category.name),
+      contains('Mobile'),
     );
   });
 
@@ -30,34 +28,29 @@ void main() {
 
     expect(
       educationCategories.map((category) => category.name),
-      containsAll([
-        'Tuition & Fees',
-        'Books & Supplies',
-        'Courses & Training',
-        'Exam Fees',
-        'School Transport',
-      ]),
+      containsAll(['School Fee', 'Books', 'Courses', 'Exam Fee', 'Transport']),
     );
     expect(educationCategories.every((category) => category.isExpense), isTrue);
-    expect(TransactionCategory.hierarchyPathFor('Tuition & Fees'), [
-      'Education & Learning',
+    expect(TransactionCategory.hierarchyPathFor('School Fee'), [
       'Education',
-      'Tuition & Fees',
+      'Education',
+      'School Fee',
     ]);
   });
 
   test('builds printable paths for new and legacy categories', () {
     expect(TransactionCategory.hierarchyPathFor('Fuel'), [
-      'Housing & Transport',
-      'Transport',
+      'Travel',
+      'Travel',
       'Fuel',
     ]);
     expect(
-      TransactionCategory.displayPathFor('Basic Pay'),
-      'Income > Salary > Basic Pay',
+      TransactionCategory.displayPathFor('Salary'),
+      'Money In > Salary > Salary',
     );
     expect(TransactionCategory.hierarchyPathFor('Salary'), [
-      'Income',
+      'Money In',
+      'Salary',
       'Salary',
     ]);
     expect(TransactionCategory.hierarchyPathFor('Old Custom'), ['Old Custom']);

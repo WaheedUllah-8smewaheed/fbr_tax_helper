@@ -22,6 +22,8 @@ class AddTransactionPage extends StatefulWidget {
     this.initialPurpose,
     this.initialAmount,
     this.initialDate,
+    this.parentCategory,
+    this.categoryOptions = const [],
     this.showCategoryPicker = false,
     this.appBarActions = const [],
   });
@@ -34,6 +36,8 @@ class AddTransactionPage extends StatefulWidget {
   final String? initialPurpose;
   final double? initialAmount;
   final DateTime? initialDate;
+  final String? parentCategory;
+  final List<TransactionCategory> categoryOptions;
   final bool showCategoryPicker;
   final List<Widget> appBarActions;
 
@@ -59,6 +63,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   DateTime _selectedDate = DateTime.now();
   String? _selectedCategory;
   String? _receiptImagePath;
+  bool _showCategoryError = false;
+
+  bool get _hasCategoryOptions => widget.categoryOptions.isNotEmpty;
 
   @override
   void initState() {
@@ -82,11 +89,14 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         _amountController.text = _formatAmountInput(widget.initialAmount!);
       }
       _selectedDate = widget.initialDate ?? DateTime.now();
-      _selectedCategory =
-          widget.initialCategory ?? TransactionCategory.misc.name;
+      _selectedCategory = _hasCategoryOptions
+          ? widget.initialCategory
+          : widget.initialCategory ?? TransactionCategory.misc.name;
       _isExpense =
           widget.initialIsExpense ??
-          TransactionCategory.fromName(_selectedCategory!).isExpense;
+          (_selectedCategory == null
+              ? true
+              : TransactionCategory.fromName(_selectedCategory!).isExpense);
     }
   }
 
@@ -178,8 +188,11 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         _receiptImagePath = result.imagePath;
         final merchant = result.merchant;
         if (merchant != null) {
-          _titleController.text = merchant;
-          _beneficiaryController.text = merchant;
+          if (_hasCategoryOptions) {
+            _purposeController.text = merchant;
+          } else {
+            _titleController.text = merchant;
+          }
         }
         if (result.purpose != null) {
           _purposeController.text = result.purpose!;
@@ -215,7 +228,11 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   }
 
   void _submitData() {
-    if (_selectedCategory == null || !_formKey.currentState!.validate()) {
+    if (_selectedCategory == null) {
+      setState(() => _showCategoryError = true);
+      return;
+    }
+    if (!_formKey.currentState!.validate()) {
       return;
     }
 
@@ -232,7 +249,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     final transaction = entity.Transaction(
       id: widget.transaction?.id,
       userId: userId,
-      title: _titleController.text.trim(),
+      title: _hasCategoryOptions
+          ? _selectedCategory!
+          : _titleController.text.trim(),
       beneficiary: _beneficiaryController.text.trim(),
       purpose: _purposeController.text.trim(),
       amount: double.parse(_amountController.text.trim().replaceAll(',', '')),
@@ -265,6 +284,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         title: Text(
           widget.isEditing
               ? 'Edit Transaction'
+              : _hasCategoryOptions
+              ? 'Add ${widget.parentCategory ?? ''} Transaction'
               : widget.showCategoryPicker
               ? 'Review Transaction'
               : 'Add ${_selectedCategory ?? ''} Transaction',
@@ -290,35 +311,69 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    TextFormField(
-                      controller: _titleController,
-                      decoration: const InputDecoration(
-                        labelText: 'Title',
-                        border: OutlineInputBorder(),
+                    if (_hasCategoryOptions) ...[
+                      Text(
+                        'Choose a subcategory',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
                       ),
-                      textCapitalization: TextCapitalization.words,
-                      textInputAction: TextInputAction.next,
-                      validator: _requiredValidator('Enter a title.'),
-                    ),
-                    const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _beneficiaryController,
-                      decoration: const InputDecoration(
-                        labelText: 'Beneficiary (optional)',
-                        border: OutlineInputBorder(),
+                      const SizedBox(height: 8),
+                      RadioGroup<String>(
+                        groupValue: _selectedCategory,
+                        onChanged: (value) {
+                          if (value != null) _selectCategory(value);
+                        },
+                        child: Column(
+                          children: [
+                            for (
+                              var index = 0;
+                              index < widget.categoryOptions.length;
+                              index++
+                            )
+                              _ColorfulCategoryRadio(
+                                category: widget.categoryOptions[index],
+                                index: index,
+                                selected:
+                                    _selectedCategory ==
+                                    widget.categoryOptions[index].name,
+                              ),
+                          ],
+                        ),
                       ),
-                      textCapitalization: TextCapitalization.words,
-                      textInputAction: TextInputAction.next,
-                    ),
-                    const SizedBox(height: 14),
+                      if (_showCategoryError)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 12, top: 2),
+                          child: Text(
+                            'Select a subcategory.',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 10),
+                    ] else ...[
+                      TextFormField(
+                        controller: _titleController,
+                        decoration: const InputDecoration(
+                          labelText: 'Title',
+                          border: OutlineInputBorder(),
+                        ),
+                        textCapitalization: TextCapitalization.words,
+                        textInputAction: TextInputAction.next,
+                        validator: _requiredValidator('Enter a title.'),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
                     TextFormField(
                       controller: _purposeController,
                       decoration: const InputDecoration(
-                        labelText: 'Purpose (optional)',
+                        labelText: 'Description (optional)',
                         border: OutlineInputBorder(),
                       ),
                       textCapitalization: TextCapitalization.sentences,
                       textInputAction: TextInputAction.next,
+                      maxLines: 2,
                     ),
                     const SizedBox(height: 14),
                     TextFormField(
@@ -430,6 +485,17 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     );
   }
 
+  void _selectCategory(String category) {
+    setState(() {
+      _selectedCategory = category;
+      _titleController.text = category;
+      _showCategoryError = false;
+      if (!_categoryPreferences.isDualMode(category)) {
+        _isExpense = _categoryPreferences.isExpense(category);
+      }
+    });
+  }
+
   String? Function(String?) _requiredValidator(String message) {
     return (value) {
       if (value == null || value.trim().isEmpty) {
@@ -444,6 +510,57 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       return amount.toStringAsFixed(0);
     }
     return amount.toStringAsFixed(2);
+  }
+}
+
+class _ColorfulCategoryRadio extends StatelessWidget {
+  const _ColorfulCategoryRadio({
+    required this.category,
+    required this.index,
+    required this.selected,
+  });
+
+  final TransactionCategory category;
+  final int index;
+  final bool selected;
+
+  static const _colors = <Color>[
+    Color(0xFF00897B),
+    Color(0xFF3949AB),
+    Color(0xFFEF6C00),
+    Color(0xFF8E24AA),
+    Color(0xFFD81B60),
+    Color(0xFF43A047),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _colors[index % _colors.length];
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: selected ? 2 : 0,
+      color: color.withValues(alpha: selected ? 0.18 : 0.08),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: color.withValues(alpha: selected ? 0.9 : 0.3),
+          width: selected ? 2 : 1,
+        ),
+      ),
+      child: RadioListTile<String>(
+        value: category.name,
+        activeColor: color,
+        title: Text(
+          category.name,
+          style: TextStyle(color: color, fontWeight: FontWeight.w700),
+        ),
+        secondary: Icon(
+          category.isExpense ? Icons.arrow_downward : Icons.arrow_upward,
+          color: color,
+        ),
+        controlAffinity: ListTileControlAffinity.leading,
+      ),
+    );
   }
 }
 

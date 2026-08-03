@@ -141,6 +141,20 @@ class _TransactionsPage extends StatefulWidget {
 class _TransactionsPageState extends State<_TransactionsPage> {
   _TransactionFilter _filter = _TransactionFilter.income;
 
+  void _openParentTransaction(
+    String parentCategory,
+    List<TransactionCategory> categoryOptions,
+  ) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => AddTransactionPage(
+          parentCategory: parentCategory,
+          categoryOptions: categoryOptions,
+        ),
+      ),
+    );
+  }
+
   bool _isVisible(TransactionCategory category) {
     if (!widget.categoryPreferences.isEnabled(category.name)) return false;
     return switch (_filter) {
@@ -248,9 +262,21 @@ class _TransactionsPageState extends State<_TransactionsPage> {
                             size: 20,
                           ),
                         ),
-                        title: Text(
-                          visibleParents[parentIndex].key,
-                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        title: InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () => _openParentTransaction(
+                            visibleParents[parentIndex].key,
+                            visibleParents[parentIndex].value,
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            child: Text(
+                              visibleParents[parentIndex].key,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
                         ),
                         children: [
                           for (
@@ -896,12 +922,20 @@ class _CategorySettingsPage extends StatelessWidget {
 
   IconData _iconForSuperCategory(String name) {
     return switch (name) {
-      'Income' => Icons.account_balance_wallet_outlined,
-      'Housing & Transport' => Icons.home_work_outlined,
-      'Food & Lifestyle' => Icons.restaurant_outlined,
-      'Education & Learning' => Icons.school_outlined,
-      'Wellness & Giving' => Icons.favorite_outline,
-      'Financial Obligations' => Icons.request_quote_outlined,
+      'Money In' => Icons.account_balance_wallet_outlined,
+      'Home' => Icons.home_outlined,
+      'Travel' => Icons.directions_car_outlined,
+      'Food' => Icons.restaurant_outlined,
+      'Shopping' => Icons.shopping_bag_outlined,
+      'Health' => Icons.favorite_outline,
+      'Education' => Icons.school_outlined,
+      'Personal Care' => Icons.spa_outlined,
+      'Entertainment' => Icons.tv_outlined,
+      'Gifts' => Icons.card_giftcard_outlined,
+      'Charity' => Icons.volunteer_activism_outlined,
+      'Taxes' => Icons.request_quote_outlined,
+      'Banking' => Icons.account_balance_outlined,
+      'Others' => Icons.inventory_2_outlined,
       _ => Icons.receipt_long_outlined,
     };
   }
@@ -2181,8 +2215,10 @@ IconData _getIconForCategory(String category) {
     case 'salary':
       return Icons.work;
     case 'investment':
+    case 'business':
       return Icons.trending_up;
     case 'tax':
+    case 'taxes':
     case 'income tax':
     case 'property tax':
     case 'salary tax (withholding)':
@@ -2191,18 +2227,22 @@ IconData _getIconForCategory(String category) {
     case 'health':
       return Icons.local_hospital;
     case 'food & drinks':
+    case 'food':
       return Icons.restaurant;
     case 'shopping':
       return Icons.shopping_bag;
     case 'housing & utils':
+    case 'bills':
       return Icons.home_work;
     case 'rent':
       return Icons.key_outlined;
     case 'transport':
+    case 'travel':
       return Icons.directions_car_outlined;
     case 'personal care':
       return Icons.spa;
     case 'subscriptions':
+    case 'entertainment':
       return Icons.subscriptions;
     case 'education':
       return Icons.local_library;
@@ -2216,10 +2256,13 @@ IconData _getIconForCategory(String category) {
     case 'school transport':
       return Icons.directions_bus_outlined;
     case 'gifts & rewards':
+    case 'gifts':
       return Icons.card_giftcard;
     case 'zakat':
+    case 'charity':
       return Icons.volunteer_activism;
     case 'misc':
+    case 'others':
       return Icons.more_horiz;
     default:
       return Icons.category;
@@ -2231,28 +2274,36 @@ Color _getColorForCategory(String category) {
     case 'salary':
       return Colors.green;
     case 'investment':
+    case 'business':
       return Colors.indigo;
     case 'tax':
+    case 'taxes':
       return Colors.deepOrange;
     case 'health':
       return Colors.red;
     case 'food & drinks':
+    case 'food':
       return Colors.amber.shade800;
     case 'shopping':
       return Colors.purple;
     case 'housing & utils':
+    case 'bills':
       return Colors.blueGrey;
     case 'rent':
       return Colors.brown;
     case 'transport':
+    case 'travel':
       return Colors.cyan.shade800;
     case 'personal care':
       return Colors.pink;
     case 'subscriptions':
+    case 'entertainment':
       return Colors.blue;
     case 'gifts & rewards':
+    case 'gifts':
       return const Color(0xFF0F6B57);
     case 'zakat':
+    case 'charity':
       return Colors.lightGreen.shade700;
     default:
       return Colors.grey.shade700;

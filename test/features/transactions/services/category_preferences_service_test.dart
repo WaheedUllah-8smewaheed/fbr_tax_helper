@@ -8,12 +8,12 @@ void main() {
     addTearDown(service.dispose);
 
     expect(service.modeForParent('Salary'), CategoryMode.income);
-    expect(service.isExpense('Basic Pay'), isFalse);
-    expect(service.modeForParent('Transport'), CategoryMode.expense);
+    expect(service.isExpense('Salary'), isFalse);
+    expect(service.modeForParent('Travel'), CategoryMode.expense);
     expect(service.isExpense('Fuel'), isTrue);
-    expect(service.modeForParent('Gifts & Rewards'), CategoryMode.both);
-    expect(service.isDualMode('Given'), isTrue);
-    expect(service.isDualMode('Received'), isTrue);
+    expect(service.modeForParent('Gifts'), CategoryMode.both);
+    expect(service.isDualMode('Gift Given'), isTrue);
+    expect(service.isDualMode('Gift Received'), isTrue);
   });
 
   test('changing a level-2 category to expense updates every child', () async {
@@ -25,12 +25,12 @@ void main() {
     await service.setParentMode('Salary', mode: CategoryMode.expense);
 
     expect(service.modeForParent('Salary'), CategoryMode.expense);
-    expect(service.isExpense('Basic Pay'), isTrue);
+    expect(service.isExpense('Salary'), isTrue);
     expect(service.isExpense('Bonus'), isTrue);
-    expect(service.isDualMode('Basic Pay'), isFalse);
+    expect(service.isDualMode('Salary'), isFalse);
     expect(
       service.shouldShowCategoryInSection(
-        categoryName: 'Basic Pay',
+        categoryName: 'Salary',
         isExpenseSection: true,
       ),
       isTrue,
@@ -49,11 +49,11 @@ void main() {
 
     expect(service.isParentEnabled('Education'), isFalse);
     for (final category in [
-      'Tuition & Fees',
-      'Books & Supplies',
-      'Courses & Training',
-      'Exam Fees',
-      'School Transport',
+      'School Fee',
+      'Books',
+      'Courses',
+      'Exam Fee',
+      'Transport',
     ]) {
       expect(service.isEnabled(category), isFalse);
     }
@@ -61,8 +61,8 @@ void main() {
     await service.setParentEnabled('Education', enabled: true);
 
     expect(service.isParentEnabled('Education'), isTrue);
-    expect(service.isEnabled('Tuition & Fees'), isTrue);
-    expect(service.isEnabled('School Transport'), isTrue);
+    expect(service.isEnabled('School Fee'), isTrue);
+    expect(service.isEnabled('Transport'), isTrue);
   });
 
   test(

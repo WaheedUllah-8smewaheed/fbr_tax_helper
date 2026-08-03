@@ -4,27 +4,18 @@ class TransactionCategory {
   final String name;
   final bool isExpense;
 
-  static const salary = TransactionCategory(
-    name: 'Basic Pay',
-    isExpense: false,
-  );
+  static const salary = TransactionCategory(name: 'Salary', isExpense: false);
   static const investment = TransactionCategory(
-    name: 'Dividends',
+    name: 'Investment Profit',
     isExpense: false,
   );
   static const tax = TransactionCategory(name: 'Income Tax', isExpense: true);
-  static const health = TransactionCategory(
-    name: 'Doctor/Consultation',
-    isExpense: true,
-  );
+  static const health = TransactionCategory(name: 'Doctor', isExpense: true);
   static const foodAndDrinks = TransactionCategory(
     name: 'Groceries',
     isExpense: true,
   );
-  static const shopping = TransactionCategory(
-    name: 'Clothing',
-    isExpense: true,
-  );
+  static const shopping = TransactionCategory(name: 'Clothes', isExpense: true);
   static const housingAndUtils = TransactionCategory(
     name: 'Electricity',
     isExpense: true,
@@ -32,120 +23,133 @@ class TransactionCategory {
   static const rent = TransactionCategory(name: 'House Rent', isExpense: true);
   static const transport = TransactionCategory(name: 'Fuel', isExpense: true);
   static const personalCare = TransactionCategory(
-    name: 'Salon/Grooming',
+    name: 'Salon',
     isExpense: true,
   );
   static const subscriptions = TransactionCategory(
-    name: 'Streaming (Netflix, etc.)',
+    name: 'Netflix',
     isExpense: true,
   );
   static const giftsAndRewards = TransactionCategory(
-    name: 'Given',
+    name: 'Gift Given',
     isExpense: true,
   );
-  static const zakat = TransactionCategory(
-    name: 'Zakat on Savings',
-    isExpense: true,
-  );
+  static const zakat = TransactionCategory(name: 'Zakat', isExpense: true);
   static const misc = TransactionCategory(name: 'Other', isExpense: true);
 
   static const hierarchy = <String, Map<String, List<TransactionCategory>>>{
-    'Income': {
+    'Money In': {
       'Salary': [
         salary,
         TransactionCategory(name: 'Bonus', isExpense: false),
         TransactionCategory(name: 'Overtime', isExpense: false),
-        TransactionCategory(name: 'Allowances', isExpense: false),
+        TransactionCategory(name: 'Allowance', isExpense: false),
       ],
-      'Investment': [
+      'Business': [
+        TransactionCategory(name: 'Business Income', isExpense: false),
+        TransactionCategory(name: 'Freelance Income', isExpense: false),
+        TransactionCategory(name: 'Rent Received', isExpense: false),
         investment,
-        TransactionCategory(name: 'Capital Gains', isExpense: false),
-        TransactionCategory(name: 'Rental Income', isExpense: false),
-        TransactionCategory(name: 'Interest/Profit', isExpense: false),
       ],
     },
-    'Housing & Transport': {
-      'Housing & Utils': [
+    'Home': {
+      'Bills': [
         housingAndUtils,
         TransactionCategory(name: 'Gas', isExpense: true),
         TransactionCategory(name: 'Water', isExpense: true),
-        TransactionCategory(name: 'Mobile Package', isExpense: true),
-        TransactionCategory(name: 'Internet & Cable', isExpense: true),
-        TransactionCategory(name: 'Maintenance/Repairs', isExpense: true),
+        TransactionCategory(name: 'Mobile', isExpense: true),
+        TransactionCategory(name: 'Internet', isExpense: true),
+        TransactionCategory(name: 'Home Repair', isExpense: true),
       ],
       'Rent': [
         rent,
         TransactionCategory(name: 'Office Rent', isExpense: true),
-        TransactionCategory(name: 'Security Deposit', isExpense: true),
-      ],
-      'Transport': [
-        transport,
-        TransactionCategory(name: 'Vehicle Maintenance', isExpense: true),
-        TransactionCategory(name: 'Vehicle Tax/Token', isExpense: true),
-        TransactionCategory(name: 'Public Transport/Fare', isExpense: true),
-        TransactionCategory(name: 'Parking & Tolls', isExpense: true),
+        TransactionCategory(name: 'Deposit', isExpense: true),
       ],
     },
-    'Food & Lifestyle': {
-      'Food & Drinks': [
-        foodAndDrinks,
-        TransactionCategory(name: 'Dining Out', isExpense: true),
-        TransactionCategory(name: 'Delivery/Takeout', isExpense: true),
+    'Travel': {
+      'Travel': [
+        transport,
+        TransactionCategory(name: 'Vehicle Repair', isExpense: true),
+        TransactionCategory(name: 'Vehicle Tax', isExpense: true),
+        TransactionCategory(name: 'Bus Fare', isExpense: true),
+        TransactionCategory(name: 'Parking', isExpense: true),
       ],
+    },
+    'Food': {
+      'Food': [
+        foodAndDrinks,
+        TransactionCategory(name: 'Restaurant', isExpense: true),
+        TransactionCategory(name: 'Food Delivery', isExpense: true),
+      ],
+    },
+    'Shopping': {
       'Shopping': [
         shopping,
         TransactionCategory(name: 'Electronics', isExpense: true),
-        TransactionCategory(name: 'Home Essentials', isExpense: true),
-      ],
-      'Personal Care': [
-        personalCare,
-        TransactionCategory(name: 'Skincare/Cosmetics', isExpense: true),
-        TransactionCategory(name: 'Gym/Fitness', isExpense: true),
-      ],
-      'Subscriptions': [
-        subscriptions,
-        TransactionCategory(name: 'Software/Apps', isExpense: true),
-        TransactionCategory(name: 'Memberships', isExpense: true),
+        TransactionCategory(name: 'Home Items', isExpense: true),
       ],
     },
-    'Education & Learning': {
-      'Education': [
-        TransactionCategory(name: 'Tuition & Fees', isExpense: true),
-        TransactionCategory(name: 'Books & Supplies', isExpense: true),
-        TransactionCategory(name: 'Courses & Training', isExpense: true),
-        TransactionCategory(name: 'Exam Fees', isExpense: true),
-        TransactionCategory(name: 'School Transport', isExpense: true),
-      ],
-    },
-    'Wellness & Giving': {
+    'Health': {
       'Health': [
         health,
         TransactionCategory(name: 'Medicine', isExpense: true),
-        TransactionCategory(name: 'Hospital/Surgery', isExpense: true),
-        TransactionCategory(name: 'Insurance Premium', isExpense: true),
-      ],
-      'Zakat': [
-        zakat,
-        TransactionCategory(name: 'Zakat on Gold/Assets', isExpense: true),
-        TransactionCategory(name: 'Sadaqah', isExpense: true),
-      ],
-      'Gifts & Rewards': [
-        giftsAndRewards,
-        TransactionCategory(name: 'Received', isExpense: false),
+        TransactionCategory(name: 'Hospital', isExpense: true),
+        TransactionCategory(name: 'Insurance', isExpense: true),
       ],
     },
-    'Financial Obligations': {
-      'Tax': [
+    'Education': {
+      'Education': [
+        TransactionCategory(name: 'School Fee', isExpense: true),
+        TransactionCategory(name: 'Books', isExpense: true),
+        TransactionCategory(name: 'Courses', isExpense: true),
+        TransactionCategory(name: 'Exam Fee', isExpense: true),
+        TransactionCategory(name: 'Transport', isExpense: true),
+      ],
+    },
+    'Personal Care': {
+      'Personal Care': [
+        personalCare,
+        TransactionCategory(name: 'Beauty Products', isExpense: true),
+        TransactionCategory(name: 'Gym', isExpense: true),
+      ],
+    },
+    'Entertainment': {
+      'Entertainment': [
+        subscriptions,
+        TransactionCategory(name: 'Apps', isExpense: true),
+        TransactionCategory(name: 'Membership', isExpense: true),
+      ],
+    },
+    'Gifts': {
+      'Gifts': [
+        giftsAndRewards,
+        TransactionCategory(name: 'Gift Received', isExpense: false),
+      ],
+    },
+    'Charity': {
+      'Charity': [
+        zakat,
+        TransactionCategory(name: 'Sadaqah', isExpense: true),
+        TransactionCategory(name: 'Donation', isExpense: true),
+      ],
+    },
+    'Taxes': {
+      'Taxes': [
         tax,
         TransactionCategory(name: 'Property Tax', isExpense: true),
-        TransactionCategory(name: 'Salary Tax (withholding)', isExpense: true),
-        TransactionCategory(name: 'Sales Tax/GST', isExpense: true),
+        TransactionCategory(name: 'Sales Tax', isExpense: true),
+        TransactionCategory(name: 'Vehicle Tax', isExpense: true),
       ],
-      'Misc': [
-        TransactionCategory(name: 'Bank Charges/Fees', isExpense: true),
-        TransactionCategory(name: 'Loan Repayment', isExpense: true),
-        misc,
+    },
+    'Banking': {
+      'Banking': [
+        TransactionCategory(name: 'Bank Charges', isExpense: true),
+        TransactionCategory(name: 'Loan Payment', isExpense: true),
       ],
+    },
+    'Others': {
+      'Others': [misc],
     },
   };
 
@@ -177,11 +181,11 @@ class TransactionCategory {
   static List<String> hierarchyPathFor(String categoryName) {
     for (final superCategory in hierarchy.entries) {
       for (final parent in superCategory.value.entries) {
-        if (parent.key == categoryName) {
-          return [superCategory.key, parent.key];
-        }
         if (parent.value.any((category) => category.name == categoryName)) {
           return [superCategory.key, parent.key, categoryName];
+        }
+        if (parent.key == categoryName) {
+          return [superCategory.key, parent.key];
         }
       }
     }
@@ -192,20 +196,23 @@ class TransactionCategory {
     return hierarchyPathFor(categoryName).join(' > ');
   }
 
+  // Kept so transactions saved by earlier app versions remain readable.
   static const legacy = <TransactionCategory>[
-    TransactionCategory(name: 'Salary', isExpense: false),
+    TransactionCategory(name: 'Basic Pay', isExpense: false),
+    TransactionCategory(name: 'Allowances', isExpense: false),
     TransactionCategory(name: 'Investment', isExpense: false),
+    TransactionCategory(name: 'Capital Gains', isExpense: false),
+    TransactionCategory(name: 'Rental Income', isExpense: false),
+    TransactionCategory(name: 'Interest/Profit', isExpense: false),
     TransactionCategory(name: 'Tax', isExpense: true),
     TransactionCategory(name: 'Health', isExpense: true),
     TransactionCategory(name: 'Food & Drinks', isExpense: true),
-    TransactionCategory(name: 'Shopping', isExpense: true),
+    TransactionCategory(name: 'Clothing', isExpense: true),
     TransactionCategory(name: 'Housing & Utils', isExpense: true),
     TransactionCategory(name: 'Rent', isExpense: true),
-    TransactionCategory(name: 'Transport', isExpense: true),
     TransactionCategory(name: 'Personal Care', isExpense: true),
     TransactionCategory(name: 'Subscriptions', isExpense: true),
     TransactionCategory(name: 'Gifts & Rewards', isExpense: true),
-    TransactionCategory(name: 'Zakat', isExpense: true),
     TransactionCategory(name: 'Misc', isExpense: true),
     TransactionCategory(name: 'Uncategorized', isExpense: true),
   ];
