@@ -12,6 +12,7 @@ import 'package:fbr_tax_helper/features/transactions/services/transaction_report
 import 'package:fbr_tax_helper/features/transactions/services/category_preferences_service.dart';
 
 import 'package:fbr_tax_helper/core/platform/app_storage.dart';
+import 'package:fbr_tax_helper/core/database/tax_database.dart';
 import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:fbr_tax_helper/features/auth/services/biometric_lock_service.dart';
 import 'package:fbr_tax_helper/features/backup/services/drive_service.dart';
@@ -32,6 +33,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
+  TransactionTypeFilter _transactionFilter = TransactionTypeFilter.income;
   late final CategoryPreferencesService _categoryPreferences;
 
   @override
@@ -96,8 +98,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
         builder: (context, _) => IndexedStack(
           index: _selectedIndex,
           children: [
-            _HomeDashboard(categoryPreferences: _categoryPreferences),
-            _TransactionsPage(categoryPreferences: _categoryPreferences),
+            _HomeDashboard(
+              categoryPreferences: _categoryPreferences,
+              transactionFilter: _transactionFilter,
+            ),
+            _TransactionsPage(
+              categoryPreferences: _categoryPreferences,
+              filter: _transactionFilter,
+              onFilterChanged: (filter) {
+                setState(() => _transactionFilter = filter);
+              },
+            ),
             _CategorySettingsPage(categoryPreferences: _categoryPreferences),
             const _MorePage(),
           ],
@@ -127,20 +138,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-enum _TransactionFilter { income, expense, both }
+enum TransactionTypeFilter { income, expense, both }
 
 class _TransactionsPage extends StatefulWidget {
-  const _TransactionsPage({required this.categoryPreferences});
+  const _TransactionsPage({
+    required this.categoryPreferences,
+    required this.filter,
+    required this.onFilterChanged,
+  });
 
   final CategoryPreferencesService categoryPreferences;
+  final TransactionTypeFilter filter;
+  final ValueChanged<TransactionTypeFilter> onFilterChanged;
 
   @override
   State<_TransactionsPage> createState() => _TransactionsPageState();
 }
 
 class _TransactionsPageState extends State<_TransactionsPage> {
-  _TransactionFilter _filter = _TransactionFilter.income;
-
   void _openParentTransaction(
     String parentCategory,
     List<TransactionCategory> categoryOptions,
@@ -157,49 +172,65 @@ class _TransactionsPageState extends State<_TransactionsPage> {
 
   bool _isVisible(TransactionCategory category) {
     if (!widget.categoryPreferences.isEnabled(category.name)) return false;
-    return switch (_filter) {
-      _TransactionFilter.income =>
+    return switch (widget.filter) {
+      TransactionTypeFilter.income =>
         widget.categoryPreferences.shouldShowCategoryInSection(
           categoryName: category.name,
           isExpenseSection: false,
         ),
-      _TransactionFilter.expense =>
+      TransactionTypeFilter.expense =>
         widget.categoryPreferences.shouldShowCategoryInSection(
           categoryName: category.name,
           isExpenseSection: true,
         ),
-      _TransactionFilter.both => widget.categoryPreferences.isDualMode(
+      TransactionTypeFilter.both => widget.categoryPreferences.isDualMode(
         category.name,
       ),
     };
   }
 
+  List<_TransactionCategoryCardData> _visibleCategoryCards() {
+    return TransactionCategory.hierarchy.entries.expand((superCategory) {
+      return superCategory.value.entries
+          .map(
+            (parent) => _TransactionCategoryCardData(
+              groupName: superCategory.key,
+              categoryName: parent.key,
+              options: parent.value.where(_isVisible).toList(),
+            ),
+          )
+          .where((card) => card.options.isNotEmpty);
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final categoryCards = _visibleCategoryCards();
+
     return Scaffold(
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          SegmentedButton<_TransactionFilter>(
+          SegmentedButton<TransactionTypeFilter>(
             expandedInsets: EdgeInsets.zero,
             showSelectedIcon: false,
             segments: const [
               ButtonSegment(
-                value: _TransactionFilter.income,
+                value: TransactionTypeFilter.income,
                 label: Text('Income'),
               ),
               ButtonSegment(
-                value: _TransactionFilter.expense,
+                value: TransactionTypeFilter.expense,
                 label: Text('Expense'),
               ),
               ButtonSegment(
-                value: _TransactionFilter.both,
+                value: TransactionTypeFilter.both,
                 label: Text('Both'),
               ),
             ],
-            selected: {_filter},
+            selected: {widget.filter},
             onSelectionChanged: (selection) {
-              setState(() => _filter = selection.first);
+              widget.onFilterChanged(selection.first);
             },
           ),
           const SizedBox(height: 12),
@@ -217,115 +248,208 @@ class _TransactionsPageState extends State<_TransactionsPage> {
             label: const Text('View All Transactions'),
           ),
           const SizedBox(height: 20),
-          ...TransactionCategory.hierarchy.entries.expand((superCategory) {
-            final visibleParents = superCategory.value.entries
-                .map(
-                  (parent) => MapEntry(
-                    parent.key,
-                    parent.value.where(_isVisible).toList(),
-                  ),
-                )
-                .where((parent) => parent.value.isNotEmpty)
-                .toList();
-            if (visibleParents.isEmpty) return const <Widget>[];
-            return <Widget>[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
-                child: Text(
-                  superCategory.key,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 280),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            child: LayoutBuilder(
+              key: ValueKey(widget.filter),
+              builder: (context, constraints) => GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: categoryCards.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: constraints.maxWidth < 360 ? 1.12 : 1.3,
                 ),
+                itemBuilder: (context, index) {
+                  final card = categoryCards[index];
+                  return _AnimatedTransactionCategoryCard(
+                    key: ValueKey('${widget.filter.name}-${card.categoryName}'),
+                    data: card,
+                    index: index,
+                    onTap: () =>
+                        _openParentTransaction(card.categoryName, card.options),
+                  );
+                },
               ),
-              Card(
-                margin: const EdgeInsets.only(bottom: 18),
-                child: Column(
-                  children: [
-                    for (
-                      var parentIndex = 0;
-                      parentIndex < visibleParents.length;
-                      parentIndex++
-                    ) ...[
-                      ExpansionTile(
-                        leading: CircleAvatar(
-                          backgroundColor: _getColorForCategory(
-                            visibleParents[parentIndex].key,
-                          ).withValues(alpha: 0.12),
-                          foregroundColor: _getColorForCategory(
-                            visibleParents[parentIndex].key,
-                          ),
-                          child: Icon(
-                            _getIconForCategory(
-                              visibleParents[parentIndex].key,
-                            ),
-                            size: 20,
-                          ),
-                        ),
-                        title: InkWell(
-                          borderRadius: BorderRadius.circular(8),
-                          onTap: () => _openParentTransaction(
-                            visibleParents[parentIndex].key,
-                            visibleParents[parentIndex].value,
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            child: Text(
-                              visibleParents[parentIndex].key,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ),
-                        children: [
-                          for (
-                            var categoryIndex = 0;
-                            categoryIndex <
-                                visibleParents[parentIndex].value.length;
-                            categoryIndex++
-                          ) ...[
-                            ListTile(
-                              contentPadding: const EdgeInsets.only(
-                                left: 72,
-                                right: 16,
-                              ),
-                              title: Text(
-                                visibleParents[parentIndex]
-                                    .value[categoryIndex]
-                                    .name,
-                              ),
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: () {
-                                final category = visibleParents[parentIndex]
-                                    .value[categoryIndex];
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        _CategoryTransactionsPage(
-                                          category: category.name,
-                                          categoryPreferences:
-                                              widget.categoryPreferences,
-                                        ),
-                                  ),
-                                );
-                              },
-                            ),
-                            if (categoryIndex <
-                                visibleParents[parentIndex].value.length - 1)
-                              const Divider(height: 1, indent: 72),
-                          ],
-                        ],
-                      ),
-                      if (parentIndex < visibleParents.length - 1)
-                        const Divider(height: 1, indent: 72),
-                    ],
-                  ],
-                ),
-              ),
-            ];
-          }),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _TransactionCategoryCardData {
+  const _TransactionCategoryCardData({
+    required this.groupName,
+    required this.categoryName,
+    required this.options,
+  });
+
+  final String groupName;
+  final String categoryName;
+  final List<TransactionCategory> options;
+}
+
+class _AnimatedTransactionCategoryCard extends StatefulWidget {
+  const _AnimatedTransactionCategoryCard({
+    super.key,
+    required this.data,
+    required this.index,
+    required this.onTap,
+  });
+
+  final _TransactionCategoryCardData data;
+  final int index;
+  final VoidCallback onTap;
+
+  @override
+  State<_AnimatedTransactionCategoryCard> createState() =>
+      _AnimatedTransactionCategoryCardState();
+}
+
+class _AnimatedTransactionCategoryCardState
+    extends State<_AnimatedTransactionCategoryCard> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _getColorForCategory(widget.data.categoryName);
+    final accent = HSLColor.fromColor(
+      color,
+    ).withHue((HSLColor.fromColor(color).hue + 28) % 360).toColor();
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: 260 + (widget.index % 6) * 45),
+      curve: Curves.easeOutBack,
+      builder: (context, value, child) => Opacity(
+        opacity: value.clamp(0, 1),
+        child: Transform.translate(
+          offset: Offset(0, 14 * (1 - value)),
+          child: child,
+        ),
+      ),
+      child: AnimatedScale(
+        scale: _pressed ? 0.96 : 1,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                color.withValues(alpha: _pressed ? 0.24 : 0.17),
+                accent.withValues(alpha: _pressed ? 0.18 : 0.09),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: color.withValues(alpha: 0.42)),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: _pressed ? 0.12 : 0.2),
+                blurRadius: _pressed ? 7 : 14,
+                offset: Offset(0, _pressed ? 3 : 7),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: widget.onTap,
+              onTapDown: (_) => setState(() => _pressed = true),
+              onTapUp: (_) => setState(() => _pressed = false),
+              onTapCancel: () => setState(() => _pressed = false),
+              child: Stack(
+                children: [
+                  Positioned(
+                    right: -18,
+                    top: -20,
+                    child: Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: accent.withValues(alpha: 0.1),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 43,
+                              height: 43,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [color, accent],
+                                ),
+                                borderRadius: BorderRadius.circular(14),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: color.withValues(alpha: 0.3),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                _getIconForCategory(widget.data.categoryName),
+                                color: Colors.white,
+                                size: 23,
+                              ),
+                            ),
+                            const Spacer(),
+                            Icon(
+                              Icons.arrow_outward_rounded,
+                              size: 20,
+                              color: color,
+                            ),
+                          ],
+                        ),
+                        const Spacer(),
+                        Text(
+                          widget.data.groupName.toUpperCase(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: color.withValues(alpha: 0.8),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.1,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          widget.data.categoryName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: color,
+                                fontWeight: FontWeight.w900,
+                                height: 1.15,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -334,9 +458,13 @@ class _TransactionsPageState extends State<_TransactionsPage> {
 enum _TransactionDateFilter { all, month, range }
 
 class _AllTransactionsPage extends StatefulWidget {
-  const _AllTransactionsPage({required this.categoryPreferences});
+  const _AllTransactionsPage({
+    required this.categoryPreferences,
+    this.initialCategory,
+  });
 
   final CategoryPreferencesService categoryPreferences;
+  final String? initialCategory;
 
   @override
   State<_AllTransactionsPage> createState() => _AllTransactionsPageState();
@@ -377,6 +505,10 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
     List<entity.Transaction> transactions,
   ) {
     return transactions.where((transaction) {
+      if (widget.initialCategory != null &&
+          transaction.category != widget.initialCategory) {
+        return false;
+      }
       return switch (_dateFilter) {
         _TransactionDateFilter.all => true,
         _TransactionDateFilter.month =>
@@ -412,14 +544,15 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
             ? 'Select from and to dates'
             : '${DateFormat('MMM d, yyyy').format(_rangeStart!)} – ${DateFormat('MMM d, yyyy').format(_rangeEnd!)}',
     };
-    return 'All transactions • $period';
+    final category = widget.initialCategory;
+    return '${category ?? 'All transactions'} • $period';
   }
 
   @override
   Widget build(BuildContext context) {
     final currentUserId = context.read<AuthService>().currentUser?.uid ?? '';
     return Scaffold(
-      appBar: AppBar(title: const Text('All Transactions')),
+      appBar: AppBar(title: Text(widget.initialCategory ?? 'All Transactions')),
       body: BlocBuilder<TransactionBloc, TransactionState>(
         builder: (context, state) {
           final storedTransactions =
@@ -1117,6 +1250,7 @@ class _ProfilePageState extends State<_ProfilePage>
   bool _isBiometricSupported = false;
   bool _isUpdatingProfile = false;
   bool _isPickingImage = false;
+  bool _isDeletingAccount = false;
   String? _profileImagePath;
   String? _pendingEmailChange;
 
@@ -1502,6 +1636,97 @@ class _ProfilePageState extends State<_ProfilePage>
     }
   }
 
+  Future<void> _removeAccount() async {
+    if (_isDeletingAccount) return;
+    final user = _authService.currentUser;
+    if (user == null) return;
+
+    final confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            icon: Icon(Icons.warning_amber_rounded, color: Colors.red.shade700),
+            title: const Text('Remove account permanently?'),
+            content: const Text(
+              'This permanently deletes your Filer Flow account and removes its local transactions, receipts, preferences, and profile data from this device. This cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(dialogContext).colorScheme.error,
+                ),
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Remove account'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed || !mounted) return;
+
+    setState(() => _isDeletingAccount = true);
+    try {
+      final providers = user.providerData
+          .map((info) => info.providerId)
+          .toSet();
+      if (providers.contains('password')) {
+        final password = await showDialog<String>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const _ConfirmPasswordDialog(),
+        );
+        if (password == null) {
+          throw const AuthServiceException('Account removal was canceled.');
+        }
+        await _authService.reauthenticateCurrentUserWithPassword(password);
+      } else if (providers.contains('google.com')) {
+        await _authService.reauthenticateCurrentUserWithGoogle();
+      }
+
+      final userId = user.uid;
+      final profileImagePath = await _profileStorage.read(
+        key: _profileImageKey,
+      );
+      await _authService.deleteCurrentUser();
+      await _deleteLocalAccountData(userId, profileImagePath);
+    } on AuthServiceException catch (error) {
+      if (!mounted) return;
+      setState(() => _isDeletingAccount = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not remove account: ${error.message}')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isDeletingAccount = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not remove account: $error')),
+      );
+    }
+  }
+
+  Future<void> _deleteLocalAccountData(
+    String userId,
+    String? profileImagePath,
+  ) async {
+    await TaxDatabase.instance.deleteDataForUser(userId);
+    await Future.wait([
+      _profileStorage.delete(key: 'profile_image_$userId'),
+      _profileStorage.delete(key: 'pending_email_$userId'),
+      _profileStorage.delete(key: 'biometric_lock_enabled_$userId'),
+      _profileStorage.delete(key: 'category_preferences_$userId'),
+      _profileStorage.delete(key: 'CACHED_TAX_PROFILE'),
+      _profileStorage.delete(key: 'terms_license_v1_accepted_$userId'),
+    ]);
+    if (profileImagePath != null) {
+      final profileImage = File(profileImagePath);
+      if (await profileImage.exists()) await profileImage.delete();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = _authService.currentUser;
@@ -1682,6 +1907,29 @@ class _ProfilePageState extends State<_ProfilePage>
                     onTap: _sendEmailVerification,
                   ),
                 ],
+                const Divider(height: 1),
+                ListTile(
+                  leading: _isDeletingAccount
+                      ? const SizedBox.square(
+                          dimension: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          Icons.person_remove_outlined,
+                          color: Colors.red.shade700,
+                        ),
+                  title: Text(
+                    _isDeletingAccount ? 'Removing account…' : 'Remove account',
+                    style: TextStyle(
+                      color: Colors.red.shade700,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  subtitle: const Text('Permanently delete your account'),
+                  onTap: _isDeletingAccount || _isUpdatingProfile
+                      ? null
+                      : _removeAccount,
+                ),
               ],
             ),
           ),
@@ -1912,9 +2160,13 @@ class _ConfirmPasswordDialogState extends State<_ConfirmPasswordDialog> {
 }
 
 class _HomeDashboard extends StatefulWidget {
-  const _HomeDashboard({required this.categoryPreferences});
+  const _HomeDashboard({
+    required this.categoryPreferences,
+    required this.transactionFilter,
+  });
 
   final CategoryPreferencesService categoryPreferences;
+  final TransactionTypeFilter transactionFilter;
 
   @override
   State<_HomeDashboard> createState() => _HomeDashboardState();
@@ -1954,6 +2206,11 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                 final visibleTransactions = filterTransactionsByMonth(
                   transactions,
                   _selectedMonth,
+                );
+                final selectedTransactions = filterTransactionsForSelection(
+                  visibleTransactions,
+                  widget.transactionFilter,
+                  widget.categoryPreferences,
                 );
                 final monthOptions = _buildMonthOptions(transactions);
 
@@ -2035,12 +2292,27 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                     Align(
                       alignment: Alignment.centerRight,
                       child: _PrintTransactionsButton(
-                        transactions: visibleTransactions,
-                        filterLabel: _transactionFilterLabel(_selectedMonth),
+                        transactions: selectedTransactions,
+                        filterLabel: _transactionFilterLabel(
+                          _selectedMonth,
+                          widget.transactionFilter,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),
-                    _TopCategoryCharts(transactions: visibleTransactions),
+                    _TopCategoryCharts(
+                      transactions: visibleTransactions,
+                      onCategoryTap: (category) {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => _AllTransactionsPage(
+                              categoryPreferences: widget.categoryPreferences,
+                              initialCategory: category,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   ],
                 );
               },
@@ -2233,7 +2505,7 @@ IconData _getIconForCategory(String category) {
       return Icons.shopping_bag;
     case 'housing & utils':
     case 'bills':
-      return Icons.home_work;
+      return Icons.bolt_rounded;
     case 'rent':
       return Icons.key_outlined;
     case 'transport':
@@ -2245,7 +2517,7 @@ IconData _getIconForCategory(String category) {
     case 'entertainment':
       return Icons.subscriptions;
     case 'education':
-      return Icons.local_library;
+      return Icons.school_rounded;
     case 'tuition & fees':
     case 'exam fees':
       return Icons.assignment_outlined;
@@ -2261,8 +2533,11 @@ IconData _getIconForCategory(String category) {
     case 'zakat':
     case 'charity':
       return Icons.volunteer_activism;
-    case 'misc':
+    case 'banking':
+      return Icons.account_balance_wallet_rounded;
     case 'others':
+      return Icons.widgets_rounded;
+    case 'misc':
       return Icons.more_horiz;
     default:
       return Icons.category;
@@ -2288,12 +2563,12 @@ Color _getColorForCategory(String category) {
       return Colors.purple;
     case 'housing & utils':
     case 'bills':
-      return Colors.blueGrey;
+      return const Color(0xFF2563EB);
     case 'rent':
       return Colors.brown;
     case 'transport':
     case 'travel':
-      return Colors.cyan.shade800;
+      return const Color(0xFF0891B2);
     case 'personal care':
       return Colors.pink;
     case 'subscriptions':
@@ -2305,6 +2580,10 @@ Color _getColorForCategory(String category) {
     case 'zakat':
     case 'charity':
       return Colors.lightGreen.shade700;
+    case 'banking':
+      return const Color(0xFF4F46E5);
+    case 'others':
+      return const Color(0xFF64748B);
     default:
       return Colors.grey.shade700;
   }
@@ -2475,9 +2754,13 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _TopCategoryCharts extends StatelessWidget {
-  const _TopCategoryCharts({required this.transactions});
+  const _TopCategoryCharts({
+    required this.transactions,
+    required this.onCategoryTap,
+  });
 
   final List<entity.Transaction> transactions;
+  final ValueChanged<String> onCategoryTap;
 
   List<_CategoryTotal> _topCategories({required bool isExpense}) {
     final totals = <String, double>{};
@@ -2520,7 +2803,7 @@ class _TopCategoryCharts extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Top five categories based on range. Percentages show each category’s share of total activity.',
+              'Top five categories based on range. Tap a category to view all of its transactions.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 18),
@@ -2528,6 +2811,7 @@ class _TopCategoryCharts extends StatelessWidget {
               incomeItems: income,
               expenseItems: expenses,
               totalActivity: totalActivity,
+              onCategoryTap: onCategoryTap,
             ),
           ],
         ),
@@ -2541,11 +2825,13 @@ class _TopCategoryLollipopChart extends StatelessWidget {
     required this.incomeItems,
     required this.expenseItems,
     required this.totalActivity,
+    required this.onCategoryTap,
   });
 
   final List<_CategoryTotal> incomeItems;
   final List<_CategoryTotal> expenseItems;
   final double totalActivity;
+  final ValueChanged<String> onCategoryTap;
 
   @override
   Widget build(BuildContext context) {
@@ -2607,6 +2893,7 @@ class _TopCategoryLollipopChart extends StatelessWidget {
                         color: items[index].isExpense
                             ? expenseColor
                             : incomeColor,
+                        onTap: () => onCategoryTap(items[index].category),
                       ),
                     ),
                 ],
@@ -2623,11 +2910,13 @@ class _HorizontalCategoryLollipop extends StatelessWidget {
     required this.item,
     required this.totalActivity,
     required this.color,
+    required this.onTap,
   });
 
   final _CategoryChartBar item;
   final double totalActivity;
   final Color color;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -2637,118 +2926,141 @@ class _HorizontalCategoryLollipop extends StatelessWidget {
     final type = item.isExpense ? 'Expense' : 'Income';
 
     return Semantics(
+      button: true,
       label:
           '${item.category}, $type, ${_formatDashboardMoney(item.total)}, $percentageLabel of total activity',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  item.category,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    _formatDashboardMoney(item.total),
-                    maxLines: 1,
-                    style: TextStyle(color: color, fontWeight: FontWeight.w800),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 7),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              const markerSize = 36.0;
-              final markerCenter = constraints.maxWidth * fraction;
-              final markerLeft = (markerCenter - markerSize / 2)
-                  .clamp(0.0, constraints.maxWidth - markerSize)
-                  .toDouble();
-              final activeLineWidth = markerCenter
-                  .clamp(item.total > 0 ? 1.0 : 0.0, constraints.maxWidth)
-                  .toDouble();
-
-              return SizedBox(
-                height: markerSize,
-                child: Stack(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
                   children: [
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      top: 16,
-                      height: 4,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
+                    Expanded(
+                      child: Text(
+                        item.category,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
-                    Positioned(
-                      left: 0,
-                      top: 16,
-                      width: activeLineWidth,
-                      height: 4,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      left: markerLeft,
-                      top: 0,
-                      width: markerSize,
-                      height: markerSize,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                          boxShadow: [
-                            BoxShadow(
-                              color: color.withValues(alpha: 0.24),
-                              blurRadius: 5,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Center(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Padding(
-                              padding: const EdgeInsets.all(4),
-                              child: Text(
-                                percentageLabel,
-                                maxLines: 1,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          _formatDashboardMoney(item.total),
+                          maxLines: 1,
+                          style: TextStyle(
+                            color: color,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
                     ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ],
                 ),
-              );
-            },
+                const SizedBox(height: 7),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    const markerSize = 36.0;
+                    final markerCenter = constraints.maxWidth * fraction;
+                    final markerLeft = (markerCenter - markerSize / 2)
+                        .clamp(0.0, constraints.maxWidth - markerSize)
+                        .toDouble();
+                    final activeLineWidth = markerCenter
+                        .clamp(item.total > 0 ? 1.0 : 0.0, constraints.maxWidth)
+                        .toDouble();
+
+                    return SizedBox(
+                      height: markerSize,
+                      child: Stack(
+                        children: [
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            top: 16,
+                            height: 4,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.14),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: 0,
+                            top: 16,
+                            width: activeLineWidth,
+                            height: 4,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: color,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: markerLeft,
+                            top: 0,
+                            width: markerSize,
+                            height: markerSize,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: color,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: color.withValues(alpha: 0.24),
+                                    blurRadius: 5,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(4),
+                                    child: Text(
+                                      percentageLabel,
+                                      maxLines: 1,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 8,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -2807,137 +3119,34 @@ String _formatChartPercentage(double percentage) {
   return '${percentage.toStringAsFixed(0)}%';
 }
 
-class _CategoryTransactionsPage extends StatelessWidget {
-  const _CategoryTransactionsPage({
-    required this.category,
-    required this.categoryPreferences,
-  });
-
-  final String category;
-  final CategoryPreferencesService categoryPreferences;
-
-  void _openAddTransaction(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => AddTransactionPage(
-          initialCategory: category,
-          initialIsExpense: categoryPreferences.isDualMode(category)
-              ? null
-              : categoryPreferences.isExpense(category),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _getColorForCategory(category);
-    return Scaffold(
-      appBar: AppBar(title: Text(category)),
-      body: BlocBuilder<TransactionBloc, TransactionState>(
-        builder: (context, state) {
-          if (state is TransactionLoading || state is TransactionInitial) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (state is TransactionError) {
-            return Center(child: Text('Error: ${state.message}'));
-          }
-
-          final transactions = (state as TransactionLoaded).transactions
-              .where((transaction) => transaction.category == category)
-              .map(
-                (transaction) => transaction.copyWith(
-                  isExpense: categoryPreferences
-                      .resolveTransactionTypeForCategory(
-                        categoryName: category,
-                        transactionIsExpense: transaction.isExpense,
-                      ),
-                ),
-              )
-              .toList();
-          final total = transactions.fold<double>(
-            0,
-            (sum, transaction) => sum + transaction.amount,
-          );
-
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-            children: [
-              Card(
-                elevation: 0,
-                color: color.withValues(alpha: 0.08),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        backgroundColor: color.withValues(alpha: 0.14),
-                        foregroundColor: color,
-                        child: Icon(_getIconForCategory(category), size: 28),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 10.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Text(
-                                '${transactions.length} transactions',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: 2),
-                              Text('Total: ${_formatDashboardMoney(total)}'),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: () => _openAddTransaction(context),
-                icon: const Icon(Icons.add),
-                label: Text('Add $category transaction'),
-              ),
-              const SizedBox(height: 10),
-              _PrintTransactionsButton(
-                transactions: transactions,
-                filterLabel: 'Selected transactions',
-                buttonLabel: 'Print $category report',
-              ),
-              const SizedBox(height: 16),
-              Text(
-                '$category history',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 8),
-              if (transactions.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 32),
-                  child: Center(
-                    child: Text('No transactions in this category yet.'),
-                  ),
-                )
-              else
-                ...transactions.map(
-                  (transaction) => _TransactionTile(transaction: transaction),
-                ),
-            ],
-          );
-        },
-      ),
-    );
-  }
+List<entity.Transaction> filterTransactionsForSelection(
+  List<entity.Transaction> transactions,
+  TransactionTypeFilter filter,
+  CategoryPreferencesService categoryPreferences,
+) {
+  return transactions.where((transaction) {
+    final isDualMode = categoryPreferences.isDualMode(transaction.category);
+    return switch (filter) {
+      TransactionTypeFilter.income => !isDualMode && !transaction.isExpense,
+      TransactionTypeFilter.expense => !isDualMode && transaction.isExpense,
+      TransactionTypeFilter.both => isDualMode,
+    };
+  }).toList();
 }
 
-String _transactionFilterLabel(DateTime? selectedMonth) {
-  if (selectedMonth == null) return 'All transactions';
-  return DateFormat('MMMM yyyy').format(selectedMonth);
+String _transactionFilterLabel(
+  DateTime? selectedMonth,
+  TransactionTypeFilter filter,
+) {
+  final typeLabel = switch (filter) {
+    TransactionTypeFilter.income => 'Income',
+    TransactionTypeFilter.expense => 'Expense',
+    TransactionTypeFilter.both => 'Both-mode',
+  };
+  final periodLabel = selectedMonth == null
+      ? 'All dates'
+      : DateFormat('MMMM yyyy').format(selectedMonth);
+  return '$typeLabel - $periodLabel';
 }
 
 class _PrintTransactionsButton extends StatefulWidget {

@@ -9,6 +9,7 @@ import 'package:fbr_tax_helper/features/transactions/presentation/bloc/transacti
 import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fbr_tax_helper/firebase_options.dart';
@@ -63,11 +64,65 @@ class MyApp extends StatelessWidget {
           title: 'Filer Flow',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
+          builder: (context, child) {
+            if (!_useSessionRouter) {
+              return _AppThemeFrame(
+                isAuthenticated: false,
+                child: child ?? const SizedBox.shrink(),
+              );
+            }
+            return StreamBuilder<User?>(
+              stream: authService.authStateChanges(),
+              initialData: authService.currentUser,
+              builder: (context, session) => _AppThemeFrame(
+                isAuthenticated: session.data != null,
+                child: child ?? const SizedBox.shrink(),
+              ),
+            );
+          },
           home: SplashScreen(
             authService: authService,
             nextScreen: _useSessionRouter ? const SessionRouter() : null,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _AppThemeFrame extends StatelessWidget {
+  const _AppThemeFrame({required this.isAuthenticated, required this.child});
+
+  final bool isAuthenticated;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Theme(
+      data: isAuthenticated ? AppTheme.authenticated : AppTheme.light,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isAuthenticated
+                ? const [
+                    Color(0xFFE8FAF4),
+                    Color(0xFFF4F0FF),
+                    Color(0xFFFFF2E5),
+                    Color(0xFFEAF4FF),
+                  ]
+                : const [
+                    AppColors.mintSoft,
+                    AppColors.background,
+                    AppColors.goldSurface,
+                  ],
+            stops: isAuthenticated
+                ? const [0, 0.36, 0.7, 1]
+                : const [0, 0.62, 1],
+          ),
+        ),
+        child: child,
       ),
     );
   }

@@ -337,8 +337,17 @@ class TransactionReportService {
                   'Type',
                   transaction.isExpense ? 'Expense' : 'Income',
                 ),
-                _detailRow('Beneficiary', transaction.beneficiary),
-                _detailRow('Purpose', transaction.purpose),
+                if (transaction.purpose.trim().isNotEmpty) ...[
+                  pw.SizedBox(height: 3),
+                  pw.Text(
+                    transaction.purpose.trim(),
+                    style: const pw.TextStyle(
+                      fontSize: 9,
+                      color: PdfColors.grey700,
+                      lineSpacing: 2,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

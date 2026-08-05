@@ -178,6 +178,19 @@ class TaxDatabase {
         .toList();
   }
 
+  Future<void> deleteDataForUser(String userId) async {
+    final receiptPaths = await getReceiptPathsForUser(userId);
+    final db = await database;
+    await db.delete('transactions', where: 'userId = ?', whereArgs: [userId]);
+
+    for (final receiptPath in receiptPaths) {
+      final receipt = File(receiptPath);
+      if (await receipt.exists()) {
+        await receipt.delete();
+      }
+    }
+  }
+
   Future<void> close() async {
     final current = _database;
     _database = null;

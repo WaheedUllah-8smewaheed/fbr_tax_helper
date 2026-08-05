@@ -24,7 +24,6 @@ class AddTransactionPage extends StatefulWidget {
     this.initialDate,
     this.parentCategory,
     this.categoryOptions = const [],
-    this.showCategoryPicker = false,
     this.appBarActions = const [],
   });
 
@@ -38,7 +37,6 @@ class AddTransactionPage extends StatefulWidget {
   final DateTime? initialDate;
   final String? parentCategory;
   final List<TransactionCategory> categoryOptions;
-  final bool showCategoryPicker;
   final List<Widget> appBarActions;
 
   bool get isEditing => transaction != null;
@@ -62,6 +60,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   bool _isExpense = true;
   DateTime _selectedDate = DateTime.now();
   String? _selectedCategory;
+  String? _expandedCategory;
   String? _receiptImagePath;
   bool _showCategoryError = false;
 
@@ -97,6 +96,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
           (_selectedCategory == null
               ? true
               : TransactionCategory.fromName(_selectedCategory!).isExpense);
+    }
+    if (_hasCategoryOptions) {
+      _expandedCategory = _selectedCategory;
     }
   }
 
@@ -281,14 +283,15 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.isEditing
-              ? 'Edit Transaction'
-              : _hasCategoryOptions
-              ? 'Add ${widget.parentCategory ?? ''} Transaction'
-              : widget.showCategoryPicker
-              ? 'Review Transaction'
-              : 'Add ${_selectedCategory ?? ''} Transaction',
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            widget.parentCategory ??
+                _selectedCategory ??
+                widget.transaction?.category ??
+                'Transaction',
+          ),
         ),
         actions: widget.appBarActions,
       ),
@@ -321,7 +324,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                       RadioGroup<String>(
                         groupValue: _selectedCategory,
                         onChanged: (value) {
-                          if (value != null) _selectCategory(value);
+                          if (value != null) _toggleCategory(value);
                         },
                         child: Column(
                           children: [
@@ -336,6 +339,20 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                                 selected:
                                     _selectedCategory ==
                                     widget.categoryOptions[index].name,
+                                onTap: () => _toggleCategory(
+                                  widget.categoryOptions[index].name,
+                                ),
+                                details:
+                                    _selectedCategory ==
+                                            widget
+                                                .categoryOptions[index]
+                                                .name &&
+                                        _expandedCategory ==
+                                            widget.categoryOptions[index].name
+                                    ? _buildTransactionDetailsFields(
+                                        embedded: true,
+                                      )
+                                    : null,
                               ),
                           ],
                         ),
@@ -364,39 +381,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                         validator: _requiredValidator('Enter a title.'),
                       ),
                       const SizedBox(height: 14),
+                      _buildTransactionDetailsFields(),
+                      const SizedBox(height: 16),
                     ],
-                    TextFormField(
-                      controller: _purposeController,
-                      decoration: const InputDecoration(
-                        labelText: 'Description (optional)',
-                        border: OutlineInputBorder(),
-                      ),
-                      textCapitalization: TextCapitalization.sentences,
-                      textInputAction: TextInputAction.next,
-                      maxLines: 2,
-                    ),
-                    const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _amountController,
-                      decoration: const InputDecoration(
-                        labelText: 'Amount',
-                        prefixText: 'PKR ',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      validator: (value) {
-                        final amount = double.tryParse(
-                          (value ?? '').trim().replaceAll(',', ''),
-                        );
-                        if (amount == null || amount <= 0) {
-                          return 'Enter a valid amount.';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
                     OutlinedButton.icon(
                       onPressed: _selectDate,
                       icon: const Icon(Icons.calendar_today_outlined),
@@ -404,67 +391,31 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                         _selectedDate.toLocal().toString().split(' ')[0],
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    if (widget.showCategoryPicker) ...[
-                      DropdownButtonFormField<String>(
-                        initialValue: _selectedCategory,
-                        decoration: const InputDecoration(
-                          labelText: 'Category',
-                          prefixIcon: Icon(Icons.category_outlined),
-                        ),
-                        items: TransactionCategory.all
-                            .where(
-                              (category) =>
-                                  _categoryPreferences.isEnabled(
-                                    category.name,
-                                  ) ||
-                                  category.name == _selectedCategory,
-                            )
-                            .map(
-                              (category) => DropdownMenuItem<String>(
-                                value: category.name,
-                                child: Text(category.name),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          if (value == null) return;
+                    if (canSelectTransactionType) ...[
+                      const SizedBox(height: 16),
+                      SegmentedButton<bool>(
+                        expandedInsets: EdgeInsets.zero,
+                        showSelectedIcon: false,
+                        segments: const [
+                          ButtonSegment<bool>(
+                            value: false,
+                            label: Text('Income'),
+                            icon: Icon(Icons.arrow_upward),
+                          ),
+                          ButtonSegment<bool>(
+                            value: true,
+                            label: Text('Expense'),
+                            icon: Icon(Icons.arrow_downward),
+                          ),
+                        ],
+                        selected: {_isExpense},
+                        onSelectionChanged: (selection) {
                           setState(() {
-                            _selectedCategory = value;
-                            if (!_categoryPreferences.isDualMode(value)) {
-                              _isExpense = _categoryPreferences.isExpense(
-                                value,
-                              );
-                            }
+                            _isExpense = selection.first;
                           });
                         },
                       ),
-                      const SizedBox(height: 16),
                     ],
-                    SegmentedButton<bool>(
-                      expandedInsets: EdgeInsets.zero,
-                      showSelectedIcon: false,
-                      segments: const [
-                        ButtonSegment<bool>(
-                          value: false,
-                          label: Text('Income'),
-                          icon: Icon(Icons.arrow_upward),
-                        ),
-                        ButtonSegment<bool>(
-                          value: true,
-                          label: Text('Expense'),
-                          icon: Icon(Icons.arrow_downward),
-                        ),
-                      ],
-                      selected: {_isExpense},
-                      onSelectionChanged: canSelectTransactionType
-                          ? (selection) {
-                              setState(() {
-                                _isExpense = selection.first;
-                              });
-                            }
-                          : null,
-                    ),
                     const SizedBox(height: 16),
                     FilledButton.icon(
                       onPressed: _submitData,
@@ -488,12 +439,67 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   void _selectCategory(String category) {
     setState(() {
       _selectedCategory = category;
+      _expandedCategory = category;
       _titleController.text = category;
       _showCategoryError = false;
       if (!_categoryPreferences.isDualMode(category)) {
         _isExpense = _categoryPreferences.isExpense(category);
       }
     });
+  }
+
+  void _toggleCategory(String category) {
+    if (_selectedCategory != category) {
+      _selectCategory(category);
+      return;
+    }
+
+    setState(() {
+      _expandedCategory = _expandedCategory == category ? null : category;
+    });
+  }
+
+  Widget _buildTransactionDetailsFields({bool embedded = false}) {
+    final fields = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextFormField(
+          controller: _purposeController,
+          decoration: const InputDecoration(
+            labelText: 'Description (optional)',
+            border: OutlineInputBorder(),
+          ),
+          textCapitalization: TextCapitalization.sentences,
+          textInputAction: TextInputAction.next,
+          maxLines: 2,
+        ),
+        const SizedBox(height: 14),
+        TextFormField(
+          controller: _amountController,
+          decoration: const InputDecoration(
+            labelText: 'Amount',
+            prefixText: 'PKR ',
+            border: OutlineInputBorder(),
+          ),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          validator: (value) {
+            final amount = double.tryParse(
+              (value ?? '').trim().replaceAll(',', ''),
+            );
+            if (amount == null || amount <= 0) {
+              return 'Enter a valid amount.';
+            }
+            return null;
+          },
+        ),
+      ],
+    );
+
+    if (!embedded) return fields;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      child: fields,
+    );
   }
 
   String? Function(String?) _requiredValidator(String message) {
@@ -512,17 +518,22 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     return amount.toStringAsFixed(2);
   }
 }
+// 
 
 class _ColorfulCategoryRadio extends StatelessWidget {
   const _ColorfulCategoryRadio({
     required this.category,
     required this.index,
     required this.selected,
+    required this.onTap,
+    this.details,
   });
 
   final TransactionCategory category;
   final int index;
   final bool selected;
+  final VoidCallback onTap;
+  final Widget? details;
 
   static const _colors = <Color>[
     Color(0xFF00897B),
@@ -537,7 +548,7 @@ class _ColorfulCategoryRadio extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = _colors[index % _colors.length];
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 5),
       elevation: selected ? 2 : 0,
       color: color.withValues(alpha: selected ? 0.18 : 0.08),
       shape: RoundedRectangleBorder(
@@ -547,18 +558,41 @@ class _ColorfulCategoryRadio extends StatelessWidget {
           width: selected ? 2 : 1,
         ),
       ),
-      child: RadioListTile<String>(
-        value: category.name,
-        activeColor: color,
-        title: Text(
-          category.name,
-          style: TextStyle(color: color, fontWeight: FontWeight.w700),
-        ),
-        secondary: Icon(
-          category.isExpense ? Icons.arrow_downward : Icons.arrow_upward,
-          color: color,
-        ),
-        controlAffinity: ListTileControlAffinity.leading,
+      child: Column(
+        children: [
+         ListTile(
+  onTap: onTap,
+  dense: true,
+  visualDensity: const VisualDensity(vertical: -3),
+  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+  minTileHeight: 42,
+  leading: IgnorePointer(
+    child: Radio<String>(
+      value: category.name,
+      activeColor: color,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: const VisualDensity(
+        horizontal: -4,
+        vertical: -4,
+      ),
+    ),
+  ),
+  title: Text(
+    category.name,
+    style: TextStyle(
+      color: color,
+      fontWeight: FontWeight.w600,
+      fontSize: 15,
+    ),
+  ),
+  trailing: Icon(
+    category.isExpense ? Icons.arrow_downward : Icons.arrow_upward,
+    color: color,
+    size: 20,
+  ),
+),
+          ?details,
+        ],
       ),
     );
   }
@@ -577,6 +611,7 @@ class _ReceiptPanel extends StatelessWidget {
   final VoidCallback onScan;
   final VoidCallback onRemove;
 
+  /// Returns a widget that displays the receipt image (if available) and provides buttons to scan or remove the
   @override
   Widget build(BuildContext context) {
     final file = imagePath == null ? null : File(imagePath!);

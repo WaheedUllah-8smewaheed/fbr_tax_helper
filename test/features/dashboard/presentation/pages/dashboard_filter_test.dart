@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fbr_tax_helper/features/dashboard/presentation/pages/dashboard_screen.dart';
 import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction.dart';
+import 'package:fbr_tax_helper/features/transactions/services/category_preferences_service.dart';
 
 void main() {
   test('filters transactions by selected month', () {
@@ -55,4 +56,66 @@ void main() {
       expect(categoryShareOfActivity(100, 0), 0);
     },
   );
+
+  test('transaction selection filters chart and print data consistently', () {
+    final preferences = CategoryPreferencesService();
+    addTearDown(preferences.dispose);
+    final transactions = [
+      Transaction(
+        userId: '1',
+        title: 'Salary',
+        beneficiary: '',
+        purpose: '',
+        amount: 50000,
+        isExpense: false,
+        date: DateTime(2025, 2, 1),
+        category: 'Salary',
+      ),
+      Transaction(
+        userId: '1',
+        title: 'Groceries',
+        beneficiary: '',
+        purpose: '',
+        amount: 5000,
+        isExpense: true,
+        date: DateTime(2025, 2, 2),
+        category: 'Groceries',
+      ),
+      Transaction(
+        userId: '1',
+        title: 'Gift Given',
+        beneficiary: '',
+        purpose: '',
+        amount: 1000,
+        isExpense: true,
+        date: DateTime(2025, 2, 3),
+        category: 'Gift Given',
+      ),
+    ];
+
+    expect(
+      filterTransactionsForSelection(
+        transactions,
+        TransactionTypeFilter.income,
+        preferences,
+      ).map((transaction) => transaction.title),
+      ['Salary'],
+    );
+    expect(
+      filterTransactionsForSelection(
+        transactions,
+        TransactionTypeFilter.expense,
+        preferences,
+      ).map((transaction) => transaction.title),
+      ['Groceries'],
+    );
+    expect(
+      filterTransactionsForSelection(
+        transactions,
+        TransactionTypeFilter.both,
+        preferences,
+      ).map((transaction) => transaction.title),
+      ['Gift Given'],
+    );
+  });
 }

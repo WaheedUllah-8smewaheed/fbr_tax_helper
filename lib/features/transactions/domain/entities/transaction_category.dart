@@ -72,7 +72,7 @@ class TransactionCategory {
         transport,
         TransactionCategory(name: 'Vehicle Repair', isExpense: true),
         TransactionCategory(name: 'Vehicle Tax', isExpense: true),
-        TransactionCategory(name: 'Bus Fare', isExpense: true),
+        TransactionCategory(name: 'Transport Fare', isExpense: true),
         TransactionCategory(name: 'Parking', isExpense: true),
       ],
     },

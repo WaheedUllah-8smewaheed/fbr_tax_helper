@@ -465,6 +465,27 @@ class AuthService {
     await Future.wait([_firebaseAuth.signOut(), _googleSignIn.signOut()]);
   }
 
+  Future<void> deleteCurrentUser() async {
+    final user = _requireCurrentUser();
+    try {
+      await user.delete();
+    } on FirebaseAuthException catch (error) {
+      if (_requiresRecentLogin(error.code)) {
+        throw const RecentLoginRequiredException();
+      }
+      throw AuthServiceException(_firebaseAuthMessage(error));
+    }
+
+    _googleAccount = null;
+    _clearDriveCredentials();
+    try {
+      await _googleSignIn.signOut();
+    } catch (_) {
+      // The Firebase account is already deleted. A stale Google session must
+      // not make the completed deletion appear to have failed.
+    }
+  }
+
   Future<void> disconnectGoogle() async {
     _googleAccount = null;
     _clearDriveCredentials();

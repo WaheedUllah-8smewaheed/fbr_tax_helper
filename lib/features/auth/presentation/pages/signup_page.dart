@@ -35,14 +35,18 @@ class _SignupFormState extends State<SignupForm>
   final _contactController = TextEditingController(text: '03');
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _captchaController = TextEditingController();
+  final _captchaFieldKey = GlobalKey<FormFieldState<String>>();
 
   late final AnimationController _animationController;
+  late _ArithmeticChallenge _captcha;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
 
   @override
   void initState() {
     super.initState();
+    _captcha = _ArithmeticChallenge.generate();
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 8),
@@ -57,6 +61,7 @@ class _SignupFormState extends State<SignupForm>
     _contactController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _captchaController.dispose();
     super.dispose();
   }
 
@@ -74,7 +79,16 @@ class _SignupFormState extends State<SignupForm>
   }
 
   void _submitGoogleSignup() {
+    if (!(_captchaFieldKey.currentState?.validate() ?? false)) return;
     context.read<SignupBloc>().add(const SignUpWithGooglePressed());
+  }
+
+  void _refreshCaptcha() {
+    setState(() {
+      _captcha = _ArithmeticChallenge.generate();
+      _captchaController.clear();
+      _captchaFieldKey.currentState?.reset();
+    });
   }
 
   String? _validateName(String? value) {
@@ -128,6 +142,13 @@ class _SignupFormState extends State<SignupForm>
     if (value != _passwordController.text) {
       return 'Passwords do not match';
     }
+    return null;
+  }
+
+  String? _validateCaptcha(String? value) {
+    final answer = int.tryParse((value ?? '').trim());
+    if (answer == null) return 'Enter the answer';
+    if (answer != _captcha.answer) return 'Incorrect answer. Try again.';
     return null;
   }
 
@@ -220,6 +241,9 @@ class _SignupFormState extends State<SignupForm>
                               passwordController: _passwordController,
                               confirmPasswordController:
                                   _confirmPasswordController,
+                              captchaController: _captchaController,
+                              captchaFieldKey: _captchaFieldKey,
+                              captchaQuestion: _captcha.question,
                               obscurePassword: _obscurePassword,
                               obscureConfirmPassword: _obscureConfirmPassword,
                               onTogglePassword: () {
@@ -235,11 +259,13 @@ class _SignupFormState extends State<SignupForm>
                               },
                               onSignup: _submitSignup,
                               onGoogleSignup: _submitGoogleSignup,
+                              onRefreshCaptcha: _refreshCaptcha,
                               validateName: _validateName,
                               validateEmail: _validateEmail,
                               validateContact: _validateContact,
                               validatePassword: _validatePassword,
                               validateConfirmPassword: _validateConfirmPassword,
+                              validateCaptcha: _validateCaptcha,
                             ),
                           ),
                         ),
@@ -264,17 +290,22 @@ class _SignupPanel extends StatelessWidget {
     required this.contactController,
     required this.passwordController,
     required this.confirmPasswordController,
+    required this.captchaController,
+    required this.captchaFieldKey,
+    required this.captchaQuestion,
     required this.obscurePassword,
     required this.obscureConfirmPassword,
     required this.onTogglePassword,
     required this.onToggleConfirmPassword,
     required this.onSignup,
     required this.onGoogleSignup,
+    required this.onRefreshCaptcha,
     required this.validateName,
     required this.validateEmail,
     required this.validateContact,
     required this.validatePassword,
     required this.validateConfirmPassword,
+    required this.validateCaptcha,
   });
 
   final GlobalKey<FormState> formKey;
@@ -283,21 +314,27 @@ class _SignupPanel extends StatelessWidget {
   final TextEditingController contactController;
   final TextEditingController passwordController;
   final TextEditingController confirmPasswordController;
+  final TextEditingController captchaController;
+  final GlobalKey<FormFieldState<String>> captchaFieldKey;
+  final String captchaQuestion;
   final bool obscurePassword;
   final bool obscureConfirmPassword;
   final VoidCallback onTogglePassword;
   final VoidCallback onToggleConfirmPassword;
   final VoidCallback onSignup;
   final VoidCallback onGoogleSignup;
+  final VoidCallback onRefreshCaptcha;
   final String? Function(String?) validateName;
   final String? Function(String?) validateEmail;
   final String? Function(String?) validateContact;
   final String? Function(String?) validatePassword;
   final String? Function(String?) validateConfirmPassword;
+  final String? Function(String?) validateCaptcha;
 
   InputDecoration _inputDecoration({
     required String hint,
     required IconData icon,
+    Color? iconColor,
     Widget? suffixIcon,
   }) {
     final border = OutlineInputBorder(
@@ -308,7 +345,7 @@ class _SignupPanel extends StatelessWidget {
     return InputDecoration(
       hintText: hint,
       floatingLabelBehavior: FloatingLabelBehavior.never,
-      prefixIcon: Icon(icon),
+      prefixIcon: Icon(icon, color: iconColor),
       suffixIcon: suffixIcon,
       filled: true,
       fillColor: Colors.white.withValues(alpha: 0.96),
@@ -470,11 +507,8 @@ class _SignupPanel extends StatelessWidget {
                   controller: confirmPasswordController,
                   enabled: !isLoading,
                   obscureText: obscureConfirmPassword,
-                  textInputAction: TextInputAction.done,
+                  textInputAction: TextInputAction.next,
                   validator: validateConfirmPassword,
-                  onFieldSubmitted: (_) {
-                    if (!isLoading) onSignup();
-                  },
                   decoration: _inputDecoration(
                     hint: 'Confirm password',
                     icon: Icons.verified_user_outlined,
@@ -489,6 +523,138 @@ class _SignupPanel extends StatelessWidget {
                             : Icons.visibility_off_outlined,
                       ),
                     ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF0F6B57), Color(0xFF183A5A)],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: const Color(0xFF4DDBC4).withValues(alpha: 0.55),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF092B29).withValues(alpha: 0.22),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFC857),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(
+                              Icons.shield_rounded,
+                              color: Color(0xFF092B29),
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              'Security check',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: const Color(
+                                0xFF4DDBC4,
+                              ).withValues(alpha: 0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: IconButton(
+                              tooltip: 'New question',
+                              visualDensity: VisualDensity.compact,
+                              onPressed: isLoading ? null : onRefreshCaptcha,
+                              icon: const Icon(
+                                Icons.refresh_rounded,
+                                color: Color(0xFF4DDBC4),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            height: 56,
+                            constraints: const BoxConstraints(minWidth: 118),
+                            alignment: Alignment.center,
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFFFFC857), Color(0xFF4DDBC4)],
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.functions_rounded,
+                                  color: Color(0xFF183A5A),
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 7),
+                                Text(
+                                  '$captchaQuestion = ?',
+                                  style: const TextStyle(
+                                    color: Color(0xFF092B29),
+                                    fontSize: 19,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextFormField(
+                              key: captchaFieldKey,
+                              controller: captchaController,
+                              enabled: !isLoading,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(4),
+                              ],
+                              textInputAction: TextInputAction.done,
+                              validator: validateCaptcha,
+                              onFieldSubmitted: (_) {
+                                if (!isLoading) onSignup();
+                              },
+                              decoration: _inputDecoration(
+                                hint: 'Answer',
+                                icon: Icons.calculate_outlined,
+                                iconColor: const Color(0xFF0F6B57),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 22),
@@ -623,6 +789,47 @@ class _SignupPanel extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _ArithmeticChallenge {
+  const _ArithmeticChallenge({required this.question, required this.answer});
+
+  final String question;
+  final int answer;
+
+  factory _ArithmeticChallenge.generate() {
+    final random = math.Random.secure();
+    switch (random.nextInt(4)) {
+      case 0:
+        final first = random.nextInt(20) + 1;
+        final second = random.nextInt(20) + 1;
+        return _ArithmeticChallenge(
+          question: '$first + $second',
+          answer: first + second,
+        );
+      case 1:
+        final first = random.nextInt(20) + 1;
+        final second = random.nextInt(first) + 1;
+        return _ArithmeticChallenge(
+          question: '$first - $second',
+          answer: first - second,
+        );
+      case 2:
+        final first = random.nextInt(11) + 2;
+        final second = random.nextInt(11) + 2;
+        return _ArithmeticChallenge(
+          question: '$first * $second',
+          answer: first * second,
+        );
+      default:
+        final divisor = random.nextInt(11) + 2;
+        final answer = random.nextInt(11) + 2;
+        return _ArithmeticChallenge(
+          question: '${divisor * answer} / $divisor',
+          answer: answer,
+        );
+    }
   }
 }
 

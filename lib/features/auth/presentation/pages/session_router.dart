@@ -1,5 +1,6 @@
 import 'package:fbr_tax_helper/features/dashboard/presentation/pages/dashboard_screen.dart';
 import 'package:fbr_tax_helper/features/auth/presentation/pages/login_page.dart';
+import 'package:fbr_tax_helper/features/auth/presentation/pages/terms_agreement_page.dart';
 import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:fbr_tax_helper/features/auth/services/biometric_lock_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -25,10 +26,17 @@ class SessionRouter extends StatelessWidget {
 
         // If a valid user session token is found on the device hardware
         if (snapshot.hasData && snapshot.data != null) {
+          final user = snapshot.data!;
           if (kIsWeb) {
-            return const DashboardScreen();
+            return TermsAgreementGate(
+              user: user,
+              child: const DashboardScreen(),
+            );
           }
-          return _BiometricSessionGate(user: snapshot.data!);
+          return TermsAgreementGate(
+            user: user,
+            child: _BiometricSessionGate(user: user),
+          );
         }
 
         // Signed-out users authenticate before opening account features.
