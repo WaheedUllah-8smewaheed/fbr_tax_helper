@@ -98,10 +98,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         builder: (context, _) => IndexedStack(
           index: _selectedIndex,
           children: [
-            _HomeDashboard(
-              categoryPreferences: _categoryPreferences,
-              transactionFilter: _transactionFilter,
-            ),
+            _HomeDashboard(categoryPreferences: _categoryPreferences),
             _TransactionsPage(
               categoryPreferences: _categoryPreferences,
               filter: _transactionFilter,
@@ -2160,13 +2157,9 @@ class _ConfirmPasswordDialogState extends State<_ConfirmPasswordDialog> {
 }
 
 class _HomeDashboard extends StatefulWidget {
-  const _HomeDashboard({
-    required this.categoryPreferences,
-    required this.transactionFilter,
-  });
+  const _HomeDashboard({required this.categoryPreferences});
 
   final CategoryPreferencesService categoryPreferences;
-  final TransactionTypeFilter transactionFilter;
 
   @override
   State<_HomeDashboard> createState() => _HomeDashboardState();
@@ -2206,11 +2199,6 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                 final visibleTransactions = filterTransactionsByMonth(
                   transactions,
                   _selectedMonth,
-                );
-                final selectedTransactions = filterTransactionsForSelection(
-                  visibleTransactions,
-                  widget.transactionFilter,
-                  widget.categoryPreferences,
                 );
                 final monthOptions = _buildMonthOptions(transactions);
 
@@ -2292,11 +2280,8 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                     Align(
                       alignment: Alignment.centerRight,
                       child: _PrintTransactionsButton(
-                        transactions: selectedTransactions,
-                        filterLabel: _transactionFilterLabel(
-                          _selectedMonth,
-                          widget.transactionFilter,
-                        ),
+                        transactions: visibleTransactions,
+                        filterLabel: _transactionFilterLabel(_selectedMonth),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -3134,19 +3119,11 @@ List<entity.Transaction> filterTransactionsForSelection(
   }).toList();
 }
 
-String _transactionFilterLabel(
-  DateTime? selectedMonth,
-  TransactionTypeFilter filter,
-) {
-  final typeLabel = switch (filter) {
-    TransactionTypeFilter.income => 'Income',
-    TransactionTypeFilter.expense => 'Expense',
-    TransactionTypeFilter.both => 'Both-mode',
-  };
+String _transactionFilterLabel(DateTime? selectedMonth) {
   final periodLabel = selectedMonth == null
       ? 'All dates'
       : DateFormat('MMMM yyyy').format(selectedMonth);
-  return '$typeLabel - $periodLabel';
+  return 'All transactions • $periodLabel';
 }
 
 class _PrintTransactionsButton extends StatefulWidget {
