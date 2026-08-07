@@ -289,7 +289,14 @@ class _TotpSignInDialogState extends State<_TotpSignInDialog> {
               decoration: InputDecoration(
                 labelText: '6-digit code',
                 errorText: _error,
+                errorStyle: const TextStyle(color: Colors.black),
                 border: const OutlineInputBorder(),
+                errorBorder: const OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.black),
+                ),
+                focusedErrorBorder: const OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.black, width: 2),
+                ),
               ),
             ),
           ],
@@ -352,7 +359,12 @@ class _LoginPanel extends StatelessWidget {
         final isLoading = state is LoginLoading;
 
         return Padding(
-          padding: const EdgeInsets.only(top:10, bottom: 24, right: 24, left: 24),
+          padding: const EdgeInsets.only(
+            top: 10,
+            bottom: 24,
+            right: 24,
+            left: 24,
+          ),
           child: Form(
             key: formKey,
             child: Column(
@@ -360,9 +372,9 @@ class _LoginPanel extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Center(child: FilerFlowLogo(size: 120)),
-                
+
                 const SizedBox(height: 20),
-                
+
                 Text(
                   'Filer Flow',
                   textAlign: TextAlign.center,
@@ -400,6 +412,8 @@ class _LoginPanel extends StatelessWidget {
                   decoration: InputDecoration(
                     hintText: 'Email address',
                     floatingLabelBehavior: FloatingLabelBehavior.never,
+                    // Change Color
+                    errorStyle: const TextStyle(color: Colors.black),
                     prefixIcon: const Icon(Icons.alternate_email),
                     filled: true,
                     fillColor: Colors.white.withValues(alpha: 0.96),
@@ -410,6 +424,17 @@ class _LoginPanel extends StatelessWidget {
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
                       borderSide: BorderSide.none,
+                    ),
+                    errorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: Colors.black),
+                    ),
+                    focusedErrorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(
+                        color: Colors.black,
+                        width: 2,
+                      ),
                     ),
                   ),
                 ),
@@ -425,6 +450,8 @@ class _LoginPanel extends StatelessWidget {
                   decoration: InputDecoration(
                     hintText: 'Password',
                     floatingLabelBehavior: FloatingLabelBehavior.never,
+                    // errorStyle: TextStyle(color: Colors.red), // Default error color
+                    errorStyle: const TextStyle(color: Colors.black),
                     prefixIcon: const Icon(Icons.lock_outline),
                     filled: true,
                     fillColor: Colors.white.withValues(alpha: 0.96),
@@ -435,6 +462,17 @@ class _LoginPanel extends StatelessWidget {
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
                       borderSide: BorderSide.none,
+                    ),
+                    errorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: Colors.black),
+                    ),
+                    focusedErrorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(
+                        color: Colors.black,
+                        width: 2,
+                      ),
                     ),
                     suffixIcon: IconButton(
                       tooltip: obscurePassword
@@ -454,11 +492,30 @@ class _LoginPanel extends StatelessWidget {
                   height: 52,
                   child: FilledButton.icon(
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFFFFC857),
-                      foregroundColor: const Color(0xFF092B29),
-                      elevation: 3,
-                      shadowColor: Colors.black.withValues(alpha: 0.35),
-                      textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                      backgroundColor: const Color(0xFF083B1F),
+                      foregroundColor: const Color(
+                        0xFFD1EBE1,
+                      ), // Clean white for text & icons
+                      elevation: 2,
+                      shadowColor: const Color(0xFF083B1F).withValues(
+                        alpha: 0.3,
+                      ), // Natural shadow matching button
+                      side: BorderSide(
+                        color: Colors.white.withValues(
+                          alpha: 0.2,
+                        ), // Subtle light border
+                        width: 1,
+                      ),
+                      textStyle: const TextStyle(
+                        fontWeight: FontWeight
+                            .w600, // Reduced from w800 for cleaner typography
+                        fontSize: 15,
+                        letterSpacing: 0.3,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 14,
+                        horizontal: 20,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),
@@ -472,7 +529,7 @@ class _LoginPanel extends StatelessWidget {
                               color: Colors.white,
                             ),
                           )
-                        : const Icon(Icons.arrow_forward_rounded),
+                        : const Icon(Icons.arrow_forward_rounded, size: 20),
                     label: const Text('Sign in'),
                   ),
                 ),
@@ -742,12 +799,12 @@ class _LoginBackdropPainter extends CustomPainter {
     final wave = math.sin(progress * 2 * math.pi) * size.height * 0.025;
 
     final goldPath = Path()
-      ..moveTo(0, size.height * 0.74 + wave)
+      ..moveTo(0, size.height * 0.60 + wave)
       ..quadraticBezierTo(
         size.width * 0.36,
-        size.height * 0.61 - wave,
+        size.height * 0.49 - wave,
         size.width,
-        size.height * 0.68 + wave,
+        size.height * 0.55 + wave,
       )
       ..lineTo(size.width, size.height)
       ..lineTo(0, size.height)
@@ -755,12 +812,12 @@ class _LoginBackdropPainter extends CustomPainter {
     canvas.drawPath(goldPath, goldPaint);
 
     final mintPath = Path()
-      ..moveTo(0, size.height * 0.82 - wave)
+      ..moveTo(0, size.height * 0.86 - wave)
       ..quadraticBezierTo(
         size.width * 0.42,
-        size.height * 0.70 + wave,
+        size.height * 0.76 + wave,
         size.width,
-        size.height * 0.78 - wave,
+        size.height * 0.82 - wave,
       )
       ..lineTo(size.width, size.height)
       ..lineTo(0, size.height)

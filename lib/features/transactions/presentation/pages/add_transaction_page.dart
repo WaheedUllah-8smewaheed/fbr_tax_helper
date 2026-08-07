@@ -24,6 +24,7 @@ class AddTransactionPage extends StatefulWidget {
     this.initialDate,
     this.parentCategory,
     this.categoryOptions = const [],
+    this.onViewCategoryHistory,
     this.appBarActions = const [],
   });
 
@@ -37,6 +38,7 @@ class AddTransactionPage extends StatefulWidget {
   final DateTime? initialDate;
   final String? parentCategory;
   final List<TransactionCategory> categoryOptions;
+  final ValueChanged<String>? onViewCategoryHistory;
   final List<Widget> appBarActions;
 
   bool get isEditing => transaction != null;
@@ -274,6 +276,12 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     Navigator.of(context).pop(true);
   }
 
+  void _openCategoryHistory() {
+    final category = _selectedCategory;
+    if (category == null) return;
+    widget.onViewCategoryHistory?.call(category);
+  }
+
   @override
   Widget build(BuildContext context) {
     final canSelectTransactionType =
@@ -308,7 +316,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                 onScan: _chooseReceiptSource,
                 onRemove: () => setState(() => _receiptImagePath = null),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 15),
+              // Form for transaction details
               Form(
                 key: _formKey,
                 child: Column(
@@ -416,7 +425,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                         },
                       ),
                     ],
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     FilledButton.icon(
                       onPressed: _submitData,
                       icon: Icon(widget.isEditing ? Icons.save : Icons.add),
@@ -425,6 +434,16 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                             ? 'Save Transaction'
                             : 'Add Transaction',
                       ),
+                    ),
+                    const SizedBox(height: 5),
+                    OutlinedButton.icon(
+                      onPressed:
+                          _selectedCategory != null &&
+                              widget.onViewCategoryHistory != null
+                          ? _openCategoryHistory
+                          : null,
+                      icon: const Icon(Icons.history_rounded),
+                      label: const Text('View category history'),
                     ),
                   ],
                 ),
@@ -518,7 +537,6 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     return amount.toStringAsFixed(2);
   }
 }
-// 
 
 class _ColorfulCategoryRadio extends StatelessWidget {
   const _ColorfulCategoryRadio({
@@ -560,37 +578,37 @@ class _ColorfulCategoryRadio extends StatelessWidget {
       ),
       child: Column(
         children: [
-         ListTile(
-  onTap: onTap,
-  dense: true,
-  visualDensity: const VisualDensity(vertical: -3),
-  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-  minTileHeight: 42,
-  leading: IgnorePointer(
-    child: Radio<String>(
-      value: category.name,
-      activeColor: color,
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      visualDensity: const VisualDensity(
-        horizontal: -4,
-        vertical: -4,
-      ),
-    ),
-  ),
-  title: Text(
-    category.name,
-    style: TextStyle(
-      color: color,
-      fontWeight: FontWeight.w600,
-      fontSize: 15,
-    ),
-  ),
-  trailing: Icon(
-    category.isExpense ? Icons.arrow_downward : Icons.arrow_upward,
-    color: color,
-    size: 20,
-  ),
-),
+          ListTile(
+            onTap: onTap,
+            dense: true,
+            visualDensity: const VisualDensity(vertical: -3),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+            minTileHeight: 42,
+            leading: IgnorePointer(
+              child: Radio<String>(
+                value: category.name,
+                activeColor: color,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: const VisualDensity(
+                  horizontal: -4,
+                  vertical: -4,
+                ),
+              ),
+            ),
+            title: Text(
+              category.name,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+              ),
+            ),
+            trailing: Icon(
+              category.isExpense ? Icons.arrow_downward : Icons.arrow_upward,
+              color: color,
+              size: 20,
+            ),
+          ),
           ?details,
         ],
       ),
@@ -613,70 +631,115 @@ class _ReceiptPanel extends StatelessWidget {
 
   /// Returns a widget that displays the receipt image (if available) and provides buttons to scan or remove the
   @override
-  Widget build(BuildContext context) {
-    final file = imagePath == null ? null : File(imagePath!);
-    final hasImage = file?.existsSync() ?? false;
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: Colors.teal.shade100),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Receipt image',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+  // scan the receipt. If an image is available, it will be displayed above the buttons.
+ @override
+Widget build(BuildContext context) {
+  final file = imagePath == null ? null : File(imagePath!);
+  final hasImage = file?.existsSync() ?? false;
+  final theme = Theme.of(context);
+
+  return Card(
+    elevation: 0,
+    color: Colors.white,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+      side: BorderSide(color: Colors.teal.shade100),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Receipt image',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: Colors.teal.shade900,
             ),
-            const SizedBox(height: 6),
-            const Text(
-              'Take a photo or upload an image. Text will be read on-device and placed into the editable fields below.',
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Take a photo or upload an image. Text will be read on-device and placed into the editable fields below.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: Colors.grey.shade700,
+              fontSize: 13,
+              height: 1.35,
             ),
-            if (hasImage) ...[
-              const SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.file(
-                  file!,
-                  height: 180,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                ),
-              ),
-            ],
+          ),
+          if (hasImage) ...[
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: isScanning ? null : onScan,
-                    icon: isScanning
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.document_scanner_outlined),
-                    label: Text(hasImage ? 'Replace & scan' : 'Add & scan'),
-                  ),
-                ),
-                if (hasImage) ...[
-                  const SizedBox(width: 8),
-                  IconButton(
-                    tooltip: 'Remove receipt',
-                    onPressed: isScanning ? null : onRemove,
-                    icon: const Icon(Icons.delete_outline),
-                  ),
-                ],
-              ],
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.file(
+                file!,
+                height: 160,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              ),
             ),
           ],
-        ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.teal.shade50,
+                    foregroundColor: Colors.teal.shade800,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: isScanning ? null : onScan,
+                  icon: isScanning
+                      ? SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.teal.shade800,
+                          ),
+                        )
+                      : const Icon(Icons.document_scanner_outlined, size: 18),
+                  label: Text(
+                    hasImage ? 'Replace & scan' : 'Add & scan',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
+              if (hasImage) ...[
+                const SizedBox(width: 8),
+                Material(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: isScanning ? null : onRemove,
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Icon(
+                        Icons.delete_outline_rounded,
+                        size: 20,
+                        color: Colors.red.shade700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 }

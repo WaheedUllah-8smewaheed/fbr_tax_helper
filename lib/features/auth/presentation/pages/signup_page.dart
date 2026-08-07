@@ -345,12 +345,21 @@ class _SignupPanel extends StatelessWidget {
     return InputDecoration(
       hintText: hint,
       floatingLabelBehavior: FloatingLabelBehavior.never,
+      errorStyle: const TextStyle(color: Colors.black),
       prefixIcon: Icon(icon, color: iconColor),
       suffixIcon: suffixIcon,
       filled: true,
       fillColor: Colors.white.withValues(alpha: 0.96),
       border: border,
       enabledBorder: border,
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Colors.black),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Colors.black, width: 2),
+      ),
     );
   }
 

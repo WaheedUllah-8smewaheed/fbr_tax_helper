@@ -162,6 +162,16 @@ class _TransactionsPageState extends State<_TransactionsPage> {
         builder: (context) => AddTransactionPage(
           parentCategory: parentCategory,
           categoryOptions: categoryOptions,
+          onViewCategoryHistory: (category) {
+            Navigator.of(this.context).push(
+              MaterialPageRoute(
+                builder: (context) => _AllTransactionsPage(
+                  categoryPreferences: widget.categoryPreferences,
+                  initialCategory: category,
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -545,6 +555,26 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
     return '${category ?? 'All transactions'} • $period';
   }
 
+  Widget _rangeDateField({required bool isStart}) {
+    final value = isStart ? _rangeStart : _rangeEnd;
+    return TextFormField(
+      key: ValueKey(
+        '${isStart ? 'range_start' : 'range_end'}_'
+        '${value?.millisecondsSinceEpoch ?? 'empty'}',
+      ),
+      readOnly: true,
+      initialValue: value == null
+          ? ''
+          : DateFormat('dd MMM yyyy').format(value),
+      decoration: InputDecoration(
+        labelText: isStart ? 'From' : 'To',
+        hintText: 'Select date',
+        suffixIcon: const Icon(Icons.calendar_today_outlined),
+      ),
+      onTap: () => _pickRangeDate(isStart: isStart),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUserId = context.read<AuthService>().currentUser?.uid ?? '';
@@ -623,40 +653,25 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
               ],
               if (_dateFilter == _TransactionDateFilter.range) ...[
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        key: ValueKey(_rangeStart),
-                        readOnly: true,
-                        initialValue: _rangeStart == null
-                            ? ''
-                            : DateFormat('dd MMM yyyy').format(_rangeStart!),
-                        decoration: const InputDecoration(
-                          labelText: 'From',
-                          hintText: 'Select date',
-                          suffixIcon: Icon(Icons.calendar_today_outlined),
-                        ),
-                        onTap: () => _pickRangeDate(isStart: true),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextFormField(
-                        key: ValueKey(_rangeEnd),
-                        readOnly: true,
-                        initialValue: _rangeEnd == null
-                            ? ''
-                            : DateFormat('dd MMM yyyy').format(_rangeEnd!),
-                        decoration: const InputDecoration(
-                          labelText: 'To',
-                          hintText: 'Select date',
-                          suffixIcon: Icon(Icons.calendar_today_outlined),
-                        ),
-                        onTap: () => _pickRangeDate(isStart: false),
-                      ),
-                    ),
-                  ],
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (constraints.maxWidth < 430) {
+                      return Column(
+                        children: [
+                          _rangeDateField(isStart: true),
+                          const SizedBox(height: 10),
+                          _rangeDateField(isStart: false),
+                        ],
+                      );
+                    }
+                    return Row(
+                      children: [
+                        Expanded(child: _rangeDateField(isStart: true)),
+                        const SizedBox(width: 12),
+                        Expanded(child: _rangeDateField(isStart: false)),
+                      ],
+                    );
+                  },
                 ),
                 if (_rangeStart == null || _rangeEnd == null) ...[
                   const SizedBox(height: 8),
@@ -667,22 +682,39 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
                 ],
               ],
               const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '${visibleTransactions.length} transactions',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final count = Text(
+                    '${visibleTransactions.length} transactions',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
                     ),
-                  ),
-                  _PrintTransactionsButton(
+                  );
+                  final printButton = _PrintTransactionsButton(
                     transactions: visibleTransactions,
                     filterLabel: _filterLabel(),
                     buttonLabel: 'Print',
-                  ),
-                ],
+                  );
+                  if (constraints.maxWidth < 360) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        count,
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: printButton,
+                        ),
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(child: count),
+                      printButton,
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 10),
               _TransactionList(
