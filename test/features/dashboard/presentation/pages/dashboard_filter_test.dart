@@ -118,4 +118,25 @@ void main() {
       ['Gift Given'],
     );
   });
+
+  test('finds a transaction only when it exceeds half the period total', () {
+    Transaction transaction(String title, double amount) => Transaction(
+      userId: '1',
+      title: title,
+      beneficiary: '',
+      purpose: '',
+      amount: amount,
+      isExpense: true,
+      date: DateTime(2026, 1, 1),
+      category: 'General',
+    );
+
+    final dominant = transaction('Rent', 600);
+    final remaining = transaction('Other', 400);
+    expect(findDominantTransaction([dominant, remaining], 1000), dominant);
+
+    final exactlyHalf = transaction('Exactly half', 500);
+    expect(findDominantTransaction([exactlyHalf, remaining], 1000), isNull);
+    expect(findDominantTransaction(const [], 0), isNull);
+  });
 }
