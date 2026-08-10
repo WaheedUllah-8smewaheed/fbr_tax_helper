@@ -3431,11 +3431,8 @@ class _ComparisonDashboardPageState extends State<_ComparisonDashboardPage> {
                     transactions,
                   );
 
-                  return SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: _PeriodComparisonDashboard(
-                      transactions: filteredTransactions,
-                    ),
+                  return _ReferenceComparisonDashboard(
+                    transactions: filteredTransactions,
                   );
                 },
               ),
@@ -3443,6 +3440,416 @@ class _ComparisonDashboardPageState extends State<_ComparisonDashboardPage> {
       ),
     );
   }
+}
+
+enum _ComparisonDisplay { statement, trend }
+
+enum _ComparisonRange { week, month, quarter }
+
+class _ReferenceComparisonDashboard extends StatefulWidget {
+  const _ReferenceComparisonDashboard({required this.transactions});
+
+  final List<entity.Transaction> transactions;
+
+  @override
+  State<_ReferenceComparisonDashboard> createState() =>
+      _ReferenceComparisonDashboardState();
+}
+
+class _ReferenceComparisonDashboardState
+    extends State<_ReferenceComparisonDashboard> {
+  static const _accent = Color(0xFF168C91);
+  static const _line = Color(0xFF16194F);
+
+  _ComparisonDisplay _display = _ComparisonDisplay.trend;
+  _ComparisonRange _range = _ComparisonRange.month;
+
+  @override
+  Widget build(BuildContext context) {
+    final buckets = _referenceComparisonBuckets(widget.transactions, _range);
+
+    return ColoredBox(
+      color: const Color(0xFFF2F4F5),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 22, 20, 32),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _ComparisonSwitch<_ComparisonDisplay>(
+                  values: const [
+                    (_ComparisonDisplay.statement, 'Statement'),
+                    (_ComparisonDisplay.trend, 'Trend'),
+                  ],
+                  selected: _display,
+                  selectedColor: _accent,
+                  height: 58,
+                  onChanged: (value) => setState(() => _display = value),
+                ),
+                const SizedBox(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: _ComparisonSwitch<_ComparisonRange>(
+                    values: const [
+                      (_ComparisonRange.week, 'Week'),
+                      (_ComparisonRange.month, 'Month'),
+                      (_ComparisonRange.quarter, 'Quarter'),
+                    ],
+                    selected: _range,
+                    selectedColor: _accent,
+                    height: 48,
+                    separated: true,
+                    onChanged: (value) => setState(() => _range = value),
+                  ),
+                ),
+                const SizedBox(height: 28),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 240),
+                  child: _ComparisonPlotCard(
+                    key: ValueKey('comparison-${_display.name}-${_range.name}'),
+                    buckets: buckets,
+                    display: _display,
+                    lineColor: _line,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ComparisonSwitch<T> extends StatelessWidget {
+  const _ComparisonSwitch({
+    required this.values,
+    required this.selected,
+    required this.selectedColor,
+    required this.height,
+    required this.onChanged,
+    this.separated = false,
+  });
+
+  final List<(T, String)> values;
+  final T selected;
+  final Color selectedColor;
+  final double height;
+  final ValueChanged<T> onChanged;
+  final bool separated;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: height,
+      padding: EdgeInsets.all(separated ? 0 : 5),
+      decoration: separated
+          ? null
+          : BoxDecoration(
+              color: const Color(0xFFE7EBEC),
+              borderRadius: BorderRadius.circular(18),
+            ),
+      child: Row(
+        children: values.indexed.expand((entry) {
+          final item = entry.$2;
+          final isSelected = item.$1 == selected;
+          final button = Expanded(
+            child: Semantics(
+              button: true,
+              selected: isSelected,
+              child: Material(
+                color: isSelected ? selectedColor : Colors.transparent,
+                borderRadius: BorderRadius.circular(17),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => onChanged(item.$1),
+                  child: Center(
+                    child: Text(
+                      item.$2,
+                      style: TextStyle(
+                        color: isSelected
+                            ? Colors.white
+                            : const Color(0xFF161A1D),
+                        fontSize: separated ? 16 : 17,
+                        fontWeight: isSelected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+          return [
+            button,
+            if (separated && entry.$1 < values.length - 1)
+              const SizedBox(width: 14),
+          ];
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _ComparisonPlotCard extends StatelessWidget {
+  const _ComparisonPlotCard({
+    super.key,
+    required this.buckets,
+    required this.display,
+    required this.lineColor,
+  });
+
+  final List<_ReferenceComparisonBucket> buckets;
+  final _ComparisonDisplay display;
+  final Color lineColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final highest = buckets.fold<double>(
+      0,
+      (value, bucket) => math.max(
+        value,
+        display == _ComparisonDisplay.trend
+            ? bucket.activity
+            : math.max(bucket.income, bucket.expense),
+      ),
+    );
+    final maxY = _roundedComparisonMaximum(highest);
+    final interval = maxY / 6;
+
+    return Container(
+      height: 315,
+      padding: const EdgeInsets.fromLTRB(14, 24, 18, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x14000000),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: display == _ComparisonDisplay.trend
+          ? LineChart(
+              LineChartData(
+                minX: 0,
+                maxX: (buckets.length - 1).toDouble(),
+                minY: 0,
+                maxY: maxY,
+                gridData: const FlGridData(show: false),
+                borderData: FlBorderData(show: false),
+                titlesData: _referenceComparisonTitles(buckets, interval),
+                lineTouchData: LineTouchData(
+                  enabled: true,
+                  touchTooltipData: LineTouchTooltipData(
+                    getTooltipColor: (_) => const Color(0xFF25275C),
+                    getTooltipItems: (spots) => spots
+                        .map(
+                          (spot) => LineTooltipItem(
+                            'PKR ${NumberFormat.compact().format(spot.y)}',
+                            const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: buckets.indexed
+                        .map(
+                          (entry) =>
+                              FlSpot(entry.$1.toDouble(), entry.$2.activity),
+                        )
+                        .toList(),
+                    color: lineColor,
+                    barWidth: 4,
+                    isCurved: true,
+                    curveSmoothness: 0.22,
+                    isStrokeCapRound: true,
+                    dotData: FlDotData(
+                      show: true,
+                      getDotPainter: (spot, percent, bar, index) =>
+                          FlDotCirclePainter(
+                            radius: 5,
+                            color: Colors.white,
+                            strokeWidth: 4,
+                            strokeColor: lineColor,
+                          ),
+                    ),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          const Color(0xFF95B2C7).withValues(alpha: 0.42),
+                          const Color(0xFF95B2C7).withValues(alpha: 0.12),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.easeOutCubic,
+            )
+          : BarChart(
+              BarChartData(
+                maxY: maxY,
+                alignment: BarChartAlignment.spaceAround,
+                gridData: const FlGridData(show: false),
+                borderData: FlBorderData(show: false),
+                titlesData: _referenceComparisonTitles(buckets, interval),
+                barGroups: buckets.indexed
+                    .map(
+                      (entry) => BarChartGroupData(
+                        x: entry.$1,
+                        barsSpace: 3,
+                        barRods: [
+                          BarChartRodData(
+                            toY: entry.$2.income,
+                            width: 8,
+                            color: const Color(0xFF168C91),
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(4),
+                            ),
+                          ),
+                          BarChartRodData(
+                            toY: entry.$2.expense,
+                            width: 8,
+                            color: const Color(0xFF16194F),
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+    );
+  }
+}
+
+FlTitlesData _referenceComparisonTitles(
+  List<_ReferenceComparisonBucket> buckets,
+  double interval,
+) {
+  return FlTitlesData(
+    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+    leftTitles: AxisTitles(
+      sideTitles: SideTitles(
+        showTitles: true,
+        reservedSize: 48,
+        interval: interval,
+        getTitlesWidget: (value, meta) {
+          if (value == meta.max) return const SizedBox.shrink();
+          return SideTitleWidget(
+            axisSide: meta.axisSide,
+            space: 7,
+            child: Text(
+              _compactChartAmount(value),
+              style: const TextStyle(color: Color(0xFF555B60), fontSize: 12),
+            ),
+          );
+        },
+      ),
+    ),
+    bottomTitles: AxisTitles(
+      sideTitles: SideTitles(
+        showTitles: true,
+        reservedSize: 38,
+        interval: 1,
+        getTitlesWidget: (value, meta) {
+          final index = value.toInt();
+          if (value != index || index < 0 || index >= buckets.length) {
+            return const SizedBox.shrink();
+          }
+          return SideTitleWidget(
+            axisSide: meta.axisSide,
+            space: 10,
+            child: Text(
+              DateFormat('dd/MM').format(buckets[index].date),
+              style: const TextStyle(color: Color(0xFF33383C), fontSize: 11),
+            ),
+          );
+        },
+      ),
+    ),
+  );
+}
+
+class _ReferenceComparisonBucket {
+  _ReferenceComparisonBucket(this.date);
+
+  final DateTime date;
+  double income = 0;
+  double expense = 0;
+
+  double get activity => income + expense;
+}
+
+List<_ReferenceComparisonBucket> _referenceComparisonBuckets(
+  List<entity.Transaction> transactions,
+  _ComparisonRange range,
+) {
+  final latestTransaction = transactions.isEmpty
+      ? null
+      : transactions.reduce(
+          (left, right) => left.date.isAfter(right.date) ? left : right,
+        );
+  final source = latestTransaction?.date ?? DateTime.now();
+  final anchor = DateTime(source.year, source.month, source.day);
+  final daysPerBucket = switch (range) {
+    _ComparisonRange.week => 1,
+    _ComparisonRange.month => 5,
+    _ComparisonRange.quarter => 15,
+  };
+  const bucketCount = 7;
+  final start = anchor.subtract(
+    Duration(days: (bucketCount * daysPerBucket) - 1),
+  );
+  final buckets = List.generate(
+    bucketCount,
+    (index) => _ReferenceComparisonBucket(
+      start.add(Duration(days: index * daysPerBucket)),
+    ),
+  );
+
+  for (final transaction in transactions) {
+    final date = DateTime(
+      transaction.date.year,
+      transaction.date.month,
+      transaction.date.day,
+    );
+    final dayOffset = date.difference(start).inDays;
+    final index = dayOffset ~/ daysPerBucket;
+    if (dayOffset < 0 || index < 0 || index >= buckets.length) continue;
+    if (transaction.isExpense) {
+      buckets[index].expense += transaction.amount;
+    } else {
+      buckets[index].income += transaction.amount;
+    }
+  }
+  return buckets;
+}
+
+double _roundedComparisonMaximum(double value) {
+  if (value <= 0) return 60000;
+  final rawStep = value / 5;
+  final magnitude = math.pow(10, (math.log(rawStep) / math.ln10).floor());
+  final step = (rawStep / magnitude).ceil() * magnitude;
+  return step * 6;
 }
 
 // ignore: unused_element
