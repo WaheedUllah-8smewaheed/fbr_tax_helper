@@ -3442,6 +3442,8 @@ class _ComparisonDashboardPageState extends State<_ComparisonDashboardPage> {
   }
 }
 
+// Legacy chart types are retained for compatibility with the older dashboard.
+// ignore: unused_field
 enum _ComparisonDisplay { statement, trend }
 
 enum _ComparisonRange { week, month, quarter }
@@ -3459,14 +3461,39 @@ class _ReferenceComparisonDashboard extends StatefulWidget {
 class _ReferenceComparisonDashboardState
     extends State<_ReferenceComparisonDashboard> {
   static const _accent = Color(0xFF168C91);
-  static const _line = Color(0xFF16194F);
-
-  _ComparisonDisplay _display = _ComparisonDisplay.trend;
-  _ComparisonRange _range = _ComparisonRange.month;
+  _SelectableComparisonMode _mode = _SelectableComparisonMode.month;
+  DateTime? _firstMonth;
+  DateTime? _secondMonth;
+  int? _firstYear;
+  int? _secondYear;
 
   @override
   Widget build(BuildContext context) {
-    final buckets = _referenceComparisonBuckets(widget.transactions, _range);
+    final months = _availableComparisonMonths(widget.transactions);
+    final years = _availableComparisonYears(widget.transactions);
+    final firstMonth = _effectiveSelection(_firstMonth, months, 0);
+    final secondMonth = _effectiveSelection(_secondMonth, months, 1);
+    final firstYear = _effectiveSelection(_firstYear, years, 0);
+    final secondYear = _effectiveSelection(_secondYear, years, 1);
+    final isMonth = _mode == _SelectableComparisonMode.month;
+    final firstLabel = isMonth
+        ? _monthComparisonLabel(firstMonth)
+        : (firstYear?.toString() ?? 'No year');
+    final secondLabel = isMonth
+        ? _monthComparisonLabel(secondMonth)
+        : (secondYear?.toString() ?? 'No year');
+    final firstTransactions = _transactionsForComparisonPeriod(
+      widget.transactions,
+      mode: _mode,
+      month: firstMonth,
+      year: firstYear,
+    );
+    final secondTransactions = _transactionsForComparisonPeriod(
+      widget.transactions,
+      mode: _mode,
+      month: secondMonth,
+      year: secondYear,
+    );
 
     return ColoredBox(
       color: const Color(0xFFF2F4F5),
@@ -3478,41 +3505,126 @@ class _ReferenceComparisonDashboardState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _ComparisonSwitch<_ComparisonDisplay>(
+                _ComparisonSwitch<_SelectableComparisonMode>(
                   values: const [
-                    (_ComparisonDisplay.statement, 'Statement'),
-                    (_ComparisonDisplay.trend, 'Trend'),
+                    (_SelectableComparisonMode.month, 'Month'),
+                    (_SelectableComparisonMode.year, 'Year'),
                   ],
-                  selected: _display,
+                  selected: _mode,
                   selectedColor: _accent,
                   height: 58,
-                  onChanged: (value) => setState(() => _display = value),
+                  onChanged: (value) => setState(() => _mode = value),
                 ),
                 const SizedBox(height: 24),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: _ComparisonSwitch<_ComparisonRange>(
-                    values: const [
-                      (_ComparisonRange.week, 'Week'),
-                      (_ComparisonRange.month, 'Month'),
-                      (_ComparisonRange.quarter, 'Quarter'),
-                    ],
-                    selected: _range,
-                    selectedColor: _accent,
-                    height: 48,
-                    separated: true,
-                    onChanged: (value) => setState(() => _range = value),
+                Text(
+                  isMonth ? 'Select two months' : 'Select two years',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.ink,
                   ),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 12),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final selectors = isMonth
+                        ? <Widget>[
+                            _ComparisonDropdown<DateTime>(
+                              label: 'First month',
+                              value: firstMonth,
+                              values: months,
+                              itemLabel: (value) =>
+                                  DateFormat('MMMM yyyy').format(value),
+                              onChanged: (value) =>
+                                  setState(() => _firstMonth = value),
+                            ),
+                            _ComparisonDropdown<DateTime>(
+                              label: 'Second month',
+                              value: secondMonth,
+                              values: months,
+                              itemLabel: (value) =>
+                                  DateFormat('MMMM yyyy').format(value),
+                              onChanged: (value) =>
+                                  setState(() => _secondMonth = value),
+                            ),
+                          ]
+                        : <Widget>[
+                            _ComparisonDropdown<int>(
+                              label: 'First year',
+                              value: firstYear,
+                              values: years,
+                              itemLabel: (value) => value.toString(),
+                              onChanged: (value) =>
+                                  setState(() => _firstYear = value),
+                            ),
+                            _ComparisonDropdown<int>(
+                              label: 'Second year',
+                              value: secondYear,
+                              values: years,
+                              itemLabel: (value) => value.toString(),
+                              onChanged: (value) =>
+                                  setState(() => _secondYear = value),
+                            ),
+                          ];
+                    if (constraints.maxWidth < 520) {
+                      return Column(
+                        children: [
+                          selectors.first,
+                          const SizedBox(height: 12),
+                          selectors.last,
+                        ],
+                      );
+                    }
+                    return Row(
+                      children: [
+                        Expanded(child: selectors.first),
+                        const SizedBox(width: 12),
+                        Expanded(child: selectors.last),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 18),
+                _SelectableComparisonLegend(
+                  firstLabel: firstLabel,
+                  secondLabel: secondLabel,
+                ),
+                const SizedBox(height: 12),
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 240),
-                  child: _ComparisonPlotCard(
-                    key: ValueKey('comparison-${_display.name}-${_range.name}'),
-                    buckets: buckets,
-                    display: _display,
-                    lineColor: _line,
+                  child: _SelectableComparisonChart(
+                    key: ValueKey(
+                      'comparison-${_mode.name}-$firstMonth-$secondMonth-$firstYear-$secondYear',
+                    ),
+                    firstValues: _comparisonSeries(
+                      widget.transactions,
+                      mode: _mode,
+                      month: firstMonth,
+                      year: firstYear,
+                    ),
+                    secondValues: _comparisonSeries(
+                      widget.transactions,
+                      mode: _mode,
+                      month: secondMonth,
+                      year: secondYear,
+                    ),
+                    firstLabel: firstLabel,
+                    secondLabel: secondLabel,
+                    mode: _mode,
                   ),
+                ),
+                const SizedBox(height: 18),
+                _ComparisonTotalsSummary(
+                  firstLabel: firstLabel,
+                  secondLabel: secondLabel,
+                  firstTransactions: firstTransactions,
+                  secondTransactions: secondTransactions,
+                ),
+                const SizedBox(height: 14),
+                _PrintComparisonButton(
+                  firstTransactions: firstTransactions,
+                  secondTransactions: secondTransactions,
+                  firstLabel: firstLabel,
+                  secondLabel: secondLabel,
                 ),
               ],
             ),
@@ -3521,6 +3633,557 @@ class _ReferenceComparisonDashboardState
       ),
     );
   }
+}
+
+enum _SelectableComparisonMode { month, year }
+
+T? _effectiveSelection<T>(T? selected, List<T> values, int fallbackIndex) {
+  if (selected != null && values.contains(selected)) return selected;
+  if (values.isEmpty) return null;
+  return values[math.min(fallbackIndex, values.length - 1)];
+}
+
+List<DateTime> _availableComparisonMonths(
+  List<entity.Transaction> transactions,
+) {
+  final values =
+      transactions
+          .map(
+            (transaction) =>
+                DateTime(transaction.date.year, transaction.date.month),
+          )
+          .toSet()
+          .toList()
+        ..sort((left, right) => right.compareTo(left));
+  return values;
+}
+
+List<int> _availableComparisonYears(List<entity.Transaction> transactions) {
+  final values =
+      transactions.map((transaction) => transaction.date.year).toSet().toList()
+        ..sort((left, right) => right.compareTo(left));
+  return values;
+}
+
+String _monthComparisonLabel(DateTime? month) {
+  return month == null ? 'No month' : DateFormat('MMM yyyy').format(month);
+}
+
+List<entity.Transaction> _transactionsForComparisonPeriod(
+  List<entity.Transaction> transactions, {
+  required _SelectableComparisonMode mode,
+  DateTime? month,
+  int? year,
+}) {
+  return transactions.where((transaction) {
+    if (mode == _SelectableComparisonMode.month) {
+      return month != null &&
+          transaction.date.year == month.year &&
+          transaction.date.month == month.month;
+    }
+    return year != null && transaction.date.year == year;
+  }).toList();
+}
+
+class _ComparisonPeriodTotals {
+  const _ComparisonPeriodTotals({
+    required this.activity,
+    required this.balance,
+  });
+
+  factory _ComparisonPeriodTotals.from(List<entity.Transaction> transactions) {
+    var income = 0.0;
+    var expenses = 0.0;
+    for (final transaction in transactions) {
+      if (transaction.isExpense) {
+        expenses += transaction.amount;
+      } else {
+        income += transaction.amount;
+      }
+    }
+    return _ComparisonPeriodTotals(
+      activity: income + expenses,
+      balance: income - expenses,
+    );
+  }
+
+  final double activity;
+  final double balance;
+}
+
+class _ComparisonTotalsSummary extends StatelessWidget {
+  const _ComparisonTotalsSummary({
+    required this.firstLabel,
+    required this.secondLabel,
+    required this.firstTransactions,
+    required this.secondTransactions,
+  });
+
+  final String firstLabel;
+  final String secondLabel;
+  final List<entity.Transaction> firstTransactions;
+  final List<entity.Transaction> secondTransactions;
+
+  @override
+  Widget build(BuildContext context) {
+    final first = _ComparisonPeriodTotals.from(firstTransactions);
+    final second = _ComparisonPeriodTotals.from(secondTransactions);
+    final difference = second.activity - first.activity;
+    final balanceDifference = second.balance - first.balance;
+    final differenceColor = difference >= 0
+        ? AppColors.primary
+        : AppColors.coral;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Comparison result',
+            style: TextStyle(
+              color: AppColors.ink,
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _ComparisonTotalCell(
+                  label: firstLabel,
+                  value: _formatComparisonMoney(first.activity),
+                  color: const Color(0xFF16194F),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ComparisonTotalCell(
+                  label: secondLabel,
+                  value: _formatComparisonMoney(second.activity),
+                  color: const Color(0xFF168C91),
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: 26),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Difference',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      _formatComparisonMoney(difference, signed: true),
+                      style: TextStyle(
+                        color: differenceColor,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                'Balance change\n${_formatComparisonMoney(balanceDifference, signed: true)}',
+                textAlign: TextAlign.end,
+                style: const TextStyle(
+                  color: AppColors.muted,
+                  fontWeight: FontWeight.w700,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '$secondLabel minus $firstLabel',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ComparisonTotalCell extends StatelessWidget {
+  const _ComparisonTotalCell({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: color, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 5),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: TextStyle(
+                color: color,
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrintComparisonButton extends StatefulWidget {
+  const _PrintComparisonButton({
+    required this.firstTransactions,
+    required this.secondTransactions,
+    required this.firstLabel,
+    required this.secondLabel,
+  });
+
+  final List<entity.Transaction> firstTransactions;
+  final List<entity.Transaction> secondTransactions;
+  final String firstLabel;
+  final String secondLabel;
+
+  @override
+  State<_PrintComparisonButton> createState() => _PrintComparisonButtonState();
+}
+
+class _PrintComparisonButtonState extends State<_PrintComparisonButton> {
+  bool _isPrinting = false;
+
+  Future<void> _print() async {
+    if (_isPrinting) return;
+    setState(() => _isPrinting = true);
+    try {
+      await const TransactionReportService().printComparisonReport(
+        firstTransactions: widget.firstTransactions,
+        secondTransactions: widget.secondTransactions,
+        firstLabel: widget.firstLabel,
+        secondLabel: widget.secondLabel,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('Could not prepare the comparison report: $error'),
+          ),
+        );
+    } finally {
+      if (mounted) setState(() => _isPrinting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasData =
+        widget.firstTransactions.isNotEmpty ||
+        widget.secondTransactions.isNotEmpty;
+    return FilledButton.icon(
+      onPressed: hasData && !_isPrinting ? _print : null,
+      icon: _isPrinting
+          ? const SizedBox.square(
+              dimension: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : const Icon(Icons.print_outlined),
+      label: Text(
+        hasData ? 'Print comparison report' : 'No comparison data to print',
+      ),
+    );
+  }
+}
+
+String _formatComparisonMoney(double value, {bool signed = false}) {
+  if (!signed) return 'PKR ${NumberFormat('#,##0.00').format(value)}';
+  final sign = value > 0 ? '+' : (value < 0 ? '-' : '');
+  return 'PKR $sign${NumberFormat('#,##0.00').format(value.abs())}';
+}
+
+class _ComparisonDropdown<T> extends StatelessWidget {
+  const _ComparisonDropdown({
+    required this.label,
+    required this.value,
+    required this.values,
+    required this.itemLabel,
+    required this.onChanged,
+  });
+
+  final String label;
+  final T? value;
+  final List<T> values;
+  final String Function(T value) itemLabel;
+  final ValueChanged<T?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<T>(
+      key: ValueKey('$label-$value'),
+      initialValue: value,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: const Icon(Icons.calendar_month_outlined),
+        fillColor: Colors.white,
+      ),
+      hint: Text(values.isEmpty ? 'No transaction data' : 'Select'),
+      items: values
+          .map(
+            (item) => DropdownMenuItem<T>(
+              value: item,
+              child: Text(itemLabel(item), overflow: TextOverflow.ellipsis),
+            ),
+          )
+          .toList(),
+      onChanged: values.isEmpty ? null : onChanged,
+    );
+  }
+}
+
+class _SelectableComparisonLegend extends StatelessWidget {
+  const _SelectableComparisonLegend({
+    required this.firstLabel,
+    required this.secondLabel,
+  });
+
+  final String firstLabel;
+  final String secondLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 20,
+      runSpacing: 8,
+      children: [
+        _PeriodLegendItem(color: const Color(0xFF16194F), label: firstLabel),
+        _PeriodLegendItem(color: const Color(0xFF168C91), label: secondLabel),
+      ],
+    );
+  }
+}
+
+class _SelectableComparisonChart extends StatelessWidget {
+  const _SelectableComparisonChart({
+    super.key,
+    required this.firstValues,
+    required this.secondValues,
+    required this.firstLabel,
+    required this.secondLabel,
+    required this.mode,
+  });
+
+  final List<double> firstValues;
+  final List<double> secondValues;
+  final String firstLabel;
+  final String secondLabel;
+  final _SelectableComparisonMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    final highest = [...firstValues, ...secondValues].fold<double>(0, math.max);
+    final maxY = _roundedComparisonMaximum(highest);
+    final interval = maxY / 6;
+    final pointCount = math.max(firstValues.length, secondValues.length);
+
+    return Container(
+      height: 330,
+      padding: const EdgeInsets.fromLTRB(12, 24, 18, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x14000000),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: LineChart(
+        LineChartData(
+          minX: 0,
+          maxX: math.max(1, pointCount - 1).toDouble(),
+          minY: 0,
+          maxY: maxY,
+          gridData: FlGridData(
+            show: true,
+            drawVerticalLine: false,
+            horizontalInterval: interval,
+            getDrawingHorizontalLine: (_) =>
+                const FlLine(color: Color(0xFFE8ECEE), strokeWidth: 1),
+          ),
+          borderData: FlBorderData(show: false),
+          titlesData: _selectableComparisonTitles(mode, interval, pointCount),
+          lineTouchData: LineTouchData(
+            enabled: true,
+            touchTooltipData: LineTouchTooltipData(
+              getTooltipColor: (_) => const Color(0xFF25275C),
+              getTooltipItems: (spots) => spots.map((spot) {
+                final label = spot.barIndex == 0 ? firstLabel : secondLabel;
+                return LineTooltipItem(
+                  '$label\nPKR ${NumberFormat.compact().format(spot.y)}',
+                  const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          lineBarsData: [
+            _selectableComparisonLine(firstValues, const Color(0xFF16194F)),
+            _selectableComparisonLine(secondValues, const Color(0xFF168C91)),
+          ],
+        ),
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+      ),
+    );
+  }
+}
+
+LineChartBarData _selectableComparisonLine(List<double> values, Color color) {
+  return LineChartBarData(
+    spots: values.indexed
+        .map((entry) => FlSpot(entry.$1.toDouble(), entry.$2))
+        .toList(),
+    color: color,
+    barWidth: 3.5,
+    isCurved: true,
+    curveSmoothness: 0.2,
+    isStrokeCapRound: true,
+    dotData: FlDotData(show: values.length <= 12),
+    belowBarData: BarAreaData(show: true, color: color.withValues(alpha: 0.06)),
+  );
+}
+
+FlTitlesData _selectableComparisonTitles(
+  _SelectableComparisonMode mode,
+  double interval,
+  int pointCount,
+) {
+  return FlTitlesData(
+    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+    leftTitles: AxisTitles(
+      sideTitles: SideTitles(
+        showTitles: true,
+        reservedSize: 78,
+        interval: interval,
+        getTitlesWidget: (value, meta) => SideTitleWidget(
+          axisSide: meta.axisSide,
+          space: 6,
+          child: Text(
+            NumberFormat('#,##0').format(value),
+            style: const TextStyle(fontSize: 11, color: AppColors.muted),
+          ),
+        ),
+      ),
+    ),
+    bottomTitles: AxisTitles(
+      sideTitles: SideTitles(
+        showTitles: true,
+        reservedSize: 36,
+        interval: 1,
+        getTitlesWidget: (value, meta) {
+          final index = value.toInt();
+          if (value != index || index < 0 || index >= pointCount) {
+            return const SizedBox.shrink();
+          }
+          final day = index + 1;
+          final isLastPoint = index == pointCount - 1;
+          final hasRoomBeforeLast = pointCount - day >= 3;
+          final show = mode == _SelectableComparisonMode.year
+              ? true
+              : index == 0 ||
+                    isLastPoint ||
+                    (day % 5 == 0 && hasRoomBeforeLast);
+          if (!show) return const SizedBox.shrink();
+          final label = mode == _SelectableComparisonMode.year
+              ? DateFormat('MMM').format(DateTime(2020, index + 1))
+              : '${index + 1}';
+          return SideTitleWidget(
+            axisSide: meta.axisSide,
+            space: 9,
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 10, color: AppColors.ink),
+            ),
+          );
+        },
+      ),
+    ),
+  );
+}
+
+List<double> _comparisonSeries(
+  List<entity.Transaction> transactions, {
+  required _SelectableComparisonMode mode,
+  DateTime? month,
+  int? year,
+}) {
+  if (mode == _SelectableComparisonMode.month) {
+    if (month == null) return const [];
+    final days = DateUtils.getDaysInMonth(month.year, month.month);
+    final values = List<double>.filled(days, 0);
+    for (final transaction in transactions) {
+      if (transaction.date.year == month.year &&
+          transaction.date.month == month.month) {
+        values[transaction.date.day - 1] += transaction.amount;
+      }
+    }
+    return values;
+  }
+
+  if (year == null) return const [];
+  final values = List<double>.filled(12, 0);
+  for (final transaction in transactions) {
+    if (transaction.date.year == year) {
+      values[transaction.date.month - 1] += transaction.amount;
+    }
+  }
+  return values;
 }
 
 class _ComparisonSwitch<T> extends StatelessWidget {
@@ -3594,8 +4257,11 @@ class _ComparisonSwitch<T> extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _ComparisonPlotCard extends StatelessWidget {
+  // ignore: unused_element_parameter
   const _ComparisonPlotCard({
+    // ignore: unused_element_parameter
     super.key,
     required this.buckets,
     required this.display,
@@ -3799,6 +4465,7 @@ class _ReferenceComparisonBucket {
   double get activity => income + expense;
 }
 
+// ignore: unused_element
 List<_ReferenceComparisonBucket> _referenceComparisonBuckets(
   List<entity.Transaction> transactions,
   _ComparisonRange range,
