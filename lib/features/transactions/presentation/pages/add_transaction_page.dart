@@ -456,7 +456,12 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   }
 
   void _selectCategory(String category) {
+    final categoryChanged = _selectedCategory != category;
     setState(() {
+      if (categoryChanged) {
+        _purposeController.clear();
+        _amountController.clear();
+      }
       _selectedCategory = category;
       _expandedCategory = category;
       _titleController.text = category;
@@ -480,6 +485,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
   Widget _buildTransactionDetailsFields({bool embedded = false}) {
     final fields = Column(
+      key: embedded ? ValueKey('transaction-details-$_selectedCategory') : null,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         TextFormField(
@@ -632,114 +638,114 @@ class _ReceiptPanel extends StatelessWidget {
   /// Returns a widget that displays the receipt image (if available) and provides buttons to scan or remove the
   @override
   // scan the receipt. If an image is available, it will be displayed above the buttons.
- @override
-Widget build(BuildContext context) {
-  final file = imagePath == null ? null : File(imagePath!);
-  final hasImage = file?.existsSync() ?? false;
-  final theme = Theme.of(context);
+  @override
+  Widget build(BuildContext context) {
+    final file = imagePath == null ? null : File(imagePath!);
+    final hasImage = file?.existsSync() ?? false;
+    final theme = Theme.of(context);
 
-  return Card(
-    elevation: 0,
-    color: Colors.white,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(12),
-      side: BorderSide(color: Colors.teal.shade100),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Receipt image',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: Colors.teal.shade900,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Take a photo or upload an image. Text will be read on-device and placed into the editable fields below.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: Colors.grey.shade700,
-              fontSize: 13,
-              height: 1.35,
-            ),
-          ),
-          if (hasImage) ...[
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.file(
-                file!,
-                height: 160,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.teal.shade100),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Receipt image',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: Colors.teal.shade900,
               ),
             ),
-          ],
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.teal.shade50,
-                    foregroundColor: Colors.teal.shade800,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    visualDensity: VisualDensity.compact,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  onPressed: isScanning ? null : onScan,
-                  icon: isScanning
-                      ? SizedBox.square(
-                          dimension: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.teal.shade800,
-                          ),
-                        )
-                      : const Icon(Icons.document_scanner_outlined, size: 18),
-                  label: Text(
-                    hasImage ? 'Replace & scan' : 'Add & scan',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
-                  ),
+            const SizedBox(height: 4),
+            Text(
+              'Take a photo or upload an image. Text will be read on-device and placed into the editable fields below.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: Colors.grey.shade700,
+                fontSize: 13,
+                height: 1.35,
+              ),
+            ),
+            if (hasImage) ...[
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(
+                  file!,
+                  height: 160,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
                 ),
               ),
-              if (hasImage) ...[
-                const SizedBox(width: 8),
-                Material(
-                  color: Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(10),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: isScanning ? null : onRemove,
-                    child: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Icon(
-                        Icons.delete_outline_rounded,
-                        size: 20,
-                        color: Colors.red.shade700,
+            ],
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.teal.shade50,
+                      foregroundColor: Colors.teal.shade800,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onPressed: isScanning ? null : onScan,
+                    icon: isScanning
+                        ? SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.teal.shade800,
+                            ),
+                          )
+                        : const Icon(Icons.document_scanner_outlined, size: 18),
+                    label: Text(
+                      hasImage ? 'Replace & scan' : 'Add & scan',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
                       ),
                     ),
                   ),
                 ),
+                if (hasImage) ...[
+                  const SizedBox(width: 8),
+                  Material(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: isScanning ? null : onRemove,
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Icon(
+                          Icons.delete_outline_rounded,
+                          size: 20,
+                          color: Colors.red.shade700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 }

@@ -74,6 +74,7 @@ class TransactionCategory {
         TransactionCategory(name: 'Vehicle Tax', isExpense: true),
         TransactionCategory(name: 'Transport Fare', isExpense: true),
         TransactionCategory(name: 'Parking', isExpense: true),
+        TransactionCategory(name: 'Picnic/Tour', isExpense: true),
       ],
     },
     'Food': {

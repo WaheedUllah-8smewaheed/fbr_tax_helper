@@ -941,7 +941,7 @@ class _SignupBackgroundBadge extends StatelessWidget {
             Text(
               label!,
               style: const TextStyle(
-                color: Colors.white,
+                color: Colors.white,  
                 fontWeight: FontWeight.w700,
               ),
             ),

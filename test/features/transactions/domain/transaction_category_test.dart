@@ -44,6 +44,11 @@ void main() {
       'Travel',
       'Fuel',
     ]);
+    expect(TransactionCategory.hierarchyPathFor('Picnic/Tour'), [
+      'Travel',
+      'Travel',
+      'Picnic/Tour',
+    ]);
     expect(
       TransactionCategory.displayPathFor('Salary'),
       'Money In > Salary > Salary',

@@ -55,6 +55,7 @@ dependencies:
   archive: ^3.5.1
   qr: ^3.0.2
   local_auth: ^3.0.2
+  url_launcher: ^6.3.2
 
   sqflite_common_ffi_web: ^1.1.1
   sqflite_common_ffi: ^2.4.0+3
@@ -85,6 +86,10 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/tax.png
+    - assets/kpxdigitalblue.png
+    - assets/kpxdigitalwhite.png
+    - assets/kpxdigitalgrey.png
+    - assets/kpxdigitaloriginal.png
     #- assets/images/
 
 

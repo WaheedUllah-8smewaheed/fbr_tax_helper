@@ -11,6 +11,7 @@ void main() {
     expect(service.isExpense('Salary'), isFalse);
     expect(service.modeForParent('Travel'), CategoryMode.expense);
     expect(service.isExpense('Fuel'), isTrue);
+    expect(service.isExpense('Picnic/Tour'), isTrue);
     expect(service.modeForParent('Gifts'), CategoryMode.both);
     expect(service.isDualMode('Gift Given'), isTrue);
     expect(service.isDualMode('Gift Received'), isTrue);

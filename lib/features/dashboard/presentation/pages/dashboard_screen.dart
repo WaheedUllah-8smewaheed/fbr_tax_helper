@@ -24,6 +24,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as path;
+import 'package:url_launcher/url_launcher.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -873,49 +874,17 @@ class _MorePageState extends State<_MorePage> {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (context) => _InformationPage(
-                        title: 'Help & Support',
-                        icon: Icons.help_outline,
-                        message:
-                            'If you experience any issues or have questions about using the application, please reach out to our support team at:',
-                        supportEmail: 'graphie-codesolutions@gmail.com',
-                        footerMessage:
-                            "We're here to assist you and will respond as soon as possible.",
-                        messageTextAlign: TextAlign.left,
-                      ),
+                      builder: (context) => const _SupportPage(),
                     ),
                   ),
                 ),
-                const Divider(height: 1, indent: 56),
+                const Divider(height: 1, indent: 30),
                 ListTile(
                   leading: const Icon(Icons.info_outline),
                   title: const Text('About'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => _InformationPage(
-                        title: 'About',
-                        icon: Icons.info_outline,
-                        message:
-                            '''Filer Flow is your all-in-one personal finance companion — track income and expenses, calculate taxes, and stay on top of your money effortlessly.
-
-Key Features:
-
-• Visual dashboard with income, expense & balance overview
-• Quick transaction entry — manually or via receipt scan
-• Customizable income/expense categories
-• Built-in tax calculator (Salary, PSEB Export, WHT)
-• Secure backup & restore via Google Drive
-• Fingerprint-secured profile with 2FA
-
-Your data stays on your device , you control when and where it's backed up.
-
-Version: 1.0
-Developed by: Graphie-Code Solutions''',
-                        messageTextAlign: TextAlign.left,
-                        useSmallMessageText: true,
-                      ),
-                    ),
+                    MaterialPageRoute(builder: (context) => const _AboutPage()),
                   ),
                 ),
               ],
@@ -941,102 +910,269 @@ Developed by: Graphie-Code Solutions''',
   }
 }
 
-class _InformationPage extends StatelessWidget {
-  const _InformationPage({
-    required this.title,
-    required this.icon,
-    required this.message,
-    this.messageTextAlign = TextAlign.center,
-    this.useSmallMessageText = false,
-    this.supportEmail,
-    this.footerMessage,
-  });
+class _SupportPage extends StatelessWidget {
+  const _SupportPage();
 
-  final String title;
-  final IconData icon;
-  final String message;
-  final TextAlign messageTextAlign;
-  final bool useSmallMessageText;
-  final String? supportEmail;
-  final String? footerMessage;
+  static const _supportEmail = 'kpxdigital@gmail.com';
+
+  Future<void> _contactSupport(BuildContext context) async {
+    final emailUri = Uri(
+      scheme: 'mailto',
+      path: _supportEmail,
+      queryParameters: const {'subject': 'Support related to Filer Flow'},
+    );
+
+    final opened = await launchUrl(emailUri);
+    if (opened || !context.mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(content: Text('Could not open an email application.')),
+      );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: SingleChildScrollView(
-        child: Center(
+      backgroundColor: Colors.white,
+      appBar: AppBar(title: const Text('Help and support')),
+      body: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 30, 24, 22),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
+            constraints: BoxConstraints(minHeight: constraints.maxHeight - 52),
+            child: IntrinsicHeight(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Icon(icon, size: 52),
-                      const SizedBox(height: 16),
+                      Center(
+                        child: Image.asset(
+                          'assets/kpxdigitalgrey.png',
+                          width: 190,
+                          height: 76,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                      const SizedBox(height: 28),
                       Text(
-                        title,
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: messageTextAlign == TextAlign.left
-                            ? Alignment.centerLeft
-                            : Alignment.center,
-                        child: Text(
-                          message,
-                          textAlign: messageTextAlign,
-                          style: useSmallMessageText
-                              ? Theme.of(context).textTheme.bodySmall
-                              : null,
+                        'Help and support',
+                        textAlign: TextAlign.center,
+                        style: textTheme.headlineSmall?.copyWith(
+                          color: AppColors.primaryDark,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                      if (supportEmail != null) ...[
-                        const SizedBox(height: 18),
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.email_outlined,
-                              color: AppColors.primary,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                alignment: Alignment.centerLeft,
-                                child: SelectableText(
-                                  supportEmail!,
-                                  maxLines: 1,
-                                  style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                      if (footerMessage != null) ...[
-                        const SizedBox(height: 18),
-                        Align(
-                          alignment: Alignment.centerLeft,
+                      const SizedBox(height: 18),
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 410),
                           child: Text(
-                            footerMessage!,
-                            textAlign: TextAlign.left,
+                            'If you experience any issues or have questions '
+                            'about using the application, please reach out to '
+                            'our support team at:',
+                            textAlign: TextAlign.center,
+                            style: textTheme.bodyLarge?.copyWith(height: 1.5),
                           ),
                         ),
-                      ],
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.email_outlined,
+                            size: 20,
+                            color: AppColors.primaryDark,
+                          ),
+                          const SizedBox(width: 10),
+                          SelectableText(
+                            _supportEmail,
+                            style: textTheme.bodyLarge?.copyWith(
+                              color: AppColors.primaryDark,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 410),
+                          child: Text(
+                            "We're here to assist you and will respond as soon as possible.",
+                            textAlign: TextAlign.center,
+                            style: textTheme.bodyLarge?.copyWith(height: 1.5),
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      const SizedBox(height: 36),
+                      SizedBox(
+                        height: 52,
+                        child: FilledButton(
+                          onPressed: () => _contactSupport(context),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.primaryDark,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text(
+                            'Contact support',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AboutPage extends StatelessWidget {
+  const _AboutPage();
+
+  static const _features = [
+    'Visual dashboard with income, expense and balance overview',
+    'Quick transaction entry — manually or via receipt scan',
+    'Customizable income and expense categories',
+    'Built-in tax calculator for Salary, PSEB Export and WHT',
+    'Secure backup and restore via Google Drive',
+    'Fingerprint-secured profile with 2FA',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(title: const Text('About')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 30, 24, 28),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Image.asset(
+                    'assets/kpxdigitalgrey.png',
+                    width: 190,
+                    height: 76,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+                const SizedBox(height: 28),
+                Text(
+                  'About Filer Flow',
+                  textAlign: TextAlign.center,
+                  style: textTheme.headlineSmall?.copyWith(
+                    color: AppColors.primaryDark,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 430),
+                    child: Text(
+                      'Filer Flow is your all-in-one personal finance '
+                      'companion. Track income and expenses, calculate taxes, '
+                      'and stay on top of your money effortlessly.',
+                      textAlign: TextAlign.center,
+                      style: textTheme.bodyLarge?.copyWith(height: 1.5),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 28),
+                Text(
+                  'Key features',
+                  style: textTheme.titleMedium?.copyWith(
+                    color: AppColors.primaryDark,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                for (final feature in _features)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 11),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(top: 5),
+                          child: Icon(
+                            Icons.check_circle_outline_rounded,
+                            size: 18,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            feature,
+                            style: textTheme.bodyMedium?.copyWith(height: 1.4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.mintSoft,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    "Your data stays on your device. You control when and where it's backed up.",
+                    textAlign: TextAlign.center,
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: AppColors.primaryDark,
+                      height: 1.45,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Version 1.0',
+                  textAlign: TextAlign.center,
+                  style: textTheme.bodyMedium?.copyWith(color: AppColors.muted),
+                ),
+                const SizedBox(height: 4),
+                Text.rich(
+                  TextSpan(
+                    text: 'Developed by ',
+                    children: [
+                      TextSpan(
+                        text: 'KPX Digital',
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: AppColors.primaryDark,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  textAlign: TextAlign.center,
+                  style: textTheme.bodyMedium?.copyWith(color: AppColors.muted),
+                ),
+              ],
             ),
           ),
         ),
