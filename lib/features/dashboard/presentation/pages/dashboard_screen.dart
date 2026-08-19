@@ -600,7 +600,9 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
     final currentUserId = context.read<AuthService>().currentUser?.uid ?? '';
     return Scaffold(
       appBar: AppBar(title: Text(widget.initialCategory ?? 'All Transactions')),
-      body: BlocBuilder<TransactionBloc, TransactionState>(
+      body: SafeArea(
+        top: false,
+        child: BlocBuilder<TransactionBloc, TransactionState>(
         builder: (context, state) {
           final storedTransactions =
               state is TransactionLoaded && state.userId == currentUserId
@@ -668,7 +670,8 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
                         ),
                       )
                       .toList(),
-                  onChanged: (month) => setState(() => _selectedMonth = month),
+                    onChanged: (month) =>
+                        setState(() => _selectedMonth = month),
                 ),
               ],
               if (_dateFilter == _TransactionDateFilter.range) ...[
@@ -745,6 +748,7 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
             ],
           );
         },
+      ),
       ),
     );
   }
@@ -919,7 +923,8 @@ class _SupportPage extends StatelessWidget {
     final emailUri = Uri(
       scheme: 'mailto',
       path: _supportEmail,
-      queryParameters: const {'subject': 'Support related to Filer Flow'},
+      //queryParameters: const {'subject': 'Support related to Filer Flow'},
+      query: 'subject=${Uri.encodeComponent('Support related to Filer Flow')}',
     );
 
     final opened = await launchUrl(emailUri);
@@ -938,105 +943,127 @@ class _SupportPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(title: const Text('Help and support')),
+      appBar: AppBar(title: const Text('Support')),
       body: LayoutBuilder(
-        builder: (context, constraints) => SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 30, 24, 22),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight - 52),
-            child: IntrinsicHeight(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 520),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Center(
-                        child: Image.asset(
-                          'assets/kpxdigitalgrey.png',
-                          width: 190,
-                          height: 76,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                      const SizedBox(height: 28),
-                      Text(
-                        'Help and support',
-                        textAlign: TextAlign.center,
-                        style: textTheme.headlineSmall?.copyWith(
-                          color: AppColors.primaryDark,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 410),
-                          child: Text(
-                            'If you experience any issues or have questions '
-                            'about using the application, please reach out to '
-                            'our support team at:',
-                            textAlign: TextAlign.center,
-                            style: textTheme.bodyLarge?.copyWith(height: 1.5),
+        builder: (context, constraints) {
+          final viewPadding = MediaQuery.viewPaddingOf(context);
+          final isCompact = constraints.maxHeight < 650;
+          final horizontalPadding = constraints.maxWidth < 360 ? 16.0 : 24.0;
+          final bottomPadding = viewPadding.bottom + 24;
+          final topPadding = isCompact ? 16.0 : 24.0;
+
+          return SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+              horizontalPadding + viewPadding.left,
+              topPadding,
+              horizontalPadding + viewPadding.right,
+              bottomPadding,
+            ),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: math.max(
+                  0,
+                  constraints.maxHeight - topPadding - bottomPadding,
+                ),
+              ),
+              child: IntrinsicHeight(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 480),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Center(
+                          child: Image.asset(
+                            'assets/kpxdigitalgrey.png',
+                            width: isCompact ? 130 : 155,
+                            height: isCompact ? 44 : 54,
+                            fit: BoxFit.contain,
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            Icons.email_outlined,
-                            size: 20,
+                        SizedBox(height: isCompact ? 14 : 20),
+                        Text(
+                          'How can we help?',
+                          textAlign: TextAlign.center,
+                          style: textTheme.headlineSmall?.copyWith(
                             color: AppColors.primaryDark,
-                          ),
-                          const SizedBox(width: 10),
-                          SelectableText(
-                            _supportEmail,
-                            style: textTheme.bodyLarge?.copyWith(
-                              color: AppColors.primaryDark,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 410),
-                          child: Text(
-                            "We're here to assist you and will respond as soon as possible.",
-                            textAlign: TextAlign.center,
-                            style: textTheme.bodyLarge?.copyWith(height: 1.5),
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
-                      ),
-                      const Spacer(),
-                      const SizedBox(height: 36),
-                      SizedBox(
-                        height: 52,
-                        child: FilledButton(
-                          onPressed: () => _contactSupport(context),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.primaryDark,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
+                        const SizedBox(height: 10),
+                        Text(
+                          'Questions or problems with Filer Flow? Send our '
+                          'support team a message and we will get back to you.',
+                          textAlign: TextAlign.center,
+                          style: textTheme.bodyMedium?.copyWith(height: 1.45),
+                        ),
+                        SizedBox(height: isCompact ? 18 : 24),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppColors.mintSoft,
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Text(
-                            'Contact support',
-                            style: TextStyle(fontWeight: FontWeight.w800),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.email_outlined,
+                                color: AppColors.primaryDark,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Email support',
+                                      style: textTheme.labelMedium?.copyWith(
+                                        color: AppColors.muted,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    SelectableText(
+                                      _supportEmail,
+                                      style: textTheme.bodyMedium?.copyWith(
+                                        color: AppColors.primaryDark,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                    ],
+                        const Spacer(),
+                        SizedBox(height: isCompact ? 20 : 32),
+                        SizedBox(
+                          height: 50,
+                          child: FilledButton.icon(
+                            onPressed: () => _contactSupport(context),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.primaryDark,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            icon: const Icon(Icons.send_outlined, size: 19),
+                            label: const Text(
+                              'Contact support',
+                              style: TextStyle(fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -1060,123 +1087,161 @@ class _AboutPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(title: const Text('About')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 30, 24, 28),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(
-                  child: Image.asset(
-                    'assets/kpxdigitalgrey.png',
-                    width: 190,
-                    height: 76,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-                const SizedBox(height: 28),
-                Text(
-                  'About Filer Flow',
-                  textAlign: TextAlign.center,
-                  style: textTheme.headlineSmall?.copyWith(
-                    color: AppColors.primaryDark,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 430),
-                    child: Text(
-                      'Filer Flow is your all-in-one personal finance '
-                      'companion. Track income and expenses, calculate taxes, '
-                      'and stay on top of your money effortlessly.',
-                      textAlign: TextAlign.center,
-                      style: textTheme.bodyLarge?.copyWith(height: 1.5),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 28),
-                Text(
-                  'Key features',
-                  style: textTheme.titleMedium?.copyWith(
-                    color: AppColors.primaryDark,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                for (final feature in _features)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 11),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.only(top: 5),
-                          child: Icon(
-                            Icons.check_circle_outline_rounded,
-                            size: 18,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            feature,
-                            style: textTheme.bodyMedium?.copyWith(height: 1.4),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.mintSoft,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    "Your data stays on your device. You control when and where it's backed up.",
-                    textAlign: TextAlign.center,
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: AppColors.primaryDark,
-                      height: 1.45,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'Version 1.0',
-                  textAlign: TextAlign.center,
-                  style: textTheme.bodyMedium?.copyWith(color: AppColors.muted),
-                ),
-                const SizedBox(height: 4),
-                Text.rich(
-                  TextSpan(
-                    text: 'Developed by ',
-                    children: [
-                      TextSpan(
-                        text: 'KPX Digital',
-                        style: textTheme.bodyMedium?.copyWith(
-                          color: AppColors.primaryDark,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                  textAlign: TextAlign.center,
-                  style: textTheme.bodyMedium?.copyWith(color: AppColors.muted),
-                ),
-              ],
+      appBar: AppBar(title: const Text('About Filer Flow')),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final viewPadding = MediaQuery.viewPaddingOf(context);
+          final isCompact = constraints.maxHeight < 720;
+          final horizontalPadding = constraints.maxWidth < 360 ? 16.0 : 24.0;
+          final verticalPadding = isCompact ? 14.0 : 22.0;
+
+          return SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+              horizontalPadding + viewPadding.left,
+              verticalPadding,
+              horizontalPadding + viewPadding.right,
+              viewPadding.bottom + verticalPadding,
             ),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 620),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Image.asset(
+                        'assets/kpxdigitalgrey.png',
+                        width: isCompact ? 120 : 145,
+                        height: isCompact ? 42 : 50,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                    SizedBox(height: isCompact ? 10 : 14),
+                    Text(
+                      'Personal finance and tax tools in one secure place.',
+                      textAlign: TextAlign.center,
+                      style: textTheme.bodyMedium?.copyWith(height: 1.4),
+                    ),
+                    SizedBox(height: isCompact ? 16 : 22),
+                    Text(
+                      'Key features',
+                      style: textTheme.titleMedium?.copyWith(
+                        color: AppColors.primaryDark,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    LayoutBuilder(
+                      builder: (context, contentConstraints) {
+                        final columns = contentConstraints.maxWidth >= 540
+                            ? 2
+                            : 1;
+                        final itemWidth = columns == 2
+                            ? (contentConstraints.maxWidth - 20) / 2
+                            : contentConstraints.maxWidth;
+
+                        return Wrap(
+                          spacing: 20,
+                          runSpacing: isCompact ? 6 : 8,
+                          children: [
+                            for (final feature in _features)
+                              SizedBox(
+                                width: itemWidth,
+                                child: _AboutFeature(
+                                  label: feature,
+                                  compact: isCompact,
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                    SizedBox(height: isCompact ? 12 : 18),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.mintSoft,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.shield_outlined,
+                            size: 21,
+                            color: AppColors.primaryDark,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Your data stays on your device. You decide when '
+                              'and where it is backed up.',
+                              style: textTheme.bodySmall?.copyWith(
+                                color: AppColors.primaryDark,
+                                height: 1.35,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: isCompact ? 12 : 18),
+                    Text.rich(
+                      TextSpan(
+                        text: 'Version 1.0  |  Developed by ',
+                        children: [
+                          TextSpan(
+                            text: 'KPX Digital',
+                            style: textTheme.bodySmall?.copyWith(
+                              color: AppColors.primaryDark,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                      textAlign: TextAlign.center,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AboutFeature extends StatelessWidget {
+  const _AboutFeature({required this.label, required this.compact});
+
+  final String label;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(
+            Icons.check_circle_outline_rounded,
+            size: compact ? 16 : 18,
+            color: AppColors.primary,
           ),
         ),
-      ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.3),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1939,7 +2004,9 @@ class _ProfilePageState extends State<_ProfilePage>
           ),
         ],
       ),
-      body: ListView(
+      body: SafeArea(
+        top: false,
+        child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Card(
@@ -1962,7 +2029,9 @@ class _ProfilePageState extends State<_ProfilePage>
                         bottom: -4,
                         child: IconButton.filled(
                           tooltip: 'Change profile image',
-                          onPressed: _isPickingImage ? null : _pickProfileImage,
+                            onPressed: _isPickingImage
+                                ? null
+                                : _pickProfileImage,
                           icon: _isPickingImage
                               ? const SizedBox.square(
                                   dimension: 18,
@@ -2076,7 +2145,9 @@ class _ProfilePageState extends State<_ProfilePage>
                 ListTile(
                   leading: const Icon(Icons.password_outlined),
                   title: const Text('Change password'),
-                  subtitle: const Text('Receive a secure password reset email'),
+                    subtitle: const Text(
+                      'Receive a secure password reset email',
+                    ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: _sendPasswordReset,
                 ),
@@ -2103,7 +2174,9 @@ class _ProfilePageState extends State<_ProfilePage>
                           color: Colors.red.shade700,
                         ),
                   title: Text(
-                    _isDeletingAccount ? 'Removing account…' : 'Remove account',
+                      _isDeletingAccount
+                          ? 'Removing account…'
+                          : 'Remove account',
                     style: TextStyle(
                       color: Colors.red.shade700,
                       fontWeight: FontWeight.w700,
@@ -2159,6 +2232,7 @@ class _ProfilePageState extends State<_ProfilePage>
             'When enabled, Filer Flow asks for your fingerprint, Face ID, or device screen lock on launch and after returning from the background.',
           ),
         ],
+      ),
       ),
     );
   }
