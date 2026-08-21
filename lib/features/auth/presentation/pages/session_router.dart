@@ -174,7 +174,7 @@ class _BiometricSessionGateState extends State<_BiometricSessionGate>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Filer Flow locked'),
+        title: const Text('Filer Flow Locked'),
         actions: [
           IconButton(
             tooltip: 'Sign out',

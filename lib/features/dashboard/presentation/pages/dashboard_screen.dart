@@ -92,7 +92,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const titles = ['DASHBOARD', 'TRANSACTIONS', 'SETTINGS', 'MORE'];
+    const titles = ['Dashboard', 'Transactions', 'Settings', 'More'];
     return Scaffold(
       appBar: AppBar(title: Text(titles[_selectedIndex])),
       body: ListenableBuilder(
@@ -572,7 +572,9 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
             : '${DateFormat('MMM d, yyyy').format(_rangeStart!)} – ${DateFormat('MMM d, yyyy').format(_rangeEnd!)}',
     };
     final category = widget.initialCategory;
-    return '${category ?? 'All transactions'} • $period';
+    // The report uses the PDF package's built-in font, which does not include
+    // the bullet glyph. Keep this label ASCII so it renders correctly in print.
+    return '${category ?? 'All transactions'} - $period';
   }
 
   Widget _rangeDateField({required bool isStart}) {
@@ -603,152 +605,152 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
       body: SafeArea(
         top: false,
         child: BlocBuilder<TransactionBloc, TransactionState>(
-        builder: (context, state) {
-          final storedTransactions =
-              state is TransactionLoaded && state.userId == currentUserId
-              ? state.transactions
-              : const <entity.Transaction>[];
-          final resolvedTransactions = storedTransactions
-              .map(
-                (transaction) => transaction.copyWith(
-                  isExpense: widget.categoryPreferences
-                      .resolveTransactionTypeForCategory(
-                        categoryName: transaction.category,
-                        transactionIsExpense: transaction.isExpense,
-                      ),
-                ),
-              )
-              .toList();
-          final monthOptions = _buildMonthOptions(resolvedTransactions);
-          final visibleTransactions = _applyFilters(resolvedTransactions);
-
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              SegmentedButton<_TransactionDateFilter>(
-                expandedInsets: EdgeInsets.zero,
-                showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(
-                    value: _TransactionDateFilter.all,
-                    label: Text('All'),
-                  ),
-                  ButtonSegment(
-                    value: _TransactionDateFilter.month,
-                    label: Text('Month'),
-                  ),
-                  ButtonSegment(
-                    value: _TransactionDateFilter.range,
-                    label: Text('Range'),
-                  ),
-                ],
-                selected: {_dateFilter},
-                onSelectionChanged: (selection) {
-                  setState(() {
-                    _dateFilter = selection.first;
-                    if (_dateFilter == _TransactionDateFilter.month &&
-                        _selectedMonth == null &&
-                        monthOptions.isNotEmpty) {
-                      _selectedMonth = monthOptions.first;
-                    }
-                  });
-                },
-              ),
-              if (_dateFilter == _TransactionDateFilter.month) ...[
-                const SizedBox(height: 12),
-                DropdownButtonFormField<DateTime>(
-                  initialValue: _selectedMonth,
-                  decoration: const InputDecoration(
-                    labelText: 'Month',
-                    prefixIcon: Icon(Icons.calendar_month_outlined),
-                  ),
-                  items: monthOptions
-                      .map(
-                        (month) => DropdownMenuItem(
-                          value: month,
-                          child: Text(_monthLabel(month)),
+          builder: (context, state) {
+            final storedTransactions =
+                state is TransactionLoaded && state.userId == currentUserId
+                ? state.transactions
+                : const <entity.Transaction>[];
+            final resolvedTransactions = storedTransactions
+                .map(
+                  (transaction) => transaction.copyWith(
+                    isExpense: widget.categoryPreferences
+                        .resolveTransactionTypeForCategory(
+                          categoryName: transaction.category,
+                          transactionIsExpense: transaction.isExpense,
                         ),
-                      )
-                      .toList(),
+                  ),
+                )
+                .toList();
+            final monthOptions = _buildMonthOptions(resolvedTransactions);
+            final visibleTransactions = _applyFilters(resolvedTransactions);
+
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                SegmentedButton<_TransactionDateFilter>(
+                  expandedInsets: EdgeInsets.zero,
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(
+                      value: _TransactionDateFilter.all,
+                      label: Text('All'),
+                    ),
+                    ButtonSegment(
+                      value: _TransactionDateFilter.month,
+                      label: Text('Month'),
+                    ),
+                    ButtonSegment(
+                      value: _TransactionDateFilter.range,
+                      label: Text('Range'),
+                    ),
+                  ],
+                  selected: {_dateFilter},
+                  onSelectionChanged: (selection) {
+                    setState(() {
+                      _dateFilter = selection.first;
+                      if (_dateFilter == _TransactionDateFilter.month &&
+                          _selectedMonth == null &&
+                          monthOptions.isNotEmpty) {
+                        _selectedMonth = monthOptions.first;
+                      }
+                    });
+                  },
+                ),
+                if (_dateFilter == _TransactionDateFilter.month) ...[
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<DateTime>(
+                    initialValue: _selectedMonth,
+                    decoration: const InputDecoration(
+                      labelText: 'Month',
+                      prefixIcon: Icon(Icons.calendar_month_outlined),
+                    ),
+                    items: monthOptions
+                        .map(
+                          (month) => DropdownMenuItem(
+                            value: month,
+                            child: Text(_monthLabel(month)),
+                          ),
+                        )
+                        .toList(),
                     onChanged: (month) =>
                         setState(() => _selectedMonth = month),
-                ),
-              ],
-              if (_dateFilter == _TransactionDateFilter.range) ...[
-                const SizedBox(height: 12),
+                  ),
+                ],
+                if (_dateFilter == _TransactionDateFilter.range) ...[
+                  const SizedBox(height: 12),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      if (constraints.maxWidth < 430) {
+                        return Column(
+                          children: [
+                            _rangeDateField(isStart: true),
+                            const SizedBox(height: 10),
+                            _rangeDateField(isStart: false),
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: _rangeDateField(isStart: true)),
+                          const SizedBox(width: 12),
+                          Expanded(child: _rangeDateField(isStart: false)),
+                        ],
+                      );
+                    },
+                  ),
+                  if (_rangeStart == null || _rangeEnd == null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Select both dates to filter transactions in between.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ],
+                const SizedBox(height: 14),
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    if (constraints.maxWidth < 430) {
+                    final count = Text(
+                      '${visibleTransactions.length} transactions',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    );
+                    final printButton = _PrintTransactionsButton(
+                      transactions: visibleTransactions,
+                      filterLabel: _filterLabel(),
+                      buttonLabel: 'Print',
+                    );
+                    if (constraints.maxWidth < 360) {
                       return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _rangeDateField(isStart: true),
-                          const SizedBox(height: 10),
-                          _rangeDateField(isStart: false),
+                          count,
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: printButton,
+                          ),
                         ],
                       );
                     }
                     return Row(
                       children: [
-                        Expanded(child: _rangeDateField(isStart: true)),
-                        const SizedBox(width: 12),
-                        Expanded(child: _rangeDateField(isStart: false)),
+                        Expanded(child: count),
+                        printButton,
                       ],
                     );
                   },
                 ),
-                if (_rangeStart == null || _rangeEnd == null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'Select both dates to filter transactions in between.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
+                const SizedBox(height: 10),
+                _TransactionList(
+                  state: state,
+                  currentUserId: currentUserId,
+                  transactions: visibleTransactions,
+                ),
               ],
-              const SizedBox(height: 14),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final count = Text(
-                    '${visibleTransactions.length} transactions',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  );
-                  final printButton = _PrintTransactionsButton(
-                    transactions: visibleTransactions,
-                    filterLabel: _filterLabel(),
-                    buttonLabel: 'Print',
-                  );
-                  if (constraints.maxWidth < 360) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        count,
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: printButton,
-                        ),
-                      ],
-                    );
-                  }
-                  return Row(
-                    children: [
-                      Expanded(child: count),
-                      printButton,
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 10),
-              _TransactionList(
-                state: state,
-                currentUserId: currentUserId,
-                transactions: visibleTransactions,
-              ),
-            ],
-          );
-        },
-      ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -1331,7 +1333,7 @@ class _CategorySettingsPage extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               children: [
                 Text(
-                  'CATEGORY SETTINGS',
+                  'Category Settings',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
@@ -2007,232 +2009,232 @@ class _ProfilePageState extends State<_ProfilePage>
       body: SafeArea(
         top: false,
         child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                children: [
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      CircleAvatar(
-                        radius: 44,
-                        backgroundImage: profileImage,
-                        child: profileImage != null
-                            ? null
-                            : const Icon(Icons.person_outline, size: 42),
-                      ),
-                      Positioned(
-                        right: -4,
-                        bottom: -4,
-                        child: IconButton.filled(
-                          tooltip: 'Change profile image',
+          padding: const EdgeInsets.all(16),
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  children: [
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        CircleAvatar(
+                          radius: 44,
+                          backgroundImage: profileImage,
+                          child: profileImage != null
+                              ? null
+                              : const Icon(Icons.person_outline, size: 42),
+                        ),
+                        Positioned(
+                          right: -4,
+                          bottom: -4,
+                          child: IconButton.filled(
+                            tooltip: 'Change profile image',
                             onPressed: _isPickingImage
                                 ? null
                                 : _pickProfileImage,
-                          icon: _isPickingImage
-                              ? const SizedBox.square(
-                                  dimension: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.camera_alt_outlined),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    user?.displayName ?? 'User',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(user?.email ?? ''),
-                  const SizedBox(height: 8),
-                  Chip(
-                    avatar: Icon(
-                      user?.emailVerified == true
-                          ? Icons.verified
-                          : Icons.warning_amber,
-                      size: 18,
-                    ),
-                    label: Text(
-                      user?.emailVerified == true
-                          ? 'Email verified'
-                          : 'Email not verified',
-                    ),
-                  ),
-                  if (_isUpdatingProfile) ...[
-                    const SizedBox(height: 12),
-                    const LinearProgressIndicator(),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          if (_pendingEmailChange != null) ...[
-            const SizedBox(height: 12),
-            Card(
-              color: Theme.of(context).colorScheme.secondaryContainer,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.pending_actions_outlined),
-                      title: const Text('Email change pending'),
-                      subtitle: Text(
-                        'Verify the change link sent to ${_pendingEmailChange!}.',
-                      ),
-                    ),
-                    Wrap(
-                      alignment: WrapAlignment.end,
-                      spacing: 8,
-                      children: [
-                        TextButton(
-                          onPressed: _isUpdatingProfile
-                              ? null
-                              : _dismissPendingEmailChange,
-                          child: const Text('Dismiss'),
-                        ),
-                        TextButton.icon(
-                          onPressed: _isUpdatingProfile
-                              ? null
-                              : _resendPendingEmailChange,
-                          icon: const Icon(Icons.send_outlined),
-                          label: const Text('Resend link'),
-                        ),
-                        FilledButton.icon(
-                          onPressed: _isUpdatingProfile
-                              ? null
-                              : _refreshAccount,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('I verified, refresh'),
+                            icon: _isPickingImage
+                                ? const SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.camera_alt_outlined),
+                          ),
                         ),
                       ],
                     ),
+                    const SizedBox(height: 12),
+                    Text(
+                      user?.displayName ?? 'User',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(user?.email ?? ''),
+                    const SizedBox(height: 8),
+                    Chip(
+                      avatar: Icon(
+                        user?.emailVerified == true
+                            ? Icons.verified
+                            : Icons.warning_amber,
+                        size: 18,
+                      ),
+                      label: Text(
+                        user?.emailVerified == true
+                            ? 'Email verified'
+                            : 'Email not verified',
+                      ),
+                    ),
+                    if (_isUpdatingProfile) ...[
+                      const SizedBox(height: 12),
+                      const LinearProgressIndicator(),
+                    ],
                   ],
                 ),
               ),
             ),
-          ],
-          const SizedBox(height: 20),
-          Text(
-            'Account',
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 10),
-          Card(
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.edit_outlined),
-                  title: const Text('Name and email'),
-                  subtitle: const Text('Update your account information'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: _isUpdatingProfile ? null : _editProfile,
+            if (_pendingEmailChange != null) ...[
+              const SizedBox(height: 12),
+              Card(
+                color: Theme.of(context).colorScheme.secondaryContainer,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.pending_actions_outlined),
+                        title: const Text('Email change pending'),
+                        subtitle: Text(
+                          'Verify the change link sent to ${_pendingEmailChange!}.',
+                        ),
+                      ),
+                      Wrap(
+                        alignment: WrapAlignment.end,
+                        spacing: 8,
+                        children: [
+                          TextButton(
+                            onPressed: _isUpdatingProfile
+                                ? null
+                                : _dismissPendingEmailChange,
+                            child: const Text('Dismiss'),
+                          ),
+                          TextButton.icon(
+                            onPressed: _isUpdatingProfile
+                                ? null
+                                : _resendPendingEmailChange,
+                            icon: const Icon(Icons.send_outlined),
+                            label: const Text('Resend link'),
+                          ),
+                          FilledButton.icon(
+                            onPressed: _isUpdatingProfile
+                                ? null
+                                : _refreshAccount,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('I verified, refresh'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.password_outlined),
-                  title: const Text('Change password'),
+              ),
+            ],
+            const SizedBox(height: 20),
+            Text(
+              'Account',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 10),
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.edit_outlined),
+                    title: const Text('Name and email'),
+                    subtitle: const Text('Update your account information'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: _isUpdatingProfile ? null : _editProfile,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.password_outlined),
+                    title: const Text('Change password'),
                     subtitle: const Text(
                       'Receive a secure password reset email',
                     ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: _sendPasswordReset,
-                ),
-                if (user?.emailVerified != true &&
-                    _pendingEmailChange == null) ...[
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: _sendPasswordReset,
+                  ),
+                  if (user?.emailVerified != true &&
+                      _pendingEmailChange == null) ...[
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: const Icon(Icons.mark_email_unread_outlined),
+                      title: const Text('Verify email'),
+                      subtitle: const Text('Send another verification link'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: _sendEmailVerification,
+                    ),
+                  ],
                   const Divider(height: 1),
                   ListTile(
-                    leading: const Icon(Icons.mark_email_unread_outlined),
-                    title: const Text('Verify email'),
-                    subtitle: const Text('Send another verification link'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: _sendEmailVerification,
-                  ),
-                ],
-                const Divider(height: 1),
-                ListTile(
-                  leading: _isDeletingAccount
-                      ? const SizedBox.square(
-                          dimension: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Icon(
-                          Icons.person_remove_outlined,
-                          color: Colors.red.shade700,
-                        ),
-                  title: Text(
+                    leading: _isDeletingAccount
+                        ? const SizedBox.square(
+                            dimension: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(
+                            Icons.person_remove_outlined,
+                            color: Colors.red.shade700,
+                          ),
+                    title: Text(
                       _isDeletingAccount
                           ? 'Removing account…'
                           : 'Remove account',
-                    style: TextStyle(
-                      color: Colors.red.shade700,
-                      fontWeight: FontWeight.w700,
+                      style: TextStyle(
+                        color: Colors.red.shade700,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
+                    subtitle: const Text('Permanently delete your account'),
+                    onTap: _isDeletingAccount || _isUpdatingProfile
+                        ? null
+                        : _removeAccount,
                   ),
-                  subtitle: const Text('Permanently delete your account'),
-                  onTap: _isDeletingAccount || _isUpdatingProfile
-                      ? null
-                      : _removeAccount,
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Security',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 10),
+            Card(
+              child: ListTile(
+                leading: Icon(
+                  _isBiometricEnabled ? Icons.fingerprint : Icons.lock_outline,
+                  color: _isBiometricEnabled ? Colors.green : Colors.teal,
                 ),
-              ],
+                title: Text(
+                  _isBiometricEnabled
+                      ? 'Fingerprint app lock enabled'
+                      : 'Enable fingerprint app lock',
+                ),
+                subtitle: Text(
+                  !_isBiometricSupported
+                      ? 'Set up biometrics or a device screen lock first'
+                      : _isBiometricEnabled
+                      ? 'This app requires device authentication to open.'
+                      : 'Protect this app with your device security.',
+                ),
+                trailing: _isLoadingBiometric
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.chevron_right),
+                onTap: _isBiometricSupported && !_isLoadingBiometric
+                    ? _toggleBiometricLock
+                    : null,
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Security',
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 10),
-          Card(
-            child: ListTile(
-              leading: Icon(
-                _isBiometricEnabled ? Icons.fingerprint : Icons.lock_outline,
-                color: _isBiometricEnabled ? Colors.green : Colors.teal,
-              ),
-              title: Text(
-                _isBiometricEnabled
-                    ? 'Fingerprint app lock enabled'
-                    : 'Enable fingerprint app lock',
-              ),
-              subtitle: Text(
-                !_isBiometricSupported
-                    ? 'Set up biometrics or a device screen lock first'
-                    : _isBiometricEnabled
-                    ? 'This app requires device authentication to open.'
-                    : 'Protect this app with your device security.',
-              ),
-              trailing: _isLoadingBiometric
-                  ? const SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.chevron_right),
-              onTap: _isBiometricSupported && !_isLoadingBiometric
-                  ? _toggleBiometricLock
-                  : null,
+            const SizedBox(height: 12),
+            const Text(
+              'When enabled, Filer Flow asks for your fingerprint, Face ID, or device screen lock on launch and after returning from the background.',
             ),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'When enabled, Filer Flow asks for your fingerprint, Face ID, or device screen lock on launch and after returning from the background.',
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -2283,7 +2285,7 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Edit profile'),
+      title: const Text('Edit Profile'),
       content: SizedBox(
         width: 420,
         child: Form(
@@ -3384,7 +3386,8 @@ String _transactionFilterLabel(DateTime? selectedMonth) {
   final periodLabel = selectedMonth == null
       ? 'All dates'
       : DateFormat('MMMM yyyy').format(selectedMonth);
-  return 'All transactions • $periodLabel';
+  // Keep printable filter labels ASCII; the PDF's default font lacks bullets.
+  return 'All transactions - $periodLabel';
 }
 
 class _PrintTransactionsButton extends StatefulWidget {
@@ -3544,7 +3547,7 @@ class _ComparisonDashboardPageState extends State<_ComparisonDashboardPage> {
       initialDate: current ?? now,
       firstDate: DateTime(2000),
       lastDate: DateTime(now.year + 5, 12, 31),
-      helpText: isStart ? 'SELECT START DATE' : 'SELECT END DATE',
+      helpText: isStart ? 'Select Start Date' : 'Select End Date',
     );
     if (pickedDate == null || !mounted) return;
 
@@ -3555,7 +3558,7 @@ class _ComparisonDashboardPageState extends State<_ComparisonDashboardPage> {
                 ? const TimeOfDay(hour: 0, minute: 0)
                 : const TimeOfDay(hour: 23, minute: 59))
           : TimeOfDay.fromDateTime(current),
-      helpText: isStart ? 'SELECT START TIME' : 'SELECT END TIME',
+      helpText: isStart ? 'Select Start Time' : 'Select End Time',
     );
     if (pickedTime == null || !mounted) return;
 
@@ -3611,7 +3614,7 @@ class _ComparisonDashboardPageState extends State<_ComparisonDashboardPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('COMPARISON DASHBOARD'),
+        title: const Text('Comparison Dashboard'),
         backgroundColor: AppColors.primaryDark,
         foregroundColor: Colors.white,
       ),

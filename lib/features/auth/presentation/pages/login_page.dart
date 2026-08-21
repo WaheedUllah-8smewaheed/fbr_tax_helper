@@ -264,7 +264,7 @@ class _TotpSignInDialogState extends State<_TotpSignInDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       icon: const Icon(Icons.phonelink_lock_outlined),
-      title: const Text('Two-factor authentication'),
+      title: const Text('Two-Factor Authentication'),
       content: SizedBox(
         width: 360,
         child: Column(

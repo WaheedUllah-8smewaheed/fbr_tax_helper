@@ -514,7 +514,7 @@ class _HeaderBand extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'TAX CALCULATOR',
+          'Tax Calculator',
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w800,
             letterSpacing: 0,

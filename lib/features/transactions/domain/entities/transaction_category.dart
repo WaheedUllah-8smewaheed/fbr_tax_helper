@@ -27,7 +27,7 @@ class TransactionCategory {
     isExpense: true,
   );
   static const subscriptions = TransactionCategory(
-    name: 'Netflix',
+    name: 'Streaming',
     isExpense: true,
   );
   static const giftsAndRewards = TransactionCategory(

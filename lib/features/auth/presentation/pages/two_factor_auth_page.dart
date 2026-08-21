@@ -241,7 +241,7 @@ class _TwoFactorAuthPageState extends State<TwoFactorAuthPage> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: !widget.requiredEnrollment,
-        title: const Text('Two-factor authentication'),
+        title: const Text('Two-Factor Authentication'),
         actions: widget.requiredEnrollment
             ? [
                 IconButton(
