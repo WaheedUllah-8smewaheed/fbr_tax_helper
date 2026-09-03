@@ -59,6 +59,7 @@ dependencies:
 
   sqflite_common_ffi_web: ^1.1.1
   sqflite_common_ffi: ^2.4.0+3
+  firebase_app_check: ^0.3.2+10
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -85,6 +86,9 @@ flutter:
   uses-material-design: true
   # To add assets to your application, add an assets section, like this:
   assets:
+    - assets/app_icon.png
+    - assets/app_logo_splash_gold.png
+    - assets/app_logo_transparent.png
     - assets/tax.png
     - assets/kpxdigitalblue.png
     - assets/kpxdigitalwhite.png
@@ -122,17 +126,19 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/tax.png"
+  image_path: "assets/app_icon.png"
+  adaptive_icon_background: "#F4F5F7"
+  adaptive_icon_foreground: "assets/app_icon.png"
   remove_alpha_ios: true
   min_sdk_android: 21 # Your app's minimum Android SDK version
   web:
     generate: true
-    image_path: "assets/tax.png"
+    image_path: "assets/app_icon.png"
     background_color: "#0F6B57"
     theme_color: "#0F6B57"
   windows:
     generate: true
-    image_path: "assets/tax.png"
+    image_path: "assets/app_icon.png"
     icon_size: 256
   macos:
     generate: true

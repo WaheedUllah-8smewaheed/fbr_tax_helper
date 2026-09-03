@@ -99,4 +99,58 @@ void main() {
       );
     },
   );
+
+  test('adding and removing custom subcategories persists and updates hierarchy', () async {
+    FlutterSecureStorage.setMockInitialValues({});
+    final service = CategoryPreferencesService();
+    addTearDown(service.dispose);
+
+    await service.loadForUser('user-custom-cat');
+
+    // Add custom subcategory under Bills
+    await service.addSubcategory(
+      parentName: 'Bills',
+      categoryName: 'Solar Maintenance',
+    );
+
+    expect(service.isCustomCategory('Solar Maintenance'), isTrue);
+    expect(service.parentNameFor('Solar Maintenance'), 'Bills');
+    expect(service.isExpense('Solar Maintenance'), isTrue);
+    expect(
+      service.childrenOf('Bills').map((c) => c.name),
+      contains('Solar Maintenance'),
+    );
+
+    // Verify hierarchy includes it
+    final billsOptions = service.hierarchy['Home']?['Bills']?.map((c) => c.name);
+    expect(billsOptions, contains('Solar Maintenance'));
+
+    // Remove custom subcategory
+    await service.removeSubcategory(
+      parentName: 'Bills',
+      categoryName: 'Solar Maintenance',
+    );
+
+    expect(service.isCustomCategory('Solar Maintenance'), isFalse);
+    expect(
+      service.childrenOf('Bills').map((c) => c.name),
+      isNot(contains('Solar Maintenance')),
+    );
+
+    // Add and reload to test persistence
+    await service.addSubcategory(
+      parentName: 'Bills',
+      categoryName: 'Gardener',
+    );
+
+    final service2 = CategoryPreferencesService();
+    addTearDown(service2.dispose);
+    await service2.loadForUser('user-custom-cat');
+
+    expect(service2.isCustomCategory('Gardener'), isTrue);
+    expect(
+      service2.childrenOf('Bills').map((c) => c.name),
+      contains('Gardener'),
+    );
+  });
 }

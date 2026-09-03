@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fbr_tax_helper/features/dashboard/presentation/pages/dashboard_screen.dart';
 import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction.dart';
 import 'package:fbr_tax_helper/features/transactions/services/category_preferences_service.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 void main() {
   test('filters transactions by selected month', () {
@@ -45,6 +46,34 @@ void main() {
       filtered.every((transaction) => transaction.date.month == 2),
       isTrue,
     );
+  });
+
+  test('calculates income and expense totals for the visible transactions', () {
+    final totals = calculateTransactionFilterTotals([
+      Transaction(
+        userId: '1',
+        title: 'Salary',
+        beneficiary: '',
+        purpose: '',
+        amount: 50000,
+        isExpense: false,
+        date: DateTime(2025, 2, 1),
+        category: 'Salary',
+      ),
+      Transaction(
+        userId: '1',
+        title: 'Rent',
+        beneficiary: '',
+        purpose: '',
+        amount: 15000,
+        isExpense: true,
+        date: DateTime(2025, 2, 2),
+        category: 'Housing & Utils',
+      ),
+    ]);
+
+    expect(totals.income, 50000);
+    expect(totals.expenses, 15000);
   });
 
   test(
@@ -119,6 +148,40 @@ void main() {
     );
   });
 
+  test('parent category reports include all of its subcategories', () {
+    Transaction transaction(String category) => Transaction(
+      userId: '1',
+      title: category,
+      beneficiary: '',
+      purpose: '',
+      amount: 100,
+      isExpense: false,
+      date: DateTime(2026, 1, 1),
+      category: category,
+    );
+
+    expect(
+      [transaction('Salary'), transaction('Bonus'), transaction('Groceries')]
+          .where(
+            (value) => transactionBelongsToCategory(
+              value,
+              'Salary',
+              includeSubcategories: true,
+            ),
+          )
+          .map((value) => value.category),
+      ['Salary', 'Bonus'],
+    );
+    expect(
+      transactionBelongsToCategory(
+        transaction('Bonus'),
+        'Salary',
+        includeSubcategories: false,
+      ),
+      isFalse,
+    );
+  });
+
   test('finds a transaction only when it exceeds half the period total', () {
     Transaction transaction(String title, double amount) => Transaction(
       userId: '1',
@@ -138,5 +201,109 @@ void main() {
     final exactlyHalf = transaction('Exactly half', 500);
     expect(findDominantTransaction([exactlyHalf, remaining], 1000), isNull);
     expect(findDominantTransaction(const [], 0), isNull);
+  });
+
+  group('resolveCategoryMode', () {
+    late CategoryPreferencesService preferences;
+
+    setUp(() {
+      preferences = CategoryPreferencesService();
+    });
+
+    tearDown(() {
+      preferences.dispose();
+    });
+
+    test('returns both when category is null (all transactions)', () {
+      expect(
+        resolveCategoryMode(
+          categoryName: null,
+          categoryPreferences: preferences,
+        ),
+        CategoryMode.both,
+      );
+    });
+
+    test('returns expense for expense parent and subcategories', () {
+      expect(
+        resolveCategoryMode(
+          categoryName: 'Bills',
+          categoryPreferences: preferences,
+        ),
+        CategoryMode.expense,
+      );
+      expect(
+        resolveCategoryMode(
+          categoryName: 'Electricity',
+          categoryPreferences: preferences,
+        ),
+        CategoryMode.expense,
+      );
+      expect(
+        resolveCategoryMode(
+          categoryName: 'Doctor',
+          categoryPreferences: preferences,
+        ),
+        CategoryMode.expense,
+      );
+    });
+
+    test('returns income for income parent and subcategories', () {
+      expect(
+        resolveCategoryMode(
+          categoryName: 'Salary',
+          categoryPreferences: preferences,
+        ),
+        CategoryMode.income,
+      );
+      expect(
+        resolveCategoryMode(
+          categoryName: 'Bonus',
+          categoryPreferences: preferences,
+        ),
+        CategoryMode.income,
+      );
+      expect(
+        resolveCategoryMode(
+          categoryName: 'Business Income',
+          categoryPreferences: preferences,
+        ),
+        CategoryMode.income,
+      );
+    });
+
+    test('returns both for dual-mode parent and subcategories', () {
+      expect(
+        resolveCategoryMode(
+          categoryName: 'Gifts',
+          categoryPreferences: preferences,
+        ),
+        CategoryMode.both,
+      );
+      expect(
+        resolveCategoryMode(
+          categoryName: 'Gift Given',
+          categoryPreferences: preferences,
+        ),
+        CategoryMode.both,
+      );
+    });
+
+    test('returns mode correctly for custom subcategories', () async {
+      FlutterSecureStorage.setMockInitialValues({});
+      await preferences.loadForUser('test-user');
+      await preferences.addSubcategory(
+        parentName: 'Bills',
+        categoryName: 'Solar Panel Maintenance',
+      );
+
+      expect(
+        resolveCategoryMode(
+          categoryName: 'Solar Panel Maintenance',
+          categoryPreferences: preferences,
+        ),
+        CategoryMode.expense,
+      );
+    });
   });
 }

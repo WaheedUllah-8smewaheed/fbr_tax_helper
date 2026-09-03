@@ -60,4 +60,24 @@ void main() {
     ]);
     expect(TransactionCategory.hierarchyPathFor('Old Custom'), ['Old Custom']);
   });
+
+  test('commitments super category contains monthly home payment and committee', () {
+    final commitmentCategories = TransactionCategory.childrenOf('Commitments');
+
+    expect(
+      commitmentCategories.map((category) => category.name),
+      containsAll(['Monthly Home Payment', 'Committee']),
+    );
+    expect(commitmentCategories.every((category) => category.isExpense), isTrue);
+    expect(TransactionCategory.hierarchyPathFor('Monthly Home Payment'), [
+      'Commitments',
+      'Commitments',
+      'Monthly Home Payment',
+    ]);
+    expect(TransactionCategory.hierarchyPathFor('Committee'), [
+      'Commitments',
+      'Commitments',
+      'Committee',
+    ]);
+  });
 }

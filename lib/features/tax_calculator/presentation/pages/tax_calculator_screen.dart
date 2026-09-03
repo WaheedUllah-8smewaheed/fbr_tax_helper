@@ -207,6 +207,10 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
             state: _state,
             metrics: metrics,
             taxYear: _selectedTaxYear,
+            // The public calculator already exposes this label in its app bar.
+            // Keep the header title on larger layouts, but avoid repeating it
+            // in the constrained phone layout.
+            showTitle: !(widget.fitToViewport && metrics.isNarrow),
           ),
           SizedBox(height: metrics.sectionSpacing),
           _CalculatorForm(
@@ -485,11 +489,13 @@ class _HeaderBand extends StatelessWidget {
   final TaxCalculatorState state;
   final _AdaptiveMetrics metrics;
   final String taxYear;
+  final bool showTitle;
 
   const _HeaderBand({
     required this.state,
     required this.metrics,
     required this.taxYear,
+    required this.showTitle,
   });
 
   @override
@@ -513,14 +519,16 @@ class _HeaderBand extends StatelessWidget {
     final headerText = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Tax Calculator',
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0,
+        if (showTitle) ...[
+          Text(
+            'Tax Calculator',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0,
+            ),
           ),
-        ),
-        const SizedBox(height: 4),
+          const SizedBox(height: 4),
+        ],
         Text(
           state is TaxCalculatorCalculated
               ? 'Your latest tax estimate is ready.'

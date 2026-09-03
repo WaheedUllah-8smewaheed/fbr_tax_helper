@@ -94,7 +94,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     const titles = ['Dashboard', 'Transactions', 'Settings', 'More'];
     return Scaffold(
-      appBar: AppBar(title: Text(titles[_selectedIndex])),
+      appBar: _selectedIndex == 0
+          ? null
+          : AppBar(title: Text(titles[_selectedIndex])),
       body: ListenableBuilder(
         listenable: _categoryPreferences,
         builder: (context, _) => IndexedStack(
@@ -157,6 +159,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 enum TransactionTypeFilter { income, expense, both }
 
+class TransactionFilterTotals {
+  const TransactionFilterTotals({required this.income, required this.expenses});
+
+  final double income;
+  final double expenses;
+}
+
+TransactionFilterTotals calculateTransactionFilterTotals(
+  Iterable<entity.Transaction> transactions,
+) {
+  var income = 0.0;
+  var expenses = 0.0;
+  for (final transaction in transactions) {
+    if (transaction.isExpense) {
+      expenses += transaction.amount;
+    } else {
+      income += transaction.amount;
+    }
+  }
+  return TransactionFilterTotals(income: income, expenses: expenses);
+}
+
+CategoryMode resolveCategoryMode({
+  required String? categoryName,
+  required CategoryPreferencesService categoryPreferences,
+}) {
+  if (categoryName == null) {
+    return CategoryMode.both;
+  }
+  if (categoryPreferences.childrenOf(categoryName).isNotEmpty) {
+    return categoryPreferences.modeForParent(categoryName);
+  }
+  if (categoryPreferences.isDualMode(categoryName)) {
+    return CategoryMode.both;
+  }
+  return categoryPreferences.isExpense(categoryName)
+      ? CategoryMode.expense
+      : CategoryMode.income;
+}
+
 class _TransactionsPage extends StatefulWidget {
   const _TransactionsPage({
     required this.categoryPreferences,
@@ -182,12 +224,14 @@ class _TransactionsPageState extends State<_TransactionsPage> {
         builder: (context) => AddTransactionPage(
           parentCategory: parentCategory,
           categoryOptions: categoryOptions,
-          onViewCategoryHistory: (category) {
+          categoryPreferences: widget.categoryPreferences,
+          onViewCategoryHistory: (category, {required includeSubcategories}) {
             Navigator.of(this.context).push(
               MaterialPageRoute(
                 builder: (context) => _AllTransactionsPage(
                   categoryPreferences: widget.categoryPreferences,
                   initialCategory: category,
+                  initialCategoryIncludesChildren: includeSubcategories,
                 ),
               ),
             );
@@ -217,7 +261,7 @@ class _TransactionsPageState extends State<_TransactionsPage> {
   }
 
   List<_TransactionCategoryCardData> _visibleCategoryCards() {
-    return TransactionCategory.hierarchy.entries.expand((superCategory) {
+    return widget.categoryPreferences.hierarchy.entries.expand((superCategory) {
       return superCategory.value.entries
           .map(
             (parent) => _TransactionCategoryCardData(
@@ -232,16 +276,19 @@ class _TransactionsPageState extends State<_TransactionsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final categoryCards = _visibleCategoryCards();
+    return ListenableBuilder(
+      listenable: widget.categoryPreferences,
+      builder: (context, _) {
+        final categoryCards = _visibleCategoryCards();
 
-    return Scaffold(
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          SegmentedButton<TransactionTypeFilter>(
-            expandedInsets: EdgeInsets.zero,
-            showSelectedIcon: false,
-            segments: const [
+        return Scaffold(
+          body: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              SegmentedButton<TransactionTypeFilter>(
+                expandedInsets: EdgeInsets.zero,
+                showSelectedIcon: false,
+                segments: const [
               ButtonSegment(
                 value: TransactionTypeFilter.income,
                 label: Text('Income'),
@@ -307,6 +354,8 @@ class _TransactionsPageState extends State<_TransactionsPage> {
         ],
       ),
     );
+  },
+);
   }
 }
 
@@ -488,10 +537,12 @@ class _AllTransactionsPage extends StatefulWidget {
   const _AllTransactionsPage({
     required this.categoryPreferences,
     this.initialCategory,
+    this.initialCategoryIncludesChildren = false,
   });
 
   final CategoryPreferencesService categoryPreferences;
   final String? initialCategory;
+  final bool initialCategoryIncludesChildren;
 
   @override
   State<_AllTransactionsPage> createState() => _AllTransactionsPageState();
@@ -533,7 +584,11 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
   ) {
     return transactions.where((transaction) {
       if (widget.initialCategory != null &&
-          transaction.category != widget.initialCategory) {
+          !transactionBelongsToCategory(
+            transaction,
+            widget.initialCategory!,
+            includeSubcategories: widget.initialCategoryIncludesChildren,
+          )) {
         return false;
       }
       return switch (_dateFilter) {
@@ -623,6 +678,13 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
                 .toList();
             final monthOptions = _buildMonthOptions(resolvedTransactions);
             final visibleTransactions = _applyFilters(resolvedTransactions);
+            final visibleTotals = calculateTransactionFilterTotals(
+              visibleTransactions,
+            );
+            final categoryMode = resolveCategoryMode(
+              categoryName: widget.initialCategory,
+              categoryPreferences: widget.categoryPreferences,
+            );
 
             return ListView(
               padding: const EdgeInsets.all(16),
@@ -709,11 +771,10 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
                 const SizedBox(height: 14),
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final count = Text(
-                      '${visibleTransactions.length} transactions',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                    final count = _TransactionFilterSummary(
+                      transactionCount: visibleTransactions.length,
+                      totals: visibleTotals,
+                      mode: categoryMode,
                     );
                     final printButton = _PrintTransactionsButton(
                       transactions: visibleTransactions,
@@ -754,6 +815,70 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
       ),
     );
   }
+}
+
+class _TransactionFilterSummary extends StatelessWidget {
+  const _TransactionFilterSummary({
+    required this.transactionCount,
+    required this.totals,
+    this.mode = CategoryMode.both,
+  });
+
+  final int transactionCount;
+  final TransactionFilterTotals totals;
+  final CategoryMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    final countStyle = Theme.of(
+      context,
+    ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800);
+    final totalStyle = Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700);
+
+    final showIncome = mode == CategoryMode.income || mode == CategoryMode.both;
+    final showExpense = mode == CategoryMode.expense || mode == CategoryMode.both;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '$transactionCount transaction${transactionCount == 1 ? '' : 's'}',
+          style: countStyle,
+        ),
+        const SizedBox(height: 3),
+        Wrap(
+          spacing: 12,
+          runSpacing: 3,
+          children: [
+            if (showIncome)
+              Text(
+                'Income: ${_formatDashboardMoney(totals.income)}',
+                style: totalStyle?.copyWith(color: Colors.green.shade700),
+              ),
+            if (showExpense)
+              Text(
+                'Expenses: ${_formatDashboardMoney(totals.expenses)}',
+                style: totalStyle?.copyWith(color: Colors.red.shade700),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+bool transactionBelongsToCategory(
+  entity.Transaction transaction,
+  String category, {
+  bool includeSubcategories = false,
+}) {
+  if (transaction.category == category) return true;
+  return includeSubcategories &&
+      TransactionCategory.childrenOf(
+        category,
+      ).any((child) => child.name == transaction.category);
 }
 
 class _MorePage extends StatefulWidget {
@@ -1304,6 +1429,147 @@ class _CategorySettingsPage extends StatelessWidget {
     }
   }
 
+  Future<void> _deleteSubcategory(
+    BuildContext context,
+    String parentName,
+    String categoryName,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete Subcategory'),
+        content: Text(
+          'Are you sure you want to delete "$categoryName" from $parentName?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await categoryPreferences.removeSubcategory(
+          parentName: parentName,
+          categoryName: categoryName,
+        );
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(content: Text('Subcategory "$categoryName" removed.')),
+          );
+      } catch (error) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(content: Text('Could not remove subcategory: $error')),
+          );
+      }
+    }
+  }
+
+  Future<void> _showAddSubcategoryDialog(
+    BuildContext context,
+    String parentName,
+  ) async {
+    final controller = TextEditingController();
+    var isExpense = categoryPreferences.isExpense(parentName);
+    final isDual =
+        categoryPreferences.modeForParent(parentName) == CategoryMode.both;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              title: Text('Add Subcategory to $parentName'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Subcategory name',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  if (isDual) ...[
+                    const SizedBox(height: 16),
+                    SegmentedButton<bool>(
+                      segments: const [
+                        ButtonSegment(value: false, label: Text('Income')),
+                        ButtonSegment(value: true, label: Text('Expense')),
+                      ],
+                      selected: {isExpense},
+                      onSelectionChanged: (selection) {
+                        setDialogState(() {
+                          isExpense = selection.first;
+                        });
+                      },
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    if (controller.text.trim().isNotEmpty) {
+                      Navigator.of(dialogContext).pop(true);
+                    }
+                  },
+                  child: const Text('Add'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == true && controller.text.trim().isNotEmpty) {
+      final name = controller.text.trim();
+      try {
+        await categoryPreferences.addSubcategory(
+          parentName: parentName,
+          categoryName: name,
+          isExpense: isExpense,
+        );
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text('Subcategory "$name" added to $parentName.'),
+            ),
+          );
+      } catch (error) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(content: Text('Could not add subcategory: $error')),
+          );
+      }
+    }
+  }
+
   IconData _iconForSuperCategory(String name) {
     return switch (name) {
       'Money In' => Icons.account_balance_wallet_outlined,
@@ -1319,6 +1585,8 @@ class _CategorySettingsPage extends StatelessWidget {
       'Charity' => Icons.volunteer_activism_outlined,
       'Taxes' => Icons.request_quote_outlined,
       'Banking' => Icons.account_balance_outlined,
+      'Commitments' => Icons.assignment_turned_in_outlined,
+      'Commitements' => Icons.assignment_turned_in_outlined,
       'Others' => Icons.inventory_2_outlined,
       _ => Icons.receipt_long_outlined,
     };
@@ -1326,160 +1594,217 @@ class _CategorySettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: categoryPreferences.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Text(
-                  'Category Settings',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+    return ListenableBuilder(
+      listenable: categoryPreferences,
+      builder: (context, _) {
+        if (categoryPreferences.isLoading) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final hierarchy = categoryPreferences.hierarchy;
+
+        return Scaffold(
+          body: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text(
+                'Category Settings',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Toggle a category to show or hide all its items. You can also turn on individual items and set each as Income, Expense, or Both.',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                if (categoryPreferences.loadError != null) ...[
-                  const SizedBox(height: 12),
-                  Card(
-                    color: Theme.of(context).colorScheme.errorContainer,
-                    child: const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: Text(
-                        'Saved category settings could not be loaded. Default classifications are currently shown.',
-                      ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Toggle a category to show or hide all its items, customize subcategories, or add new ones.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              if (categoryPreferences.loadError != null) ...[
+                const SizedBox(height: 12),
+                Card(
+                  color: Theme.of(context).colorScheme.errorContainer,
+                  child: const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Text(
+                      'Saved category settings could not be loaded. Default classifications are currently shown.',
                     ),
                   ),
-                ],
-                const SizedBox(height: 20),
-                ...TransactionCategory.hierarchy.entries.map((superCategory) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Card(
-                      margin: EdgeInsets.zero,
-                      clipBehavior: Clip.antiAlias,
-                      child: ExpansionTile(
-                        leading: Icon(_iconForSuperCategory(superCategory.key)),
-                        title: Text(
-                          superCategory.key,
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                        children: [
-                          for (final parent in superCategory.value.entries)
-                            ExpansionTile(
-                              tilePadding: const EdgeInsets.only(
-                                left: 28,
-                                right: 16,
-                              ),
-                              childrenPadding: EdgeInsets.zero,
-                              leading: Icon(
-                                _getIconForCategory(parent.key),
-                                size: 21,
-                              ),
-                              title: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      parent.key,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                      ),
+                ),
+              ],
+              const SizedBox(height: 20),
+              ...hierarchy.entries.map((superCategory) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Card(
+                    margin: EdgeInsets.zero,
+                    clipBehavior: Clip.antiAlias,
+                    child: ExpansionTile(
+                      leading: Icon(_iconForSuperCategory(superCategory.key)),
+                      title: Text(
+                        superCategory.key,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      children: [
+                        for (final parent in superCategory.value.entries)
+                          ExpansionTile(
+                            tilePadding: const EdgeInsets.only(
+                              left: 28,
+                              right: 16,
+                            ),
+                            childrenPadding: EdgeInsets.zero,
+                            leading: Icon(
+                              _getIconForCategory(parent.key),
+                              size: 21,
+                            ),
+                            title: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    parent.key,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
-                                  Switch(
-                                    value: categoryPreferences.isParentEnabled(
+                                ),
+                                Switch(
+                                  value: categoryPreferences.isParentEnabled(
+                                    parent.key,
+                                  ),
+                                  onChanged: (enabled) =>
+                                      _updateParentEnabled(
+                                        context,
+                                        parent.key,
+                                        enabled,
+                                      ),
+                                ),
+                              ],
+                            ),
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  4,
+                                  16,
+                                  10,
+                                ),
+                                child: SegmentedButton<CategoryMode>(
+                                  expandedInsets: EdgeInsets.zero,
+                                  showSelectedIcon: false,
+                                  style: const ButtonStyle(
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  segments: const [
+                                    ButtonSegment(
+                                      value: CategoryMode.income,
+                                      label: Text('Income'),
+                                    ),
+                                    ButtonSegment(
+                                      value: CategoryMode.expense,
+                                      label: Text('Expense'),
+                                    ),
+                                    ButtonSegment(
+                                      value: CategoryMode.both,
+                                      label: Text('Both'),
+                                    ),
+                                  ],
+                                  selected: {
+                                    categoryPreferences.modeForParent(
                                       parent.key,
                                     ),
-                                    onChanged: (enabled) =>
-                                        _updateParentEnabled(
+                                  },
+                                  onSelectionChanged: (selection) =>
+                                      _updateParentMode(
+                                        context,
+                                        parent.key,
+                                        selection.first,
+                                      ),
+                                ),
+                              ),
+                              for (final category in parent.value)
+                                SwitchListTile(
+                                  contentPadding: const EdgeInsets.only(
+                                    left: 48,
+                                    right: 16,
+                                  ),
+                                  title: Row(
+                                    children: [
+                                      Expanded(child: Text(category.name)),
+                                      IconButton(
+                                        icon: Icon(
+                                          Icons.delete_outline,
+                                          size: 20,
+                                          color: Colors.red.shade400,
+                                        ),
+                                        tooltip: 'Delete subcategory',
+                                        visualDensity: VisualDensity.compact,
+                                        onPressed: () => _deleteSubcategory(
                                           context,
                                           parent.key,
-                                          enabled,
+                                          category.name,
                                         ),
-                                  ),
-                                ],
-                              ),
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    16,
-                                    4,
-                                    16,
-                                    10,
-                                  ),
-                                  child: SegmentedButton<CategoryMode>(
-                                    expandedInsets: EdgeInsets.zero,
-                                    showSelectedIcon: false,
-                                    style: const ButtonStyle(
-                                      visualDensity: VisualDensity.compact,
-                                    ),
-                                    segments: const [
-                                      ButtonSegment(
-                                        value: CategoryMode.income,
-                                        label: Text('Income'),
-                                      ),
-                                      ButtonSegment(
-                                        value: CategoryMode.expense,
-                                        label: Text('Expense'),
-                                      ),
-                                      ButtonSegment(
-                                        value: CategoryMode.both,
-                                        label: Text('Both'),
                                       ),
                                     ],
-                                    selected: {
-                                      categoryPreferences.modeForParent(
-                                        parent.key,
-                                      ),
-                                    },
-                                    onSelectionChanged: (selection) =>
-                                        _updateParentMode(
+                                  ),
+                                  subtitle: Text(
+                                    categoryPreferences.isDualMode(
+                                          category.name,
+                                        )
+                                        ? 'Income or Expense'
+                                        : categoryPreferences.isExpense(
+                                            category.name,
+                                          )
+                                        ? 'Expense'
+                                        : 'Income',
+                                  ),
+                                  value: categoryPreferences.isEnabled(
+                                    category.name,
+                                  ),
+                                  onChanged: (enabled) => _updateEnabled(
+                                    context,
+                                    category.name,
+                                    enabled,
+                                  ),
+                                ),
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  48,
+                                  4,
+                                  16,
+                                  12,
+                                ),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: TextButton.icon(
+                                    style: TextButton.styleFrom(
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                    icon: const Icon(
+                                      Icons.add_rounded,
+                                      size: 18,
+                                    ),
+                                    label: Text(
+                                      'Add subcategory to ${parent.key}',
+                                    ),
+                                    onPressed: () =>
+                                        _showAddSubcategoryDialog(
                                           context,
                                           parent.key,
-                                          selection.first,
                                         ),
                                   ),
                                 ),
-                                for (final category in parent.value)
-                                  SwitchListTile(
-                                    contentPadding: const EdgeInsets.only(
-                                      left: 48,
-                                      right: 16,
-                                    ),
-                                    title: Text(category.name),
-                                    subtitle: Text(
-                                      categoryPreferences.isDualMode(
-                                            category.name,
-                                          )
-                                          ? 'Income or Expense'
-                                          : categoryPreferences.isExpense(
-                                              category.name,
-                                            )
-                                          ? 'Expense'
-                                          : 'Income',
-                                    ),
-                                    value: categoryPreferences.isEnabled(
-                                      category.name,
-                                    ),
-                                    onChanged: (enabled) => _updateEnabled(
-                                      context,
-                                      category.name,
-                                      enabled,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                        ],
-                      ),
+                              ),
+                            ],
+                          ),
+                      ],
                     ),
-                  );
-                }),
-              ],
-            ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -2432,141 +2757,192 @@ class _HomeDashboardState extends State<_HomeDashboard> {
   DateTime? _selectedMonth;
 
   @override
+  void initState() {
+    super.initState();
+    _selectedMonth = null;
+  }
+
+  List<entity.Transaction> _filterDashboardTransactions(
+    List<entity.Transaction> transactions,
+  ) {
+    if (_selectedMonth == null) {
+      return transactions;
+    }
+    return filterTransactionsByMonth(transactions, _selectedMonth);
+  }
+
+  Widget _buildDashboardHeader({
+    required BuildContext context,
+    required List<DateTime> monthOptions,
+  }) {
+    final isSelectedMonthPresent = _selectedMonth == null ||
+        monthOptions.any((m) =>
+            m.year == _selectedMonth!.year && m.month == _selectedMonth!.month);
+    final effectiveValue = isSelectedMonthPresent ? _selectedMonth : null;
+
+    return Container(
+      width: double.infinity,
+      color: const Color(0xFF06231C),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: MediaQuery.of(context).padding.top + 10,
+        bottom: 12,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Text(
+            'Dashboard',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.3,
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.25),
+              ),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<DateTime?>(
+                value: effectiveValue,
+                dropdownColor: const Color(0xFF0F3A30),
+                icon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+                isDense: true,
+                items: [
+                  const DropdownMenuItem<DateTime?>(
+                    value: null,
+                    child: Text(
+                      'All',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  for (final m in monthOptions)
+                    DropdownMenuItem<DateTime?>(
+                      value: m,
+                      child: Text(
+                        DateFormat('MMMM yyyy').format(m),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                ],
+                onChanged: (newMonth) {
+                  setState(() {
+                    _selectedMonth = newMonth;
+                  });
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final user = context.read<AuthService>().currentUser;
 
     return Scaffold(
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            BlocBuilder<TransactionBloc, TransactionState>(
-              builder: (context, state) {
-                final currentUserId = user?.uid ?? '';
-                final storedTransactions =
-                    state is TransactionLoaded && state.userId == currentUserId
-                    ? state.transactions
-                    : const <entity.Transaction>[];
-                final transactions = storedTransactions
-                    .map(
-                      (transaction) => transaction.copyWith(
-                        isExpense: widget.categoryPreferences
-                            .resolveTransactionTypeForCategory(
-                              categoryName: transaction.category,
-                              transactionIsExpense: transaction.isExpense,
-                            ),
+      body: BlocBuilder<TransactionBloc, TransactionState>(
+        builder: (context, state) {
+          final currentUserId = user?.uid ?? '';
+          final storedTransactions =
+              state is TransactionLoaded && state.userId == currentUserId
+                  ? state.transactions
+                  : const <entity.Transaction>[];
+          final transactions = storedTransactions
+              .map(
+                (transaction) => transaction.copyWith(
+                  isExpense: widget.categoryPreferences
+                      .resolveTransactionTypeForCategory(
+                        categoryName: transaction.category,
+                        transactionIsExpense: transaction.isExpense,
                       ),
-                    )
-                    .toList();
-                final visibleTransactions = filterTransactionsByMonth(
-                  transactions,
-                  _selectedMonth,
-                );
-                final monthOptions = _buildMonthOptions(transactions);
+                ),
+              )
+              .toList();
+          final visibleTransactions = _filterDashboardTransactions(transactions);
+          final monthOptions = _buildMonthOptions(transactions);
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final useTwoColumnHeader = constraints.maxWidth >= 640;
+          final totalIncome = _totalIncome(visibleTransactions);
+          final totalExpenses = _totalExpenses(visibleTransactions);
 
-                        if (useTwoColumnHeader) {
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Welcome, ${user?.displayName ?? user?.email ?? 'User'}!',
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.headlineSmall,
-                                ),
-                              ),
-                              if (monthOptions.isNotEmpty) ...[
-                                const SizedBox(width: 12),
-                                SizedBox(
-                                  width: 180,
-                                  child: _MonthFilterDropdown(
-                                    selectedMonth: _selectedMonth,
-                                    monthOptions: monthOptions,
-                                    onChanged: (month) {
-                                      setState(() {
-                                        _selectedMonth = month;
-                                      });
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ],
-                          );
-                        }
-
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                'Welcome, ${user?.displayName ?? user?.email ?? 'User'}!',
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.headlineSmall,
-                              ),
-                            ),
-                            if (monthOptions.isNotEmpty) ...[
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                width: double.infinity,
-                                child: _MonthFilterDropdown(
-                                  selectedMonth: _selectedMonth,
-                                  monthOptions: monthOptions,
-                                  onChanged: (month) {
-                                    setState(() {
-                                      _selectedMonth = month;
-                                    });
-                                  },
-                                ),
-                              ),
-                            ],
-                          ],
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    _SummaryCards(transactions: visibleTransactions),
-                    const SizedBox(height: 16),
-                    _IncomeExpensePiePanel(transactions: visibleTransactions),
-                    const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: _PrintTransactionsButton(
+          return Column(
+            children: [
+              _buildDashboardHeader(
+                context: context,
+                monthOptions: monthOptions,
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 14.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      IncomeExpensePiePanel(transactions: visibleTransactions),
+                      const SizedBox(height: 14),
+                      NetLossAlertBanner(
+                        totalIncome: totalIncome,
+                        totalExpenses: totalExpenses,
+                      ),
+                      const SizedBox(height: 14),
+                      IncomeVsExpensesComparisonPanel(
+                        totalIncome: totalIncome,
+                        totalExpenses: totalExpenses,
+                      ),
+                      const SizedBox(height: 14),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: _PrintTransactionsButton(
+                          transactions: visibleTransactions,
+                          filterLabel: _transactionFilterLabel(_selectedMonth),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      _TopCategoryCharts(
                         transactions: visibleTransactions,
-                        filterLabel: _transactionFilterLabel(_selectedMonth),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    _TopCategoryCharts(
-                      transactions: visibleTransactions,
-                      onCategoryTap: (category) {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => _AllTransactionsPage(
-                              categoryPreferences: widget.categoryPreferences,
-                              initialCategory: category,
+                        onCategoryTap: (category) {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => _AllTransactionsPage(
+                                categoryPreferences: widget.categoryPreferences,
+                                initialCategory: category,
+                              ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                );
-              },
-            ),
-          ],
-        ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -2892,8 +3268,31 @@ double _totalExpenses(List<entity.Transaction> transactions) {
       .fold<double>(0, (total, transaction) => total + transaction.amount);
 }
 
-class _SummaryCards extends StatelessWidget {
-  const _SummaryCards({required this.transactions});
+String _formatNumber(num value) {
+  final rounded = value.round().abs().toString();
+  final buffer = StringBuffer();
+  for (var index = 0; index < rounded.length; index++) {
+    final positionFromEnd = rounded.length - index;
+    buffer.write(rounded[index]);
+    if (positionFromEnd > 1 && positionFromEnd % 3 == 1) {
+      buffer.write(',');
+    }
+  }
+  return buffer.toString();
+}
+
+String _formatNetBalance(double netBalance) {
+  if (netBalance < 0) {
+    return '-PKR ${_formatNumber(netBalance.abs())}';
+  } else if (netBalance > 0) {
+    return '+PKR ${_formatNumber(netBalance)}';
+  } else {
+    return 'PKR 0';
+  }
+}
+
+class SummaryCards extends StatelessWidget {
+  const SummaryCards({super.key, required this.transactions});
 
   final List<entity.Transaction> transactions;
 
@@ -2901,35 +3300,108 @@ class _SummaryCards extends StatelessWidget {
   Widget build(BuildContext context) {
     final totalIncome = _totalIncome(transactions);
     final totalExpenses = _totalExpenses(transactions);
+    final totalActivity = totalIncome + totalExpenses;
+    final netBalance = totalIncome - totalExpenses;
+
+    final incomeShare = totalActivity > 0
+        ? ((totalIncome / totalActivity) * 100).round()
+        : (totalIncome > 0 ? 100 : 0);
+
+    final expenseToIncomePct = totalIncome > 0
+        ? ((totalExpenses / totalIncome) * 100).round()
+        : (totalExpenses > 0 ? 100 : 0);
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final maxWidth = constraints.maxWidth;
-        final useTwoColumns = maxWidth >= 560;
-        final cardWidth = useTwoColumns ? (maxWidth - 16) / 2 : maxWidth;
+        final width = constraints.maxWidth;
+        final useThreeColumns = width >= 660;
+        final useTwoColumns = width >= 440 && width < 660;
 
-        return Wrap(
-          spacing: 16,
-          runSpacing: 12,
+        final card1 = KpiMetricCard(
+          title: 'Income',
+          amount: _formatDashboardMoney(totalIncome),
+          subtitle: '$incomeShare% of income',
+          icon: Icons.arrow_upward_rounded,
+          badgeColor: const Color(0xFF0F9D58),
+          badgeTextColor: const Color(0xFF0F9D58),
+          bgColor: const Color(0xFFEDF9F2),
+          borderColor: const Color(0xFFC8EEDC),
+          amountColor: const Color(0xFF111827),
+          subtitleColor: const Color(0xFF0F9D58),
+        );
+
+        final card2 = KpiMetricCard(
+          title: 'Expenses',
+          amount: _formatDashboardMoney(totalExpenses),
+          subtitle: '$expenseToIncomePct% of income',
+          icon: Icons.arrow_downward_rounded,
+          badgeColor: const Color(0xFFE52E3D),
+          badgeTextColor: const Color(0xFFE52E3D),
+          bgColor: const Color(0xFFFDF2F3),
+          borderColor: const Color(0xFFFBD3D6),
+          amountColor: const Color(0xFF111827),
+          subtitleColor: const Color(0xFFE52E3D),
+        );
+
+        final netSubtitle = netBalance < 0
+            ? 'You spent more than you earned'
+            : (netBalance > 0
+                ? 'You saved more than you spent'
+                : 'Income equals expenses');
+
+        final card3 = KpiMetricCard(
+          title: 'Net Balance',
+          amount: _formatNetBalance(netBalance),
+          subtitle: netSubtitle,
+          icon: Icons.account_balance_wallet_rounded,
+          badgeColor: const Color(0xFFF59E0B),
+          badgeTextColor: const Color(0xFFD97706),
+          bgColor: const Color(0xFFFFF8F0),
+          borderColor: const Color(0xFFFDE6D2),
+          amountColor: netBalance < 0
+              ? const Color(0xFFE52E3D)
+              : (netBalance > 0
+                  ? const Color(0xFF0F9D58)
+                  : const Color(0xFF111827)),
+          subtitleColor: const Color(0xFF6B7280),
+        );
+
+        if (useThreeColumns) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: card1),
+              const SizedBox(width: 12),
+              Expanded(child: card2),
+              const SizedBox(width: 12),
+              Expanded(child: card3),
+            ],
+          );
+        }
+
+        if (useTwoColumns) {
+          return Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(child: card1),
+                  const SizedBox(width: 12),
+                  Expanded(child: card2),
+                ],
+              ),
+              const SizedBox(height: 12),
+              card3,
+            ],
+          );
+        }
+
+        return Column(
           children: [
-            SizedBox(
-              width: cardWidth,
-              child: _SummaryCard(
-                title: 'Income',
-                amount: _formatDashboardMoney(totalIncome),
-                icon: Icons.arrow_upward,
-                color: Colors.green,
-              ),
-            ),
-            SizedBox(
-              width: cardWidth,
-              child: _SummaryCard(
-                title: 'Expenses',
-                amount: _formatDashboardMoney(totalExpenses),
-                icon: Icons.arrow_downward,
-                color: Colors.red,
-              ),
-            ),
+            card1,
+            const SizedBox(height: 10),
+            card2,
+            const SizedBox(height: 10),
+            card3,
           ],
         );
       },
@@ -2937,65 +3409,93 @@ class _SummaryCards extends StatelessWidget {
   }
 }
 
-class _SummaryCard extends StatelessWidget {
-  final String title;
-  final String amount;
-  final IconData icon;
-  final Color color;
-
-  const _SummaryCard({
+class KpiMetricCard extends StatelessWidget {
+  const KpiMetricCard({
+    super.key,
     required this.title,
     required this.amount,
+    required this.subtitle,
     required this.icon,
-    required this.color,
+    required this.badgeColor,
+    required this.badgeTextColor,
+    required this.bgColor,
+    required this.borderColor,
+    required this.amountColor,
+    required this.subtitleColor,
   });
+
+  final String title;
+  final String amount;
+  final String subtitle;
+  final IconData icon;
+  final Color badgeColor;
+  final Color badgeTextColor;
+  final Color bgColor;
+  final Color borderColor;
+  final Color amountColor;
+  final Color subtitleColor;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(color: Colors.grey),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor, width: 1.2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: badgeColor,
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(width: 8),
-                Icon(icon, color: color),
-              ],
+                child: Icon(icon, color: Colors.white, size: 16),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  color: badgeTextColor,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              amount,
+              maxLines: 1,
+              style: TextStyle(
+                color: amountColor,
+                fontWeight: FontWeight.w900,
+                fontSize: 19,
+                letterSpacing: -0.2,
+              ),
             ),
-            const SizedBox(height: 8),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isCompact = constraints.maxWidth < 180;
-
-                return FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    amount,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style:
-                        (isCompact
-                                ? Theme.of(context).textTheme.titleMedium
-                                : Theme.of(context).textTheme.titleLarge)
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                );
-              },
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: subtitleColor,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -3446,43 +3946,6 @@ class _PrintTransactionsButtonState extends State<_PrintTransactionsButton> {
             ? 'No transactions to print'
             : widget.buttonLabel,
       ),
-    );
-  }
-}
-
-class _MonthFilterDropdown extends StatelessWidget {
-  const _MonthFilterDropdown({
-    required this.selectedMonth,
-    required this.monthOptions,
-    required this.onChanged,
-  });
-
-  final DateTime? selectedMonth;
-  final List<DateTime> monthOptions;
-  final ValueChanged<DateTime?> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return DropdownButtonFormField<DateTime?>(
-      decoration: const InputDecoration(
-        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        border: OutlineInputBorder(),
-      ),
-      initialValue: selectedMonth,
-      hint: const Text('Select month'),
-      items: [
-        const DropdownMenuItem<DateTime?>(
-          value: null,
-          child: Text('All months'),
-        ),
-        ...monthOptions.map(
-          (month) => DropdownMenuItem<DateTime?>(
-            value: month,
-            child: Text(_monthLabel(month)),
-          ),
-        ),
-      ],
-      onChanged: onChanged,
     );
   }
 }
@@ -6073,8 +6536,8 @@ String _compactChartAmount(double amount) {
   return amount.toStringAsFixed(0);
 }
 
-class _IncomeExpensePiePanel extends StatelessWidget {
-  const _IncomeExpensePiePanel({required this.transactions});
+class IncomeExpensePiePanel extends StatelessWidget {
+  const IncomeExpensePiePanel({super.key, required this.transactions});
 
   final List<entity.Transaction> transactions;
 
@@ -6082,281 +6545,692 @@ class _IncomeExpensePiePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final totalIncome = _totalIncome(transactions);
     final totalExpenses = _totalExpenses(transactions);
-    final totalActivity = totalIncome + totalExpenses;
-    final balance = totalIncome - totalExpenses;
-    final comparison = _ComparisonState.fromBalance(balance, totalActivity);
-
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isCompact = constraints.maxWidth < 640;
-            final chart = totalActivity <= 0
-                ? const _EmptyPieChart()
-                : _IncomeExpensePieChart(
-                    totalIncome: totalIncome,
-                    totalExpenses: totalExpenses,
-                  );
-            final comparisonPanel = _IncomeExpenseComparison(
-              comparison: comparison,
-              totalIncome: totalIncome,
-              totalExpenses: totalExpenses,
-              balance: balance,
-            );
-
-            if (isCompact) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _PiePanelHeader(comparison: comparison),
-                  const SizedBox(height: 16),
-                  SizedBox(height: 230, child: chart),
-                  const SizedBox(height: 16),
-                  comparisonPanel,
-                ],
-              );
-            }
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _PiePanelHeader(comparison: comparison),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(child: SizedBox(height: 240, child: chart)),
-                    const SizedBox(width: 20),
-                    Expanded(child: comparisonPanel),
-                  ],
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _IncomeExpensePieChart extends StatelessWidget {
-  const _IncomeExpensePieChart({
-    required this.totalIncome,
-    required this.totalExpenses,
-  });
-
-  final double totalIncome;
-  final double totalExpenses;
-
-  @override
-  Widget build(BuildContext context) {
-    final total = totalIncome + totalExpenses;
     final netBalance = totalIncome - totalExpenses;
-    final incomePercent = total == 0 ? 0 : (totalIncome / total) * 100;
-    final expensePercent = total == 0 ? 0 : (totalExpenses / total) * 100;
+    final positiveBalance = math.max(0.0, netBalance);
 
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        PieChart(
-          PieChartData(
-            centerSpaceRadius: 54,
-            sectionsSpace: 3,
-            borderData: FlBorderData(show: false),
-            sections: [
-              if (totalIncome > 0)
-                PieChartSectionData(
-                  value: totalIncome,
-                  color: Colors.green,
-                  radius: 62,
-                  title: '${incomePercent.toStringAsFixed(0)}%',
-                  titleStyle: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13,
-                  ),
-                ),
-              if (totalExpenses > 0)
-                PieChartSectionData(
-                  value: totalExpenses,
-                  color: Colors.red,
-                  radius: 62,
-                  title: '${expensePercent.toStringAsFixed(0)}%',
-                  titleStyle: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13,
-                  ),
-                ),
-            ],
-          ),
-        ),
-        SizedBox(
-          width: 96,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Net Balance',
-                style: TextStyle(color: Colors.grey, fontSize: 12),
-              ),
-              const SizedBox(height: 2),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  _formatDashboardMoney(netBalance),
-                  maxLines: 1,
-                  style: TextStyle(
-                    color: netBalance < 0 ? Colors.red : Colors.green,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
+    final chartTotal = totalExpenses + positiveBalance;
 
-class _PiePanelHeader extends StatelessWidget {
-  const _PiePanelHeader({required this.comparison});
+    final expenseSharePct = chartTotal > 0
+        ? ((totalExpenses / chartTotal) * 100).round()
+        : 0;
+    final balanceSharePct = chartTotal > 0
+        ? (100 - expenseSharePct)
+        : 0;
 
-  final _ComparisonState comparison;
+    final spentPct = totalIncome > 0
+        ? ((totalExpenses / totalIncome) * 100).round()
+        : (totalExpenses > 0 ? 100 : 0);
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(Icons.pie_chart_outline, color: comparison.color),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            'Income vs Expenses',
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _IncomeExpenseComparison extends StatelessWidget {
-  const _IncomeExpenseComparison({
-    required this.comparison,
-    required this.totalIncome,
-    required this.totalExpenses,
-    required this.balance,
-  });
-
-  final _ComparisonState comparison;
-  final double totalIncome;
-  final double totalExpenses;
-  final double balance;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
+    return Container(
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: comparison.color.withValues(alpha: 0.08),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: comparison.color.withValues(alpha: 0.2)),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: comparison.color.withValues(alpha: 0.14),
-                  foregroundColor: comparison.color,
-                  child: Icon(comparison.icon, size: 20),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    comparison.title,
-                    style: const TextStyle(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Expenses vs Balance',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w800,
                       fontSize: 16,
+                      color: const Color(0xFF111827),
+                    ),
+              ),
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: Icon(
+                  Icons.info_outline_rounded,
+                  size: 20,
+                  color: Colors.grey.shade500,
+                ),
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Expenses vs Balance'),
+                      content: const Text(
+                        'This chart displays the share of Expenses (red) and remaining Balance (green).',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          child: const Text('Close'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth >= 540;
+
+              final donutChart = SizedBox(
+                height: 220,
+                child: chartTotal <= 0
+                    ? const _EmptyPieChart()
+                    : Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          PieChart(
+                            PieChartData(
+                              centerSpaceRadius: 56,
+                              sectionsSpace: 2,
+                              borderData: FlBorderData(show: false),
+                              sections: [
+                                if (positiveBalance > 0)
+                                  PieChartSectionData(
+                                    value: positiveBalance,
+                                    color: const Color(0xFF00C853),
+                                    radius: 48,
+                                    showTitle: true,
+                                    title: '$balanceSharePct%',
+                                    titleStyle: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                if (totalExpenses > 0)
+                                  PieChartSectionData(
+                                    value: totalExpenses,
+                                    color: const Color(0xFFFF1744),
+                                    radius: 48,
+                                    showTitle: true,
+                                    title: '$expenseSharePct%',
+                                    titleStyle: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Balance',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey.shade600,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10.0),
+                                  child: Text(
+                                    _formatNetBalance(netBalance),
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w900,
+                                      color: netBalance < 0
+                                          ? const Color(0xFFE52E3D)
+                                          : (netBalance > 0
+                                              ? const Color(0xFF0F9D58)
+                                              : const Color(0xFF111827)),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+              );
+
+              final detailsPanel = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        margin: const EdgeInsets.only(top: 4),
+                        width: 10,
+                        height: 10,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF00C853),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Balance',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                    color: Color(0xFF1F2937),
+                                  ),
+                                ),
+                                Text(
+                                  '$balanceSharePct%',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    color: Color(0xFF1F2937),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _formatDashboardMoney(positiveBalance),
+                              style: const TextStyle(
+                                color: Color(0xFF00A84E),
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        margin: const EdgeInsets.only(top: 4),
+                        width: 10,
+                        height: 10,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFF1744),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Expenses',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                    color: Color(0xFF1F2937),
+                                  ),
+                                ),
+                                Text(
+                                  '$expenseSharePct%',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    color: Color(0xFF1F2937),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _formatDashboardMoney(totalExpenses),
+                              style: const TextStyle(
+                                color: Color(0xFFE52E3D),
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFDF1F2),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFCDADB)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Expenses vs Income',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF374151),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '$spentPct%',
+                          style: const TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFFE52E3D),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        RichText(
+                          text: TextSpan(
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF4B5563),
+                            ),
+                            children: [
+                              const TextSpan(text: 'You have spent '),
+                              TextSpan(
+                                text: '$spentPct%',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFFE52E3D),
+                                ),
+                              ),
+                              const TextSpan(text: ' of your income'),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              comparison.description(balance.abs()),
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 14),
-            _LegendAmountRow(
-              color: Colors.green,
-              label: 'Income',
-              value: _formatDashboardMoney(totalIncome),
-            ),
-            const SizedBox(height: 8),
-            _LegendAmountRow(
-              color: Colors.red,
-              label: 'Expenses',
-              value: _formatDashboardMoney(totalExpenses),
-            ),
-            const Divider(height: 24),
-            _LegendAmountRow(
-              color: comparison.color,
-              label: comparison.balanceLabel,
-              value: _formatDashboardMoney(balance.abs()),
-            ),
-          ],
-        ),
+                ],
+              );
+
+              if (isWide) {
+                return Row(
+                  children: [
+                    Expanded(flex: 5, child: donutChart),
+                    const SizedBox(width: 20),
+                    Expanded(flex: 5, child: detailsPanel),
+                  ],
+                );
+              }
+
+              return Column(
+                children: [
+                  donutChart,
+                  const SizedBox(height: 16),
+                  detailsPanel,
+                ],
+              );
+            },
+          ),
+        ],
       ),
     );
   }
 }
 
-class _LegendAmountRow extends StatelessWidget {
-  const _LegendAmountRow({
-    required this.color,
-    required this.label,
-    required this.value,
+class NetLossAlertBanner extends StatelessWidget {
+  const NetLossAlertBanner({
+    super.key,
+    required this.totalIncome,
+    required this.totalExpenses,
   });
 
-  final Color color;
-  final String label;
-  final String value;
+  final double totalIncome;
+  final double totalExpenses;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 8),
-        Expanded(child: Text(label)),
-        const SizedBox(width: 8),
-        Flexible(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerRight,
-            child: Text(
-              value,
-              maxLines: 1,
-              style: const TextStyle(fontWeight: FontWeight.w800),
+    final netBalance = totalIncome - totalExpenses;
+    final isLoss = netBalance < 0;
+    final isSurplus = netBalance > 0;
+
+    final diffPct = totalIncome > 0
+        ? (((totalExpenses - totalIncome).abs() / totalIncome) * 100).round()
+        : 100;
+
+    final bgColor = isLoss
+        ? const Color(0xFFFDF2F3)
+        : (isSurplus ? const Color(0xFFEDF9F2) : const Color(0xFFF3F4F6));
+    final borderColor = isLoss
+        ? const Color(0xFFFCDADB)
+        : (isSurplus ? const Color(0xFFC8EEDC) : const Color(0xFFE5E7EB));
+    final accentColor = isLoss
+        ? const Color(0xFFE52E3D)
+        : (isSurplus ? const Color(0xFF0F9D58) : const Color(0xFF4B5563));
+
+    final badgeBg = isLoss
+        ? const Color(0xFFFFD6D9)
+        : (isSurplus ? const Color(0xFFD1F2E0) : const Color(0xFFE5E7EB));
+
+    final title = isLoss ? 'Net Loss' : (isSurplus ? 'Net Surplus' : 'Balanced');
+    final subtitlePrefix = isLoss
+        ? 'You are over budget by '
+        : (isSurplus ? 'You are under budget by ' : 'Income matches expenses exactly');
+
+    final rightSubtitle = isLoss
+        ? 'Expenses are $diffPct% higher\nthan income'
+        : (isSurplus
+            ? 'Income is $diffPct% higher\nthan expenses'
+            : 'Balanced budget');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor, width: 1.2),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: badgeBg,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isLoss ? Icons.trending_down_rounded : Icons.trending_up_rounded,
+              color: accentColor,
+              size: 22,
             ),
           ),
-        ),
-      ],
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: accentColor,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                RichText(
+                  text: TextSpan(
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade800,
+                    ),
+                    children: [
+                      TextSpan(text: subtitlePrefix),
+                      if (netBalance != 0)
+                        TextSpan(
+                          text: _formatDashboardMoney(netBalance.abs()),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            color: accentColor,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                _formatDashboardMoney(netBalance.abs()),
+                style: TextStyle(
+                  color: accentColor,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 17,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                rightSubtitle,
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class IncomeVsExpensesComparisonPanel extends StatelessWidget {
+  const IncomeVsExpensesComparisonPanel({
+    super.key,
+    required this.totalIncome,
+    required this.totalExpenses,
+  });
+
+  final double totalIncome;
+  final double totalExpenses;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxAmount = math.max(totalIncome, totalExpenses);
+    final incomeBarFraction =
+        maxAmount > 0 ? (totalIncome / maxAmount).clamp(0.02, 1.0) : 0.02;
+    final expenseBarFraction =
+        maxAmount > 0 ? (totalExpenses / maxAmount).clamp(0.02, 1.0) : 0.02;
+
+    final incomePctLabel = totalIncome > 0 && totalExpenses > 0
+        ? '${((totalIncome / (totalIncome + totalExpenses)) * 100).round()}%'
+        : (totalIncome > 0 ? '100%' : '0%');
+    final expensePctLabel = totalIncome > 0 && totalExpenses > 0
+        ? '${((totalExpenses / (totalIncome + totalExpenses)) * 100).round()}%'
+        : (totalExpenses > 0 ? '100%' : '0%');
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Income vs Expenses Comparison',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                  color: const Color(0xFF111827),
+                ),
+          ),
+          const SizedBox(height: 16),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  SizedBox(
+                    width: 90,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Income',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF374151),
+                          ),
+                        ),
+                        Text(
+                          _formatDashboardMoney(totalIncome),
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey.shade600,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Flexible(
+                          flex: (incomeBarFraction * 100).round().clamp(2, 100),
+                          child: Container(
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00C853),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          incomePctLabel,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF374151),
+                          ),
+                        ),
+                        Flexible(
+                          flex: ((1.0 - incomeBarFraction) * 100)
+                              .round()
+                              .clamp(0, 100),
+                          child: const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  SizedBox(
+                    width: 90,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Expenses',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF374151),
+                          ),
+                        ),
+                        Text(
+                          _formatDashboardMoney(totalExpenses),
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey.shade600,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Flexible(
+                          flex: (expenseBarFraction * 100).round().clamp(2, 100),
+                          child: Container(
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF1744),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          expensePctLabel,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF374151),
+                          ),
+                        ),
+                        Flexible(
+                          flex: ((1.0 - expenseBarFraction) * 100)
+                              .round()
+                              .clamp(0, 100),
+                          child: const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Padding(
+                padding: const EdgeInsets.only(left: 98),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: const [
+                        Text('0%', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                        Text('25%', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                        Text('50%', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                        Text('75%', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                        Text('100%', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    const Center(
+                      child: Text(
+                        'Percentage of Income',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -6376,70 +7250,11 @@ class _EmptyPieChart extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.all(16),
           child: Text(
-            'Add income or expense transactions to update the pie chart.',
+            'Add income or expense transactions to update the chart.',
             textAlign: TextAlign.center,
           ),
         ),
       ),
-    );
-  }
-}
-
-class _ComparisonState {
-  const _ComparisonState({
-    required this.title,
-    required this.balanceLabel,
-    required this.color,
-    required this.icon,
-    required this.description,
-  });
-
-  final String title;
-  final String balanceLabel;
-  final Color color;
-  final IconData icon;
-  final String Function(double amount) description;
-
-  static _ComparisonState fromBalance(double balance, double totalActivity) {
-    if (totalActivity <= 0) {
-      return _ComparisonState(
-        title: 'No activity yet',
-        balanceLabel: 'Balance',
-        color: Colors.blueGrey,
-        icon: Icons.insights_outlined,
-        description: (_) =>
-            'Add transactions to compare income, expenses, and savings.',
-      );
-    }
-
-    if (balance > 0) {
-      return _ComparisonState(
-        title: 'Savings / Profit',
-        balanceLabel: 'Savings',
-        color: Colors.green,
-        icon: Icons.savings_outlined,
-        description: (amount) =>
-            'Income is ${_formatDashboardMoney(amount)} higher than expenses.',
-      );
-    }
-
-    if (balance < 0) {
-      return _ComparisonState(
-        title: 'Loss',
-        balanceLabel: 'Loss',
-        color: Colors.red,
-        icon: Icons.trending_down,
-        description: (amount) =>
-            'Expenses are ${_formatDashboardMoney(amount)} higher than income.',
-      );
-    }
-
-    return _ComparisonState(
-      title: 'Break-even',
-      balanceLabel: 'Balance',
-      color: Colors.blueGrey,
-      icon: Icons.balance_outlined,
-      description: (_) => 'Income and expenses are equal.',
     );
   }
 }

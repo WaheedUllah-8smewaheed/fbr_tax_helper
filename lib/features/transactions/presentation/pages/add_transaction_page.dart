@@ -24,6 +24,7 @@ class AddTransactionPage extends StatefulWidget {
     this.initialDate,
     this.parentCategory,
     this.categoryOptions = const [],
+    this.categoryPreferences,
     this.onViewCategoryHistory,
     this.appBarActions = const [],
   });
@@ -38,7 +39,9 @@ class AddTransactionPage extends StatefulWidget {
   final DateTime? initialDate;
   final String? parentCategory;
   final List<TransactionCategory> categoryOptions;
-  final ValueChanged<String>? onViewCategoryHistory;
+  final CategoryPreferencesService? categoryPreferences;
+  final void Function(String category, {required bool includeSubcategories})?
+  onViewCategoryHistory;
   final List<Widget> appBarActions;
 
   bool get isEditing => transaction != null;
@@ -53,7 +56,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   final _beneficiaryController = TextEditingController();
   final _purposeController = TextEditingController();
   final _amountController = TextEditingController();
-  final _categoryPreferences = CategoryPreferencesService();
+  late final CategoryPreferencesService _categoryPreferences;
+  late final bool _ownsCategoryPreferences;
   final _receiptScanner = ReceiptScannerService();
 
   bool _isScanningReceipt = false;
@@ -66,11 +70,34 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   String? _receiptImagePath;
   bool _showCategoryError = false;
 
-  bool get _hasCategoryOptions => widget.categoryOptions.isNotEmpty;
+  List<TransactionCategory> get _currentCategoryOptions {
+    if (widget.parentCategory != null) {
+      final dynamicChildren = _categoryPreferences.childrenOf(
+        widget.parentCategory!,
+      );
+      if (dynamicChildren.isNotEmpty) {
+        return dynamicChildren
+            .where((c) => _categoryPreferences.isEnabled(c.name))
+            .toList();
+      }
+    }
+    return widget.categoryOptions;
+  }
+
+  bool get _hasCategoryOptions =>
+      _currentCategoryOptions.isNotEmpty || widget.parentCategory != null;
 
   @override
   void initState() {
     super.initState();
+    if (widget.categoryPreferences != null) {
+      _categoryPreferences = widget.categoryPreferences!;
+      _ownsCategoryPreferences = false;
+      _isLoadingCategoryPreferences = false;
+    } else {
+      _categoryPreferences = CategoryPreferencesService();
+      _ownsCategoryPreferences = true;
+    }
     final transaction = widget.transaction;
     if (transaction != null) {
       _titleController.text = transaction.title;
@@ -107,7 +134,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_didLoadCategoryPreferences) return;
+    if (_didLoadCategoryPreferences || !_ownsCategoryPreferences) return;
     _didLoadCategoryPreferences = true;
     _loadCategoryPreferences();
   }
@@ -118,7 +145,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     _beneficiaryController.dispose();
     _purposeController.dispose();
     _amountController.dispose();
-    _categoryPreferences.dispose();
+    if (_ownsCategoryPreferences) {
+      _categoryPreferences.dispose();
+    }
     super.dispose();
   }
 
@@ -277,181 +306,195 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   }
 
   void _openCategoryHistory() {
-    final category = _selectedCategory;
+    final category = _selectedCategory ?? widget.parentCategory;
     if (category == null) return;
-    widget.onViewCategoryHistory?.call(category);
+    widget.onViewCategoryHistory?.call(
+      category,
+      includeSubcategories:
+          _selectedCategory == null && widget.parentCategory != null,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final canSelectTransactionType =
-        !_isLoadingCategoryPreferences &&
-        _selectedCategory != null &&
-        _categoryPreferences.isDualMode(_selectedCategory!);
+    return ListenableBuilder(
+      listenable: _categoryPreferences,
+      builder: (context, _) {
+        final canSelectTransactionType =
+            !_isLoadingCategoryPreferences &&
+            _selectedCategory != null &&
+            _categoryPreferences.isDualMode(_selectedCategory!);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            widget.parentCategory ??
-                _selectedCategory ??
-                widget.transaction?.category ??
-                'Transaction',
-          ),
-        ),
-        actions: widget.appBarActions,
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _ReceiptPanel(
-                imagePath: _receiptImagePath,
-                isScanning: _isScanningReceipt,
-                onScan: _chooseReceiptSource,
-                onRemove: () => setState(() => _receiptImagePath = null),
+        return Scaffold(
+          appBar: AppBar(
+            title: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                widget.parentCategory ??
+                    _selectedCategory ??
+                    widget.transaction?.category ??
+                    'Transaction',
               ),
-              const SizedBox(height: 15),
-              // Form for transaction details
-              Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (_hasCategoryOptions) ...[
-                      Text(
-                        'Choose a subcategory',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 8),
-                      RadioGroup<String>(
-                        groupValue: _selectedCategory,
-                        onChanged: (value) {
-                          if (value != null) _toggleCategory(value);
-                        },
-                        child: Column(
-                          children: [
-                            for (
-                              var index = 0;
-                              index < widget.categoryOptions.length;
-                              index++
-                            )
-                              _ColorfulCategoryRadio(
-                                category: widget.categoryOptions[index],
-                                index: index,
-                                selected:
-                                    _selectedCategory ==
-                                    widget.categoryOptions[index].name,
-                                onTap: () => _toggleCategory(
-                                  widget.categoryOptions[index].name,
-                                ),
-                                details:
-                                    _selectedCategory ==
-                                            widget
-                                                .categoryOptions[index]
-                                                .name &&
-                                        _expandedCategory ==
-                                            widget.categoryOptions[index].name
-                                    ? _buildTransactionDetailsFields(
-                                        embedded: true,
-                                      )
-                                    : null,
-                              ),
-                          ],
-                        ),
-                      ),
-                      if (_showCategoryError)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 12, top: 2),
-                          child: Text(
-                            'Select a subcategory.',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                              fontSize: 12,
+            ),
+            actions: widget.appBarActions,
+          ),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _ReceiptPanel(
+                    imagePath: _receiptImagePath,
+                    isScanning: _isScanningReceipt,
+                    onScan: _chooseReceiptSource,
+                    onRemove: () => setState(() => _receiptImagePath = null),
+                  ),
+                  const SizedBox(height: 15),
+                  // Form for transaction details
+                  Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (_hasCategoryOptions) ...[
+                          Text(
+                            'Choose a subcategory',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 8),
+                          RadioGroup<String>(
+                            groupValue: _selectedCategory,
+                            onChanged: (value) {
+                              if (value != null) _toggleCategory(value);
+                            },
+                            child: Column(
+                              children: [
+                                for (
+                                  var index = 0;
+                                  index < _currentCategoryOptions.length;
+                                  index++
+                                )
+                                  _ColorfulCategoryRadio(
+                                    category: _currentCategoryOptions[index],
+                                    index: index,
+                                    selected:
+                                        _selectedCategory ==
+                                        _currentCategoryOptions[index].name,
+                                    onTap: () => _toggleCategory(
+                                      _currentCategoryOptions[index].name,
+                                    ),
+                                    details:
+                                        _selectedCategory ==
+                                                _currentCategoryOptions[index]
+                                                    .name &&
+                                            _expandedCategory ==
+                                                _currentCategoryOptions[index]
+                                                    .name
+                                        ? _buildTransactionDetailsFields(
+                                            embedded: true,
+                                          )
+                                        : null,
+                                  ),
+                              ],
                             ),
                           ),
-                        ),
-                      const SizedBox(height: 10),
-                    ] else ...[
-                      TextFormField(
-                        controller: _titleController,
-                        decoration: const InputDecoration(
-                          labelText: 'Title',
-                          border: OutlineInputBorder(),
-                        ),
-                        textCapitalization: TextCapitalization.words,
-                        textInputAction: TextInputAction.next,
-                        validator: _requiredValidator('Enter a title.'),
-                      ),
-                      const SizedBox(height: 14),
-                      _buildTransactionDetailsFields(),
-                      const SizedBox(height: 16),
-                    ],
-                    OutlinedButton.icon(
-                      onPressed: _selectDate,
-                      icon: const Icon(Icons.calendar_today_outlined),
-                      label: Text(
-                        _selectedDate.toLocal().toString().split(' ')[0],
-                      ),
-                    ),
-                    if (canSelectTransactionType) ...[
-                      const SizedBox(height: 16),
-                      SegmentedButton<bool>(
-                        expandedInsets: EdgeInsets.zero,
-                        showSelectedIcon: false,
-                        segments: const [
-                          ButtonSegment<bool>(
-                            value: false,
-                            label: Text('Income'),
-                            icon: Icon(Icons.arrow_upward),
+                          if (_showCategoryError)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 12, top: 2),
+                              child: Text(
+                                'Select a subcategory.',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          const SizedBox(height: 10),
+                        ] else ...[
+                          TextFormField(
+                            controller: _titleController,
+                            decoration: const InputDecoration(
+                              labelText: 'Title',
+                              border: OutlineInputBorder(),
+                            ),
+                            textCapitalization: TextCapitalization.words,
+                            textInputAction: TextInputAction.next,
+                            validator: _requiredValidator('Enter a title.'),
                           ),
-                          ButtonSegment<bool>(
-                            value: true,
-                            label: Text('Expense'),
-                            icon: Icon(Icons.arrow_downward),
+                          const SizedBox(height: 14),
+                          _buildTransactionDetailsFields(),
+                          const SizedBox(height: 16),
+                        ],
+                        OutlinedButton.icon(
+                          onPressed: _selectDate,
+                          icon: const Icon(Icons.calendar_today_outlined),
+                          label: Text(
+                            _selectedDate.toLocal().toString().split(' ')[0],
+                          ),
+                        ),
+                        if (canSelectTransactionType) ...[
+                          const SizedBox(height: 16),
+                          SegmentedButton<bool>(
+                            expandedInsets: EdgeInsets.zero,
+                            showSelectedIcon: false,
+                            segments: const [
+                              ButtonSegment<bool>(
+                                value: false,
+                                label: Text('Income'),
+                                icon: Icon(Icons.arrow_upward),
+                              ),
+                              ButtonSegment<bool>(
+                                value: true,
+                                label: Text('Expense'),
+                                icon: Icon(Icons.arrow_downward),
+                              ),
+                            ],
+                            selected: {_isExpense},
+                            onSelectionChanged: (selection) {
+                              setState(() {
+                                _isExpense = selection.first;
+                              });
+                            },
                           ),
                         ],
-                        selected: {_isExpense},
-                        onSelectionChanged: (selection) {
-                          setState(() {
-                            _isExpense = selection.first;
-                          });
-                        },
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    FilledButton.icon(
-                      onPressed: _submitData,
-                      icon: Icon(widget.isEditing ? Icons.save : Icons.add),
-                      label: Text(
-                        widget.isEditing
-                            ? 'Save Transaction'
-                            : 'Add Transaction',
-                      ),
+                        const SizedBox(height: 12),
+                        FilledButton.icon(
+                          onPressed: _submitData,
+                          icon: Icon(widget.isEditing ? Icons.save : Icons.add),
+                          label: Text(
+                            widget.isEditing
+                                ? 'Save Transaction'
+                                : 'Add Transaction',
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        OutlinedButton.icon(
+                          onPressed:
+                              (_selectedCategory != null ||
+                                      widget.parentCategory != null) &&
+                                  widget.onViewCategoryHistory != null
+                              ? _openCategoryHistory
+                              : null,
+                          icon: const Icon(Icons.history_rounded),
+                          label: Text(
+                            _selectedCategory == null
+                                ? 'View category report'
+                                : 'View category history',
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 5),
-                    OutlinedButton.icon(
-                      onPressed:
-                          _selectedCategory != null &&
-                              widget.onViewCategoryHistory != null
-                          ? _openCategoryHistory
-                          : null,
-                      icon: const Icon(Icons.history_rounded),
-                      label: const Text('View category history'),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

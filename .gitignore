@@ -27,6 +27,9 @@ migrate_working_dir/
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
+
+# Android release-signing credentials must never be committed.
+android/key.properties
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/

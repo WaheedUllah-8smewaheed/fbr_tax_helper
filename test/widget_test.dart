@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'package:fbr_tax_helper/main.dart';
 import 'package:fbr_tax_helper/features/auth/presentation/pages/login_page.dart';
@@ -13,6 +14,8 @@ import 'package:fbr_tax_helper/features/tax_calculator/domain/usecases/calculate
 import 'package:fbr_tax_helper/features/tax_calculator/presentation/bloc/tax_calculator_bloc.dart';
 import 'package:fbr_tax_helper/features/splash/presentation/pages/splash_screen.dart';
 import 'package:fbr_tax_helper/features/tax_calculator/presentation/pages/tax_calculator_screen.dart';
+import 'package:fbr_tax_helper/features/transactions/presentation/pages/add_transaction_page.dart';
+import 'package:fbr_tax_helper/features/transactions/services/category_preferences_service.dart';
 
 class FakeLocalDataSource implements TaxLocalDataSource {
   TaxProfileModel? cachedProfile;
@@ -134,8 +137,44 @@ void main() {
     await tester.pump();
 
     expect(find.text('Sign in'), findsWidgets);
+    expect(find.text('Forgot password?'), findsOneWidget);
     expect(find.byType(SingleChildScrollView), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('forgot password opens dialog with email prefill and allows cancel', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      RepositoryProvider<AuthService>.value(
+        value: AuthService(),
+        child: const MaterialApp(home: LoginPage()),
+      ),
+    );
+    await tester.pump();
+
+    // Type email on login page
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Email address'),
+      'user@example.com',
+    );
+    await tester.tap(find.text('Forgot password?'));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('Forgot Password'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('user@example.com'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Send link'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('Forgot Password'), findsNothing);
   });
 
   testWidgets('refresh clears fields and estimate results', (tester) async {
@@ -168,6 +207,42 @@ void main() {
     expect(find.text('Start with monthly gross income'), findsOneWidget);
     incomeField = tester.widget<TextField>(find.byType(TextField));
     expect(incomeField.controller?.text, isEmpty);
+  });
+
+  testWidgets('AddTransactionPage replicates subcategories from preferences without inline add button', (
+    tester,
+  ) async {
+    FlutterSecureStorage.setMockInitialValues({});
+    final preferences = CategoryPreferencesService();
+    addTearDown(preferences.dispose);
+    await preferences.loadForUser('test-user');
+
+    // Add a custom subcategory via preferences (as done from settings)
+    await preferences.addSubcategory(
+      parentName: 'Bills',
+      categoryName: 'Internet Fiber',
+      isExpense: true,
+    );
+
+    await tester.pumpWidget(
+      RepositoryProvider<AuthService>.value(
+        value: AuthService(),
+        child: MaterialApp(
+          home: AddTransactionPage(
+            parentCategory: 'Bills',
+            categoryOptions: preferences.childrenOf('Bills'),
+            categoryPreferences: preferences,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Inline add button should NOT be present on AddTransactionPage
+    expect(find.text('Add subcategory to Bills'), findsNothing);
+
+    // Newly added subcategory from preferences is replicated on transaction screen
+    expect(find.text('Internet Fiber'), findsOneWidget);
   });
 }
 

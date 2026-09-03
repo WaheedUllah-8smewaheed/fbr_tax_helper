@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:fbr_tax_helper/core/theme/app_theme.dart';
-import 'package:fbr_tax_helper/core/widgets/filer_flow_logo.dart';
 import 'package:flutter/material.dart';
 
 import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
@@ -106,7 +105,14 @@ class _SplashScreenState extends State<SplashScreen>
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          FilerFlowLogo(size: logoSize),
+                          Image.asset(
+                            'assets/app_logo_splash_gold.png',
+                            width: logoSize,
+                            height: logoSize,
+                            fit: BoxFit.cover,
+                            alignment: Alignment.center,
+                            filterQuality: FilterQuality.high,
+                          ),
                           const SizedBox(height: 28),
                           Text(
                             'Filer Flow',

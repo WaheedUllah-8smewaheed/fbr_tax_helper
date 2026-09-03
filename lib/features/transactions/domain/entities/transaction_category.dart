@@ -35,6 +35,14 @@ class TransactionCategory {
     isExpense: true,
   );
   static const zakat = TransactionCategory(name: 'Zakat', isExpense: true);
+  static const monthlyHomePayment = TransactionCategory(
+    name: 'Monthly Home Payment',
+    isExpense: true,
+  );
+  static const committee = TransactionCategory(
+    name: 'Committee',
+    isExpense: true,
+  );
   static const misc = TransactionCategory(name: 'Other', isExpense: true);
 
   static const hierarchy = <String, Map<String, List<TransactionCategory>>>{
@@ -147,6 +155,12 @@ class TransactionCategory {
       'Banking': [
         TransactionCategory(name: 'Bank Charges', isExpense: true),
         TransactionCategory(name: 'Loan Payment', isExpense: true),
+      ],
+    },
+    'Commitments': {
+      'Commitments': [
+        monthlyHomePayment,
+        committee,
       ],
     },
     'Others': {

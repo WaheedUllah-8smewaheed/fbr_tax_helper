@@ -66,6 +66,15 @@ class _SignupFormState extends State<SignupForm>
   }
 
   void _submitSignup() {
+    final captchaError = _validateCaptcha(_captchaController.text);
+    if (captchaError != null) {
+      _refreshCaptcha();
+      if (_captchaFieldKey.currentState != null) {
+        _captchaFieldKey.currentState!.validate();
+      }
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
 
     context.read<SignupBloc>().add(
@@ -79,7 +88,10 @@ class _SignupFormState extends State<SignupForm>
   }
 
   void _submitGoogleSignup() {
-    if (!(_captchaFieldKey.currentState?.validate() ?? false)) return;
+    if (!(_captchaFieldKey.currentState?.validate() ?? false)) {
+      _refreshCaptcha();
+      return;
+    }
     context.read<SignupBloc>().add(const SignUpWithGooglePressed());
   }
 

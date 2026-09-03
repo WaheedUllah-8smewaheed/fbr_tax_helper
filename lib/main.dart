@@ -10,6 +10,7 @@ import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fbr_tax_helper/firebase_options.dart';
@@ -29,7 +30,29 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await _activateAppCheck();
   runApp(MyApp());
+}
+
+Future<void> _activateAppCheck() async {
+  // A web app needs its own reCAPTCHA v3 site key. Do not ship a placeholder
+  // key: Firebase App Check must be configured before web enforcement is on.
+  const webSiteKey = String.fromEnvironment('FBR_HELPER_RECAPTCHA_V3_SITE_KEY');
+  if (kIsWeb) {
+    if (webSiteKey.isNotEmpty) {
+      await FirebaseAppCheck.instance.activate(
+        webProvider: ReCaptchaV3Provider(webSiteKey),
+      );
+    }
+    return;
+  }
+
+  if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: AndroidProvider.playIntegrity,
+      appleProvider: AppleProvider.deviceCheck,
+    );
+  }
 }
 
 class MyApp extends StatelessWidget {

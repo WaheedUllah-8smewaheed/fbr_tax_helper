@@ -374,7 +374,6 @@ class TransactionReportService {
     required double income,
     required double expenses,
   }) {
-    final grandTotal = income + expenses;
     final balance = income - expenses;
     return pw.Container(
       width: double.infinity,
@@ -398,7 +397,6 @@ class TransactionReportService {
           pw.SizedBox(height: 10),
           _totalRow('Total income', _formatMoney(income)),
           _totalRow('Total expenses', _formatMoney(expenses)),
-          _totalRow('Grand total', _formatMoney(grandTotal)),
           pw.Divider(color: PdfColor.fromHex('#B7C9C3')),
           _totalRow('Balance', _formatMoney(balance), emphasize: true),
         ],

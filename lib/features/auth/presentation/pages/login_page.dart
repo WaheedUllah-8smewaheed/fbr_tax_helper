@@ -69,6 +69,27 @@ class _LoginFormState extends State<LoginForm>
     context.read<LoginBloc>().add(const LoginWithGooglePressed());
   }
 
+  Future<void> _handleForgotPassword() async {
+    final email = await showDialog<String>(
+      context: context,
+      builder: (context) => _ForgotPasswordDialog(
+        initialEmail: _emailController.text.trim(),
+        authService: context.read<AuthService>(),
+      ),
+    );
+    if (email == null || !mounted) return;
+
+    if (_emailController.text.trim().isEmpty) {
+      _emailController.text = email;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(content: Text('Password reset email sent.')),
+      );
+  }
+
   String? _validateEmail(String? value) {
     final email = value?.trim() ?? '';
     if (email.isEmpty) return 'Enter your email address';
@@ -181,6 +202,7 @@ class _LoginFormState extends State<LoginForm>
                                 },
                                 onEmailLogin: _submitEmailLogin,
                                 onGoogleLogin: _submitGoogleLogin,
+                                onForgotPassword: _handleForgotPassword,
                                 onCreateAccount: () {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
@@ -323,6 +345,132 @@ class _TotpSignInDialogState extends State<_TotpSignInDialog> {
   }
 }
 
+class _ForgotPasswordDialog extends StatefulWidget {
+  const _ForgotPasswordDialog({
+    required this.initialEmail,
+    required this.authService,
+  });
+
+  final String initialEmail;
+  final AuthService authService;
+
+  @override
+  State<_ForgotPasswordDialog> createState() => _ForgotPasswordDialogState();
+}
+
+class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _emailController;
+  bool _isSending = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController = TextEditingController(text: widget.initialEmail);
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  String? _validateEmail(String? value) {
+    final email = value?.trim() ?? '';
+    if (email.isEmpty) return 'Enter your email address';
+    if (!email.contains('@') || !email.contains('.')) {
+      return 'Enter a valid email address';
+    }
+    return null;
+  }
+
+  Future<void> _sendReset() async {
+    if (!_formKey.currentState!.validate() || _isSending) return;
+
+    setState(() {
+      _isSending = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await widget.authService.sendPasswordResetEmail(
+        _emailController.text.trim(),
+      );
+      if (mounted) {
+        Navigator.of(context).pop(_emailController.text.trim());
+      }
+    } on AuthServiceException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isSending = false;
+        _errorMessage = error.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isSending = false;
+        _errorMessage =
+            'Unable to send password reset email. Please try again.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      icon: const Icon(Icons.password_outlined),
+      title: const Text('Forgot Password'),
+      content: SizedBox(
+        width: 360,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Enter your account email to receive a password reset link.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _emailController,
+                autofocus: widget.initialEmail.isEmpty,
+                enabled: !_isSending,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.done,
+                validator: _validateEmail,
+                onFieldSubmitted: (_) => _sendReset(),
+                decoration: InputDecoration(
+                  labelText: 'Email address',
+                  prefixIcon: const Icon(Icons.alternate_email),
+                  errorText: _errorMessage,
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSending ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _isSending ? null : _sendReset,
+          child: _isSending
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Send link'),
+        ),
+      ],
+    );
+  }
+}
+
 class _LoginPanel extends StatelessWidget {
   const _LoginPanel({
     required this.formKey,
@@ -332,6 +480,7 @@ class _LoginPanel extends StatelessWidget {
     required this.onTogglePassword,
     required this.onEmailLogin,
     required this.onGoogleLogin,
+    required this.onForgotPassword,
     required this.onCreateAccount,
     required this.onTaxCalculator,
     required this.validateEmail,
@@ -345,6 +494,7 @@ class _LoginPanel extends StatelessWidget {
   final VoidCallback onTogglePassword;
   final VoidCallback onEmailLogin;
   final VoidCallback onGoogleLogin;
+  final VoidCallback onForgotPassword;
   final VoidCallback onCreateAccount;
   final VoidCallback onTaxCalculator;
   final FormFieldValidator<String> validateEmail;
@@ -487,7 +637,41 @@ class _LoginPanel extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(height: 22),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: const Color(
+                        0xFF092B29,
+                      ).withValues(alpha: 0.78),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 6,
+                        horizontal: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.22),
+                        ),
+                      ),
+                      textStyle: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                    onPressed: isLoading ? null : onForgotPassword,
+                    icon: const Icon(
+                      Icons.lock_reset_rounded,
+                      size: 16,
+                      color: Color(0xFFFFC857),
+                    ),
+                    label: const Text('Forgot password?'),
+                  ),
+                ),
+                const SizedBox(height: 14),
                 SizedBox(
                   height: 52,
                   child: FilledButton.icon(
