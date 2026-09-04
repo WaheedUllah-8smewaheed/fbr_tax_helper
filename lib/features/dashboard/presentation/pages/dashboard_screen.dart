@@ -2137,7 +2137,9 @@ class _ProfilePageState extends State<_ProfilePage>
       final password = await showDialog<String>(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const _ConfirmPasswordDialog(),
+        builder: (context) => const _ConfirmPasswordDialog(
+          reason: 'Enter your current password before changing your email.',
+        ),
       );
       if (password == null) {
         throw const AuthServiceException('Email change was canceled.');
@@ -2203,6 +2205,8 @@ class _ProfilePageState extends State<_ProfilePage>
     setState(() => _isUpdatingProfile = true);
     try {
       await _authService.signOut();
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (error) {
       if (!mounted) return;
       setState(() => _isUpdatingProfile = false);
@@ -2253,10 +2257,13 @@ class _ProfilePageState extends State<_ProfilePage>
         final password = await showDialog<String>(
           context: context,
           barrierDismissible: false,
-          builder: (context) => const _ConfirmPasswordDialog(),
+          builder: (context) => const _ConfirmPasswordDialog(
+            reason: 'Enter your current password to confirm account removal.',
+          ),
         );
         if (password == null) {
-          throw const AuthServiceException('Account removal was canceled.');
+          if (mounted) setState(() => _isDeletingAccount = false);
+          return;
         }
         await _authService.reauthenticateCurrentUserWithPassword(password);
       } else if (providers.contains('google.com')) {
@@ -2269,6 +2276,48 @@ class _ProfilePageState extends State<_ProfilePage>
       );
       await _authService.deleteCurrentUser();
       await _deleteLocalAccountData(userId, profileImagePath);
+
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Account permanently removed.'),
+        ),
+      );
+    } on RecentLoginRequiredException {
+      if (!mounted) return;
+      final password = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const _ConfirmPasswordDialog(
+          reason: 'Enter your current password to confirm account removal.',
+        ),
+      );
+      if (password == null) {
+        if (mounted) setState(() => _isDeletingAccount = false);
+        return;
+      }
+      try {
+        await _authService.reauthenticateCurrentUserWithPassword(password);
+        final userId = user.uid;
+        final profileImagePath = await _profileStorage.read(
+          key: _profileImageKey,
+        );
+        await _authService.deleteCurrentUser();
+        await _deleteLocalAccountData(userId, profileImagePath);
+
+        if (!mounted) return;
+        Navigator.of(context).popUntil((route) => route.isFirst);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Account permanently removed.')),
+        );
+      } catch (retryError) {
+        if (!mounted) return;
+        setState(() => _isDeletingAccount = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not remove account: $retryError')),
+        );
+      }
     } on AuthServiceException catch (error) {
       if (!mounted) return;
       setState(() => _isDeletingAccount = false);
@@ -2288,18 +2337,24 @@ class _ProfilePageState extends State<_ProfilePage>
     String userId,
     String? profileImagePath,
   ) async {
-    await TaxDatabase.instance.deleteDataForUser(userId);
-    await Future.wait([
-      _profileStorage.delete(key: 'profile_image_$userId'),
-      _profileStorage.delete(key: 'pending_email_$userId'),
-      _profileStorage.delete(key: 'biometric_lock_enabled_$userId'),
-      _profileStorage.delete(key: 'category_preferences_$userId'),
-      _profileStorage.delete(key: 'CACHED_TAX_PROFILE'),
-      _profileStorage.delete(key: 'terms_license_v1_accepted_$userId'),
-    ]);
+    try {
+      await TaxDatabase.instance.deleteDataForUser(userId);
+    } catch (_) {}
+    try {
+      await Future.wait([
+        _profileStorage.delete(key: 'profile_image_$userId'),
+        _profileStorage.delete(key: 'pending_email_$userId'),
+        _profileStorage.delete(key: 'biometric_lock_enabled_$userId'),
+        _profileStorage.delete(key: 'category_preferences_$userId'),
+        _profileStorage.delete(key: 'CACHED_TAX_PROFILE'),
+        _profileStorage.delete(key: 'terms_license_v1_accepted_$userId'),
+      ]);
+    } catch (_) {}
     if (profileImagePath != null) {
-      final profileImage = File(profileImagePath);
-      if (await profileImage.exists()) await profileImage.delete();
+      try {
+        final profileImage = File(profileImagePath);
+        if (await profileImage.exists()) await profileImage.delete();
+      } catch (_) {}
     }
   }
 
@@ -2674,7 +2729,11 @@ class _ProfileUpdate {
 }
 
 class _ConfirmPasswordDialog extends StatefulWidget {
-  const _ConfirmPasswordDialog();
+  const _ConfirmPasswordDialog({
+    this.reason = 'Please confirm your password to proceed.',
+  });
+
+  final String reason;
 
   @override
   State<_ConfirmPasswordDialog> createState() => _ConfirmPasswordDialogState();
@@ -2705,9 +2764,7 @@ class _ConfirmPasswordDialogState extends State<_ConfirmPasswordDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              'Firebase requires a recent login before changing your email.',
-            ),
+            Text(widget.reason),
             const SizedBox(height: 14),
             TextField(
               controller: _passwordController,
@@ -2754,31 +2811,24 @@ class _HomeDashboard extends StatefulWidget {
 }
 
 class _HomeDashboardState extends State<_HomeDashboard> {
-  DateTime? _selectedMonth;
+  String? _selectedFinancialYear;
+  int? _selectedMonth;
 
   @override
   void initState() {
     super.initState();
+    _selectedFinancialYear = null;
     _selectedMonth = null;
-  }
-
-  List<entity.Transaction> _filterDashboardTransactions(
-    List<entity.Transaction> transactions,
-  ) {
-    if (_selectedMonth == null) {
-      return transactions;
-    }
-    return filterTransactionsByMonth(transactions, _selectedMonth);
   }
 
   Widget _buildDashboardHeader({
     required BuildContext context,
-    required List<DateTime> monthOptions,
+    required List<String> financialYearOptions,
   }) {
-    final isSelectedMonthPresent = _selectedMonth == null ||
-        monthOptions.any((m) =>
-            m.year == _selectedMonth!.year && m.month == _selectedMonth!.month);
-    final effectiveValue = isSelectedMonthPresent ? _selectedMonth : null;
+    final isSelectedYearPresent = _selectedFinancialYear == null ||
+        financialYearOptions.contains(_selectedFinancialYear);
+    final effectiveYearValue =
+        isSelectedYearPresent ? _selectedFinancialYear : null;
 
     return Container(
       width: double.infinity,
@@ -2786,7 +2836,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
       padding: EdgeInsets.only(
         left: 16,
         right: 16,
-        top: MediaQuery.of(context).padding.top + 10,
+        top: MediaQuery.of(context).padding.top + 8,
         bottom: 12,
       ),
       child: Row(
@@ -2802,60 +2852,123 @@ class _HomeDashboardState extends State<_HomeDashboard> {
               letterSpacing: -0.3,
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.25),
-              ),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<DateTime?>(
-                value: effectiveValue,
-                dropdownColor: const Color(0xFF0F3A30),
-                icon: const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: Colors.white,
-                  size: 20,
-                ),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-                isDense: true,
-                items: [
-                  const DropdownMenuItem<DateTime?>(
-                    value: null,
-                    child: Text(
-                      'All',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Financial Year Dropdown
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.25),
                   ),
-                  for (final m in monthOptions)
-                    DropdownMenuItem<DateTime?>(
-                      value: m,
-                      child: Text(
-                        DateFormat('MMMM yyyy').format(m),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String?>(
+                    value: effectiveYearValue,
+                    dropdownColor: const Color(0xFF0F3A30),
+                    icon: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    isDense: true,
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text(
+                          'All FY',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
-                    ),
-                ],
-                onChanged: (newMonth) {
-                  setState(() {
-                    _selectedMonth = newMonth;
-                  });
-                },
+                      for (final fy in financialYearOptions)
+                        DropdownMenuItem<String?>(
+                          value: fy,
+                          child: Text(
+                            'FY $fy',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                    ],
+                    onChanged: (newYear) {
+                      setState(() {
+                        _selectedFinancialYear = newYear;
+                      });
+                    },
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 8),
+              // Month Dropdown
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.25),
+                  ),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<int?>(
+                    value: _selectedMonth,
+                    dropdownColor: const Color(0xFF0F3A30),
+                    icon: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    isDense: true,
+                    items: [
+                      const DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text(
+                          'All Months',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      for (var m = 1; m <= 12; m++)
+                        DropdownMenuItem<int?>(
+                          value: m,
+                          child: Text(
+                            dashboardMonthNames[m - 1],
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                    ],
+                    onChanged: (newMonth) {
+                      setState(() {
+                        _selectedMonth = newMonth;
+                      });
+                    },
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -2885,41 +2998,40 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                 ),
               )
               .toList();
-          final visibleTransactions = _filterDashboardTransactions(transactions);
-          final monthOptions = _buildMonthOptions(transactions);
-
-          final totalIncome = _totalIncome(visibleTransactions);
-          final totalExpenses = _totalExpenses(visibleTransactions);
+          final visibleTransactions = filterDashboardTransactions(
+            transactions,
+            financialYear: _selectedFinancialYear,
+            month: _selectedMonth,
+          );
+          final financialYearOptions = buildFinancialYearOptions(transactions);
 
           return Column(
             children: [
               _buildDashboardHeader(
                 context: context,
-                monthOptions: monthOptions,
+                financialYearOptions: financialYearOptions,
               ),
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 14.0),
+                  padding: const EdgeInsets.only(
+                    left: 14.0,
+                    right: 14.0,
+                    top: 14.0,
+                    bottom: 84.0,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       IncomeExpensePiePanel(transactions: visibleTransactions),
                       const SizedBox(height: 14),
-                      NetLossAlertBanner(
-                        totalIncome: totalIncome,
-                        totalExpenses: totalExpenses,
-                      ),
-                      const SizedBox(height: 14),
-                      IncomeVsExpensesComparisonPanel(
-                        totalIncome: totalIncome,
-                        totalExpenses: totalExpenses,
-                      ),
-                      const SizedBox(height: 14),
                       Align(
                         alignment: Alignment.centerRight,
                         child: _PrintTransactionsButton(
                           transactions: visibleTransactions,
-                          filterLabel: _transactionFilterLabel(_selectedMonth),
+                          filterLabel: _transactionFilterLabel(
+                            selectedFinancialYear: _selectedFinancialYear,
+                            selectedMonth: _selectedMonth,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -3227,6 +3339,75 @@ String _formatDashboardMoney(num value) {
 
   final sign = value < 0 ? '-' : '';
   return 'PKR $sign${buffer.toString()}';
+}
+
+String _formatSignedDashboardMoney(num value) {
+  final rounded = value.round().abs().toString();
+  final buffer = StringBuffer();
+
+  for (var index = 0; index < rounded.length; index++) {
+    final positionFromEnd = rounded.length - index;
+    buffer.write(rounded[index]);
+    if (positionFromEnd > 1 && positionFromEnd % 3 == 1) {
+      buffer.write(',');
+    }
+  }
+
+  final sign = value > 0 ? '+' : (value < 0 ? '-' : '');
+  return '${sign}PKR ${buffer.toString()}';
+}
+
+
+const dashboardMonthNames = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+String getFinancialYear(DateTime date) {
+  final startYear = date.month >= 7 ? date.year : date.year - 1;
+  final endYearShort = (startYear + 1) % 100;
+  final endYearStr = endYearShort.toString().padLeft(2, '0');
+  return '$startYear-$endYearStr';
+}
+
+List<String> buildFinancialYearOptions(List<entity.Transaction> transactions) {
+  final years = transactions
+      .map((t) => getFinancialYear(t.date))
+      .toSet()
+      .toList();
+  final currentFY = getFinancialYear(DateTime.now());
+  if (!years.contains(currentFY)) {
+    years.add(currentFY);
+  }
+  years.sort((a, b) => b.compareTo(a));
+  return years;
+}
+
+List<entity.Transaction> filterDashboardTransactions(
+  List<entity.Transaction> transactions, {
+  String? financialYear,
+  int? month,
+}) {
+  return transactions.where((transaction) {
+    if (financialYear != null &&
+        getFinancialYear(transaction.date) != financialYear) {
+      return false;
+    }
+    if (month != null && transaction.date.month != month) {
+      return false;
+    }
+    return true;
+  }).toList();
 }
 
 List<entity.Transaction> filterTransactionsByMonth(
@@ -3882,12 +4063,21 @@ List<entity.Transaction> filterTransactionsForSelection(
   }).toList();
 }
 
-String _transactionFilterLabel(DateTime? selectedMonth) {
-  final periodLabel = selectedMonth == null
-      ? 'All dates'
-      : DateFormat('MMMM yyyy').format(selectedMonth);
-  // Keep printable filter labels ASCII; the PDF's default font lacks bullets.
-  return 'All transactions - $periodLabel';
+String _transactionFilterLabel({
+  String? selectedFinancialYear,
+  int? selectedMonth,
+}) {
+  if (selectedFinancialYear == null && selectedMonth == null) {
+    return 'All transactions - All dates';
+  }
+  final parts = <String>[];
+  if (selectedFinancialYear != null) {
+    parts.add('FY $selectedFinancialYear');
+  }
+  if (selectedMonth != null && selectedMonth >= 1 && selectedMonth <= 12) {
+    parts.add(dashboardMonthNames[selectedMonth - 1]);
+  }
+  return 'All transactions - ${parts.join(', ')}';
 }
 
 class _PrintTransactionsButton extends StatefulWidget {
@@ -6550,27 +6740,25 @@ class IncomeExpensePiePanel extends StatelessWidget {
 
     final chartTotal = totalExpenses + positiveBalance;
 
-    final expenseSharePct = chartTotal > 0
-        ? ((totalExpenses / chartTotal) * 100).round()
-        : 0;
-    final balanceSharePct = chartTotal > 0
-        ? (100 - expenseSharePct)
-        : 0;
-
     final spentPct = totalIncome > 0
         ? ((totalExpenses / totalIncome) * 100).round()
         : (totalExpenses > 0 ? 100 : 0);
+    final savedPct = totalIncome > 0
+        ? ((netBalance / totalIncome) * 100).clamp(0, 100).round()
+        : 0;
+
+    final isLoss = netBalance < 0;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
+            blurRadius: 12,
             offset: const Offset(0, 4),
           ),
         ],
@@ -6585,7 +6773,7 @@ class IncomeExpensePiePanel extends StatelessWidget {
                 'Expenses vs Balance',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w800,
-                      fontSize: 16,
+                      fontSize: 14.5,
                       color: const Color(0xFF111827),
                     ),
               ),
@@ -6594,7 +6782,7 @@ class IncomeExpensePiePanel extends StatelessWidget {
                 constraints: const BoxConstraints(),
                 icon: Icon(
                   Icons.info_outline_rounded,
-                  size: 20,
+                  size: 18,
                   color: Colors.grey.shade500,
                 ),
                 onPressed: () {
@@ -6618,271 +6806,211 @@ class IncomeExpensePiePanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isWide = constraints.maxWidth >= 540;
-
-              final donutChart = SizedBox(
-                height: 220,
-                child: chartTotal <= 0
-                    ? const _EmptyPieChart()
-                    : Stack(
-                        alignment: Alignment.center,
+          SizedBox(
+            height: 230,
+            child: chartTotal <= 0
+                ? const _EmptyPieChart()
+                : Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      PieChart(
+                        PieChartData(
+                          centerSpaceRadius: 60,
+                          sectionsSpace: 3,
+                          startDegreeOffset: -90,
+                          borderData: FlBorderData(show: false),
+                          sections: [
+                            if (positiveBalance > 0)
+                              PieChartSectionData(
+                                value: positiveBalance,
+                                color: const Color(0xFF00C853),
+                                radius: 42,
+                                title: '$savedPct%',
+                                showTitle: true,
+                                titleStyle: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                ),
+                                titlePositionPercentageOffset: 0.55,
+                              ),
+                            if (totalExpenses > 0)
+                              PieChartSectionData(
+                                value: totalExpenses,
+                                color: const Color(0xFFFF1744),
+                                radius: 42,
+                                title: '$spentPct%',
+                                showTitle: true,
+                                titleStyle: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                ),
+                                titlePositionPercentageOffset: 0.55,
+                              ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          PieChart(
-                            PieChartData(
-                              centerSpaceRadius: 56,
-                              sectionsSpace: 2,
-                              borderData: FlBorderData(show: false),
-                              sections: [
-                                if (positiveBalance > 0)
-                                  PieChartSectionData(
-                                    value: positiveBalance,
-                                    color: const Color(0xFF00C853),
-                                    radius: 48,
-                                    showTitle: true,
-                                    title: '$balanceSharePct%',
-                                    titleStyle: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                if (totalExpenses > 0)
-                                  PieChartSectionData(
-                                    value: totalExpenses,
-                                    color: const Color(0xFFFF1744),
-                                    radius: 48,
-                                    showTitle: true,
-                                    title: '$expenseSharePct%',
-                                    titleStyle: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                              ],
+                          Text(
+                            'Net Balance',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: Colors.grey.shade600,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2,
                             ),
                           ),
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'Balance',
+                          const SizedBox(height: 2),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16.0,
+                              ),
+                              child: Text(
+                                _formatSignedDashboardMoney(netBalance),
                                 style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey.shade600,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.3,
+                                  fontSize: 16.5,
+                                  fontWeight: FontWeight.w900,
+                                  color: netBalance < 0
+                                      ? const Color(0xFFE52E3D)
+                                      : const Color(0xFF0F9D58),
+                                  letterSpacing: -0.4,
                                 ),
                               ),
-                              const SizedBox(height: 2),
-                              FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10.0),
-                                  child: Text(
-                                    _formatNetBalance(netBalance),
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w900,
-                                      color: netBalance < 0
-                                          ? const Color(0xFFE52E3D)
-                                          : (netBalance > 0
-                                              ? const Color(0xFF0F9D58)
-                                              : const Color(0xFF111827)),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ],
                       ),
-              );
-
-              final detailsPanel = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        margin: const EdgeInsets.only(top: 4),
-                        width: 10,
-                        height: 10,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF00C853),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  'Balance',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 14,
-                                    color: Color(0xFF1F2937),
-                                  ),
-                                ),
-                                Text(
-                                  '$balanceSharePct%',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 13,
-                                    color: Color(0xFF1F2937),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _formatDashboardMoney(positiveBalance),
-                              style: const TextStyle(
-                                color: Color(0xFF00A84E),
-                                fontWeight: FontWeight.w800,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
-                  const SizedBox(height: 14),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        margin: const EdgeInsets.only(top: 4),
-                        width: 10,
-                        height: 10,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFFF1744),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  'Expenses',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 14,
-                                    color: Color(0xFF1F2937),
-                                  ),
-                                ),
-                                Text(
-                                  '$expenseSharePct%',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 13,
-                                    color: Color(0xFF1F2937),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _formatDashboardMoney(totalExpenses),
-                              style: const TextStyle(
-                                color: Color(0xFFE52E3D),
-                                fontWeight: FontWeight.w800,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              // Left Chip (Net Surplus / Balance)
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 9,
                   ),
-                  const SizedBox(height: 16),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFDF1F2),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFFCDADB)),
+                  decoration: BoxDecoration(
+                    color: isLoss
+                        ? const Color(0xFFFDF2F3)
+                        : const Color(0xFFEDF9F2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isLoss
+                          ? const Color(0xFFFCDADB)
+                          : const Color(0xFFC8EEDC),
+                      width: 1,
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Expenses vs Income',
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            isLoss
+                                ? Icons.trending_down_rounded
+                                : Icons.trending_up_rounded,
+                            size: 14,
+                            color: isLoss
+                                ? const Color(0xFFE52E3D)
+                                : const Color(0xFF0F9D58),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            isLoss ? 'Net Deficit' : 'Net Surplus',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              color: isLoss
+                                  ? const Color(0xFFB91C1C)
+                                  : const Color(0xFF065F46),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '${_formatSignedDashboardMoney(netBalance)} ($savedPct% remaining)',
                           style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF374151),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: isLoss
+                                ? const Color(0xFFE52E3D)
+                                : const Color(0xFF0F9D58),
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '$spentPct%',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              // Right Chip (Total Expenses / Spent)
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFDF2F3),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFFFCDADB),
+                      width: 1,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(
+                            Icons.trending_down_rounded,
+                            size: 14,
+                            color: Color(0xFFE52E3D),
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'Spent',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFFB91C1C),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '${_formatDashboardMoney(totalExpenses)} ($spentPct% spent)',
                           style: const TextStyle(
-                            fontSize: 26,
+                            fontSize: 11,
                             fontWeight: FontWeight.w900,
                             color: Color(0xFFE52E3D),
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        RichText(
-                          text: TextSpan(
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF4B5563),
-                            ),
-                            children: [
-                              const TextSpan(text: 'You have spent '),
-                              TextSpan(
-                                text: '$spentPct%',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFFE52E3D),
-                                ),
-                              ),
-                              const TextSpan(text: ' of your income'),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
-              );
-
-              if (isWide) {
-                return Row(
-                  children: [
-                    Expanded(flex: 5, child: donutChart),
-                    const SizedBox(width: 20),
-                    Expanded(flex: 5, child: detailsPanel),
-                  ],
-                );
-              }
-
-              return Column(
-                children: [
-                  donutChart,
-                  const SizedBox(height: 16),
-                  detailsPanel,
-                ],
-              );
-            },
+                ),
+              ),
+            ],
           ),
         ],
       ),

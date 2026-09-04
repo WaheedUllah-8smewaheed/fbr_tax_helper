@@ -186,7 +186,7 @@ class AuthService {
   Future<void> reauthenticateCurrentUserWithGoogle() async {
     final user = _requireCurrentUser();
     try {
-      final googleUser =
+      var googleUser =
           _googleAccount ??
           _googleSignIn.currentUser ??
           await _googleSignIn.signInSilently() ??
@@ -196,12 +196,34 @@ class AuthService {
           'Google reauthentication was cancelled.',
         );
       }
-      final googleAuth = await googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(
+      var googleAuth = await googleUser.authentication;
+      var credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
-      await user.reauthenticateWithCredential(credential);
+      try {
+        await user.reauthenticateWithCredential(credential);
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'invalid-credential' ||
+            e.code == 'user-token-expired' ||
+            e.code == 'user-mismatch') {
+          final freshGoogleUser = await _googleSignIn.signIn();
+          if (freshGoogleUser == null) {
+            throw const AuthServiceException(
+              'Google reauthentication was cancelled.',
+            );
+          }
+          googleUser = freshGoogleUser;
+          googleAuth = await freshGoogleUser.authentication;
+          credential = GoogleAuthProvider.credential(
+            accessToken: googleAuth.accessToken,
+            idToken: googleAuth.idToken,
+          );
+          await user.reauthenticateWithCredential(credential);
+        } else {
+          rethrow;
+        }
+      }
       _googleAccount = googleUser;
     } on AuthServiceException {
       rethrow;
@@ -479,10 +501,14 @@ class AuthService {
     _googleAccount = null;
     _clearDriveCredentials();
     try {
-      await _googleSignIn.signOut();
+      await _googleSignIn.disconnect();
     } catch (_) {
-      // The Firebase account is already deleted. A stale Google session must
-      // not make the completed deletion appear to have failed.
+      try {
+        await _googleSignIn.signOut();
+      } catch (_) {
+        // The Firebase account is already deleted. A stale Google session must
+        // not make the completed deletion appear to have failed.
+      }
     }
   }
 

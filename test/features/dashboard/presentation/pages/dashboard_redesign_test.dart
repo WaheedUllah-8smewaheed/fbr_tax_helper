@@ -63,7 +63,7 @@ void main() {
     expect(find.text('You spent more than you earned'), findsOneWidget);
   });
 
-  testWidgets('IncomeExpensePiePanel renders Donut chart, Balance in center, and Expenses vs Income highlight',
+  testWidgets('IncomeExpensePiePanel renders Donut chart with Net Balance, Net Deficit/Surplus, and Spent chips',
       (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -75,10 +75,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Expenses vs Balance'), findsOneWidget);
-    expect(find.text('Balance'), findsWidgets);
+    expect(find.text('Net Balance'), findsOneWidget);
     expect(find.text('-PKR 10,000'), findsOneWidget);
-    expect(find.text('Expenses vs Income'), findsOneWidget);
-    expect(find.text('103%'), findsOneWidget);
+    expect(find.text('Net Deficit'), findsOneWidget);
+    expect(find.text('-PKR 10,000 (0% remaining)'), findsOneWidget);
+    expect(find.text('Spent'), findsOneWidget);
+    expect(find.text('PKR 310,000 (103% spent)'), findsOneWidget);
   });
 
   testWidgets('NetLossAlertBanner renders over budget loss information',

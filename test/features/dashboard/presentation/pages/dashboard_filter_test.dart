@@ -306,4 +306,95 @@ void main() {
       );
     });
   });
+
+  group('Financial Year and Month Dashboard Filters', () {
+    final t1 = Transaction(
+      userId: '1',
+      title: 'Salary Jul 2024',
+      beneficiary: '',
+      purpose: '',
+      amount: 100000,
+      isExpense: false,
+      date: DateTime(2024, 7, 15),
+      category: 'Salary',
+    );
+    final t2 = Transaction(
+      userId: '1',
+      title: 'Salary Feb 2025',
+      beneficiary: '',
+      purpose: '',
+      amount: 100000,
+      isExpense: false,
+      date: DateTime(2025, 2, 10),
+      category: 'Salary',
+    );
+    final t3 = Transaction(
+      userId: '1',
+      title: 'Salary Jul 2025',
+      beneficiary: '',
+      purpose: '',
+      amount: 120000,
+      isExpense: false,
+      date: DateTime(2025, 7, 15),
+      category: 'Salary',
+    );
+
+    final transactions = [t1, t2, t3];
+
+    test('getFinancialYear determines FY correctly', () {
+      expect(getFinancialYear(DateTime(2024, 7, 1)), '2024-25');
+      expect(getFinancialYear(DateTime(2024, 12, 31)), '2024-25');
+      expect(getFinancialYear(DateTime(2025, 1, 1)), '2024-25');
+      expect(getFinancialYear(DateTime(2025, 6, 30)), '2024-25');
+      expect(getFinancialYear(DateTime(2025, 7, 1)), '2025-26');
+    });
+
+    test('buildFinancialYearOptions collects distinct sorted FYs', () {
+      final options = buildFinancialYearOptions(transactions);
+      expect(options.contains('2024-25'), isTrue);
+      expect(options.contains('2025-26'), isTrue);
+    });
+
+    test('filterDashboardTransactions filters by FY only', () {
+      final fy202425 = filterDashboardTransactions(
+        transactions,
+        financialYear: '2024-25',
+      );
+      expect(fy202425, [t1, t2]);
+
+      final fy202526 = filterDashboardTransactions(
+        transactions,
+        financialYear: '2025-26',
+      );
+      expect(fy202526, [t3]);
+    });
+
+    test('filterDashboardTransactions filters by Month only', () {
+      final julys = filterDashboardTransactions(
+        transactions,
+        month: 7,
+      );
+      expect(julys, [t1, t3]);
+
+      final febs = filterDashboardTransactions(
+        transactions,
+        month: 2,
+      );
+      expect(febs, [t2]);
+    });
+
+    test('filterDashboardTransactions filters by both FY and Month', () {
+      final result = filterDashboardTransactions(
+        transactions,
+        financialYear: '2024-25',
+        month: 7,
+      );
+      expect(result, [t1]);
+    });
+
+    test('filterDashboardTransactions returns all when no filters selected', () {
+      final result = filterDashboardTransactions(transactions);
+      expect(result.length, 3);
+    });
+  });
 }
