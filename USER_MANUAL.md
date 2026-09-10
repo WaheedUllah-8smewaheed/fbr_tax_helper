@@ -87,7 +87,7 @@ Estimate your exact Pakistani income tax liability according to official Federal
 3. Select your **Taxpayer Category**:
    * **Salaried Individual:** Select this if salary constitutes 75% or more of your annual income.
    * **Business / Non-Salaried Individual:** Select this if you are a sole proprietor, freelancer, doctor, contractor, or shopkeeper.
-   * **Association of Persons (AOP):** For registered business partnerships.
+   * **Others:** For registered business partnerships.
 4. Type your income into either the **Monthly Income** or **Annual Income** field (the app automatically converts between monthly and annual values).
 5. The calculator instantly displays:
    * **Monthly Tax Deduction**
@@ -158,7 +158,7 @@ Protect your financial privacy from anyone holding your phone:
 **A:** No. Filer Flow is a private personal helper. Your income, expenses, and receipts are stored locally on your device and inside your private Google Drive backup. Nothing is submitted to the FBR unless you personally export your figures and file through the official IRIS portal.
 
 #### Q: Can I edit or delete transactions later?
-**A:** Yes. Simply tap any transaction in the list to update its amount, date, or category, or swipe to delete it.
+**A:** Yes. Simply tap any transaction in the list to update its amount, date, or category, or delete it.
 
 ---
 
