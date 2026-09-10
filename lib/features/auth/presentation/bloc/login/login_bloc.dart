@@ -13,6 +13,20 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
       super(LoginInitial()) {
     on<LoginWithEmailAndPasswordPressed>(_onLoginWithEmailAndPasswordPressed);
     on<LoginWithGooglePressed>(_onLoginWithGooglePressed);
+    on<LoginWithOfflineModePressed>(_onLoginWithOfflineModePressed);
+  }
+
+  Future<void> _onLoginWithOfflineModePressed(
+    LoginWithOfflineModePressed event,
+    Emitter<LoginState> emit,
+  ) async {
+    emit(LoginLoading());
+    try {
+      await _authService.signInOffline();
+      emit(LoginSuccess());
+    } catch (e) {
+      emit(LoginFailure('Failed to start offline mode: ${e.toString()}'));
+    }
   }
 
   Future<void> _onLoginWithEmailAndPasswordPressed(

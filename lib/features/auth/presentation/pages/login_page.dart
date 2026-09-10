@@ -202,6 +202,12 @@ class _LoginFormState extends State<LoginForm>
                                 },
                                 onEmailLogin: _submitEmailLogin,
                                 onGoogleLogin: _submitGoogleLogin,
+                                onOfflineLogin: () {
+                                  FocusScope.of(context).unfocus();
+                                  context.read<LoginBloc>().add(
+                                    const LoginWithOfflineModePressed(),
+                                  );
+                                },
                                 onForgotPassword: _handleForgotPassword,
                                 onCreateAccount: () {
                                   Navigator.of(context).push(
@@ -480,6 +486,7 @@ class _LoginPanel extends StatelessWidget {
     required this.onTogglePassword,
     required this.onEmailLogin,
     required this.onGoogleLogin,
+    required this.onOfflineLogin,
     required this.onForgotPassword,
     required this.onCreateAccount,
     required this.onTaxCalculator,
@@ -494,6 +501,7 @@ class _LoginPanel extends StatelessWidget {
   final VoidCallback onTogglePassword;
   final VoidCallback onEmailLogin;
   final VoidCallback onGoogleLogin;
+  final VoidCallback onOfflineLogin;
   final VoidCallback onForgotPassword;
   final VoidCallback onCreateAccount;
   final VoidCallback onTaxCalculator;
@@ -773,6 +781,33 @@ class _LoginPanel extends StatelessWidget {
                       ),
                     ),
                     label: const Text('Continue with Google'),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 50,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0F4C3A).withValues(alpha: 0.9),
+                      foregroundColor: Colors.white,
+                      side: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.25),
+                      ),
+                      textStyle: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    onPressed: isLoading ? null : onOfflineLogin,
+                    icon: const Icon(
+                      Icons.cloud_off_rounded,
+                      color: Color(0xFFFFC857),
+                      size: 22,
+                    ),
+                    label: const Text('Continue in Offline Mode'),
                   ),
                 ),
                 const SizedBox(height: 14),

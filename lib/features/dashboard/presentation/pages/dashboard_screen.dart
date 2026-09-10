@@ -2435,20 +2435,33 @@ class _ProfilePageState extends State<_ProfilePage>
                     ),
                     const SizedBox(height: 4),
                     Text(user?.email ?? ''),
-                    const SizedBox(height: 8),
-                    Chip(
-                      avatar: Icon(
-                        user?.emailVerified == true
-                            ? Icons.verified
-                            : Icons.warning_amber,
-                        size: 18,
+                    if (user?.isOffline == true) ...[
+                      const SizedBox(height: 8),
+                      const Chip(
+                        avatar: Icon(
+                          Icons.cloud_off_rounded,
+                          size: 18,
+                          color: Color(0xFFD97706),
+                        ),
+                        label: Text('Offline Profile (Local Storage)'),
+                        backgroundColor: Color(0xFFFEF3C7),
                       ),
-                      label: Text(
-                        user?.emailVerified == true
-                            ? 'Email verified'
-                            : 'Email not verified',
+                    ] else ...[
+                      const SizedBox(height: 8),
+                      Chip(
+                        avatar: Icon(
+                          user?.emailVerified == true
+                              ? Icons.verified
+                              : Icons.warning_amber,
+                          size: 18,
+                        ),
+                        label: Text(
+                          user?.emailVerified == true
+                              ? 'Email verified'
+                              : 'Email not verified',
+                        ),
                       ),
-                    ),
+                    ],
                     if (_isUpdatingProfile) ...[
                       const SizedBox(height: 12),
                       const LinearProgressIndicator(),
@@ -3085,13 +3098,18 @@ class _DriveSyncButtonState extends State<_DriveSyncButton> {
     final authService = context.read<AuthService>();
 
     try {
-      await authService.getGoogleDriveHeaders(promptIfNecessary: true);
       final currentUser = authService.currentUser;
       if (currentUser == null) {
         throw const AuthServiceException(
           'Sign in before using Google Drive backup and restore.',
         );
       }
+      if (currentUser.isOffline) {
+        throw const AuthServiceException(
+          'Google Drive backup requires an active internet connection and a Google account. Connect to the internet to sign in and back up.',
+        );
+      }
+      await authService.getGoogleDriveHeaders(promptIfNecessary: true);
       final driveService = DriveService(
         ownerId: currentUser.uid,
         ownerEmail: currentUser.email,

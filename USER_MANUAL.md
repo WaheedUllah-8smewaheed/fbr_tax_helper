@@ -11,18 +11,16 @@ Welcome to **Filer Flow**! This manual provides step-by-step instructions on how
 4. [Using the AI Receipt & Bill Scanner](#4-using-the-ai-receipt--bill-scanner)
 5. [Calculating Your FBR Income Tax](#5-calculating-your-fbr-income-tax)
 6. [Claiming Tax Deductions & Credits](#6-claiming-tax-deductions--credits)
-7. [FBR Live Verification (ATL, NTN, CPR)](#7-fbr-live-verification-atl-ntn-cpr)
-8. [Generating & Sharing PDF Statements](#8-generating--sharing-pdf-statements)
-9. [Security, App Lock & Cloud Backup](#9-security-app-lock--cloud-backup)
-10. [Frequently Asked Questions (FAQ)](#10-frequently-asked-questions-faq)
+7. [Generating & Sharing PDF Statements](#8-generating--sharing-pdf-statements)
+8. [Security, App Lock & Cloud Backup](#9-security-app-lock--cloud-backup)
+9. [Frequently Asked Questions (FAQ)](#10-frequently-asked-questions-faq)
 
 ---
 
 ## 1. Getting Started & Sign In
 
-When you first launch Filer Flow, you have three quick ways to access the application:
-
-* **Explore as Guest:** Tap **"Explore Calculator as Guest"** to immediately calculate income taxes or try out features without creating an account.
+* **Continue in Offline Mode:** Have no internet or prefer keeping your data completely local? Tap **"Continue in Offline Mode"** right on the login screen to access all budgeting, receipt scanning, and tax calculation features with zero internet required.
+* **Offline Cached Sign-In:** If you already have an email account and lose internet connection, you can still sign in using your regular password. Filer Flow verifies your credentials securely against your device's encrypted cache.
 * **Sign Up / Login with Email:** Enter your email address and a secure password. You can request a password reset email anytime if you forget your credentials.
 * **One-Tap Google Sign-In:** Tap the **Google** button to link your account securely and enable seamless cloud backups.
 
@@ -114,17 +112,6 @@ If you have already paid withholding tax on everyday utilities and assets, you c
 
 ---
 
-## 7. FBR Live Verification (ATL, NTN, CPR)
-
-Verify official tax documents in real-time without leaving the app:
-
-* **Active Taxpayer List (ATL) Status:**
-  * Enter your **13-digit CNIC** (e.g., `35201-1234567-1`).
-  * Tap **Check ATL Status** to verify whether you or a vendor are listed as an Active Filer with FBR (granting lower withholding tax rates).
-* **NTN Verification:**
-  * Search by National Tax Number or CNIC to check company and individual business registrations.
-* **CPR Payment Verification:**
-  * Enter your **Computerized Payment Receipt (CPR)** number to confirm that taxes deposited at the bank or State Bank have been credited to the FBR treasury.
 
 ---
 
