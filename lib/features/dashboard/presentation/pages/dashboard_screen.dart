@@ -24,6 +24,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as path;
+import 'package:fbr_tax_helper/core/widgets/filer_flow_logo.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -67,8 +68,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
-            content: const Text(
-              'Please enable fingerprint for two-factor authentication in the Profile menu.',
+            content: Row(
+              children: const [
+                FilerFlowLogo(size: 28),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Please enable fingerprint for two-factor authentication in the Profile menu.',
+                  ),
+                ),
+              ],
             ),
             duration: const Duration(seconds: 5),
           ),
@@ -1980,10 +1989,18 @@ class _ProfilePageState extends State<_ProfilePage>
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            enabled
-                ? 'Fingerprint app lock enabled.'
-                : 'Fingerprint app lock disabled.',
+          content: Row(
+            children: [
+              const FilerFlowLogo(size: 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  enabled
+                      ? 'Fingerprint app lock enabled.'
+                      : 'Fingerprint app lock disabled.',
+                ),
+              ),
+            ],
           ),
         ),
       );
@@ -2435,33 +2452,20 @@ class _ProfilePageState extends State<_ProfilePage>
                     ),
                     const SizedBox(height: 4),
                     Text(user?.email ?? ''),
-                    if (user?.isOffline == true) ...[
-                      const SizedBox(height: 8),
-                      const Chip(
-                        avatar: Icon(
-                          Icons.cloud_off_rounded,
-                          size: 18,
-                          color: Color(0xFFD97706),
-                        ),
-                        label: Text('Offline Profile (Local Storage)'),
-                        backgroundColor: Color(0xFFFEF3C7),
+                    const SizedBox(height: 8),
+                    Chip(
+                      avatar: Icon(
+                        user?.emailVerified == true
+                            ? Icons.verified
+                            : Icons.warning_amber,
+                        size: 18,
                       ),
-                    ] else ...[
-                      const SizedBox(height: 8),
-                      Chip(
-                        avatar: Icon(
-                          user?.emailVerified == true
-                              ? Icons.verified
-                              : Icons.warning_amber,
-                          size: 18,
-                        ),
-                        label: Text(
-                          user?.emailVerified == true
-                              ? 'Email verified'
-                              : 'Email not verified',
-                        ),
+                      label: Text(
+                        user?.emailVerified == true
+                            ? 'Email verified'
+                            : 'Email not verified',
                       ),
-                    ],
+                    ),
                     if (_isUpdatingProfile) ...[
                       const SizedBox(height: 12),
                       const LinearProgressIndicator(),
@@ -3102,11 +3106,6 @@ class _DriveSyncButtonState extends State<_DriveSyncButton> {
       if (currentUser == null) {
         throw const AuthServiceException(
           'Sign in before using Google Drive backup and restore.',
-        );
-      }
-      if (currentUser.isOffline) {
-        throw const AuthServiceException(
-          'Google Drive backup requires an active internet connection and a Google account. Connect to the internet to sign in and back up.',
         );
       }
       await authService.getGoogleDriveHeaders(promptIfNecessary: true);

@@ -1,9 +1,10 @@
-import 'package:fbr_tax_helper/features/auth/domain/models/app_user.dart';
 import 'package:fbr_tax_helper/features/dashboard/presentation/pages/dashboard_screen.dart';
 import 'package:fbr_tax_helper/features/auth/presentation/pages/login_page.dart';
 import 'package:fbr_tax_helper/features/auth/presentation/pages/terms_agreement_page.dart';
 import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:fbr_tax_helper/features/auth/services/biometric_lock_service.dart';
+import 'package:fbr_tax_helper/core/widgets/filer_flow_logo.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -13,8 +14,7 @@ class SessionRouter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<AppUser?>(
-      // Listens to authentication session changes (both online and offline)
+    return StreamBuilder<User?>(
       stream: context.read<AuthService>().authStateChanges(),
       builder: (context, snapshot) {
         // While auth is initializing on startup
@@ -49,7 +49,7 @@ class SessionRouter extends StatelessWidget {
 class _BiometricSessionGate extends StatefulWidget {
   const _BiometricSessionGate({required this.user});
 
-  final AppUser user;
+  final User user;
 
   @override
   State<_BiometricSessionGate> createState() => _BiometricSessionGateState();
@@ -191,8 +191,10 @@ class _BiometricSessionGateState extends State<_BiometricSessionGate>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.fingerprint, size: 88, color: Colors.teal),
+                const FilerFlowLogo(size: 80),
                 const SizedBox(height: 16),
+                const Icon(Icons.fingerprint, size: 48, color: Colors.teal),
+                const SizedBox(height: 12),
                 Text(
                   'Unlock your account',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
