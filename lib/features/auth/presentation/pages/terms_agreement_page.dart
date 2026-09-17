@@ -1,5 +1,5 @@
-import 'package:fbr_tax_helper/features/auth/domain/models/app_user.dart';
 import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -11,7 +11,7 @@ class TermsAgreementGate extends StatefulWidget {
     super.key,
   });
 
-  final AppUser user;
+  final User user;
   final Widget child;
 
   @override

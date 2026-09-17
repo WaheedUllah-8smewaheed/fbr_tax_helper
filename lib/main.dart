@@ -9,7 +9,7 @@ import 'package:fbr_tax_helper/features/transactions/presentation/bloc/transacti
 import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:fbr_tax_helper/features/auth/domain/models/app_user.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -94,7 +94,7 @@ class MyApp extends StatelessWidget {
                 child: child ?? const SizedBox.shrink(),
               );
             }
-            return StreamBuilder<AppUser?>(
+            return StreamBuilder<User?>(
               stream: authService.authStateChanges(),
               initialData: authService.currentUser,
               builder: (context, session) => _AppThemeFrame(

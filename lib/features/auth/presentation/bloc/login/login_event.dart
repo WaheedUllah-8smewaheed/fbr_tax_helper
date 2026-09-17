@@ -20,7 +20,3 @@ class LoginWithEmailAndPasswordPressed extends LoginEvent {
 class LoginWithGooglePressed extends LoginEvent {
   const LoginWithGooglePressed();
 }
-
-class LoginWithOfflineModePressed extends LoginEvent {
-  const LoginWithOfflineModePressed();
-}

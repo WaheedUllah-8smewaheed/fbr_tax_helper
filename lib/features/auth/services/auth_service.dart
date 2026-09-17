@@ -1,10 +1,6 @@
-import 'dart:async';
-import 'dart:convert';
-import 'package:fbr_tax_helper/features/auth/domain/models/app_user.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
@@ -13,7 +9,6 @@ class AuthService {
   AuthService({
     FirebaseAuth? firebaseAuth,
     GoogleSignIn? googleSignIn,
-    FlutterSecureStorage? secureStorage,
     List<String>? driveScopes,
     String? googleClientId,
     String? googleServerClientId,
@@ -24,10 +19,7 @@ class AuthService {
              clientId: googleClientId,
              serverClientId: googleServerClientId,
            ),
-       _storage = secureStorage ?? const FlutterSecureStorage(),
-       _driveScopes = List.unmodifiable(driveScopes ?? _defaultDriveScopes) {
-    _initAuthSession();
-  }
+       _driveScopes = List.unmodifiable(driveScopes ?? _defaultDriveScopes);
 
   static const List<String> _defaultDriveScopes = [
     drive.DriveApi.driveAppdataScope,
@@ -37,177 +29,23 @@ class AuthService {
 
   final FirebaseAuth? _firebaseAuthOverride;
   final GoogleSignIn _googleSignIn;
-  final FlutterSecureStorage _storage;
   final List<String> _driveScopes;
 
   GoogleSignInAccount? _googleAccount;
   Map<String, String>? _googleDriveHeaders;
-  AppUser? _offlineUser;
-  final StreamController<AppUser?> _authStateController =
-      StreamController<AppUser?>.broadcast();
-  StreamSubscription<User?>? _firebaseAuthSubscription;
 
-  static const String _activeOfflineKey = 'active_offline_session';
-  static const String _activeOfflineUidKey = 'active_offline_uid';
-  static const String _activeOfflineEmailKey = 'active_offline_email';
-  static const String _activeOfflineNameKey = 'active_offline_name';
+  FirebaseAuth get _firebaseAuth =>
+      _firebaseAuthOverride ?? FirebaseAuth.instance;
 
-  void _initAuthSession() {
-    _loadOfflineSession();
-    final auth = _tryGetFirebaseAuth();
-    if (auth != null) {
-      _firebaseAuthSubscription = auth.authStateChanges().listen((user) {
-        if (_offlineUser == null) {
-          _authStateController.add(
-            user != null ? AppUser.fromFirebase(user) : null,
-          );
-        }
-      });
-    }
-  }
+  User? get currentUser => _firebaseAuth.currentUser;
 
-  Future<void> _loadOfflineSession() async {
-    try {
-      final isActive = await _storage.read(key: _activeOfflineKey);
-      if (isActive == 'true') {
-        final uid =
-            await _storage.read(key: _activeOfflineUidKey) ??
-            'offline_local_user';
-        final email =
-            await _storage.read(key: _activeOfflineEmailKey) ??
-            'offline@filerflow.local';
-        final name =
-            await _storage.read(key: _activeOfflineNameKey) ?? 'Offline User';
-        _offlineUser = AppUser.offline(
-          uid: uid,
-          email: email,
-          displayName: name,
-        );
-        _authStateController.add(_offlineUser);
-      }
-    } catch (_) {
-      // Storage read error ignored
-    }
-  }
+  Stream<User?> get userSessionStream => authStateChanges();
 
-  FirebaseAuth? _tryGetFirebaseAuth() {
-    if (_firebaseAuthOverride != null) return _firebaseAuthOverride;
-    try {
-      return FirebaseAuth.instance;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  FirebaseAuth get _firebaseAuth {
-    final auth = _tryGetFirebaseAuth();
-    if (auth == null) {
-      throw const AuthServiceException(
-        'Firebase authentication is not available.',
-      );
-    }
-    return auth;
-  }
-
-  AppUser? get currentUser {
-    if (_offlineUser != null) return _offlineUser;
-    final auth = _tryGetFirebaseAuth();
-    if (auth != null) {
-      try {
-        final fbUser = auth.currentUser;
-        if (fbUser != null) return AppUser.fromFirebase(fbUser);
-      } catch (_) {}
-    }
-    return null;
-  }
-
-  bool get isOfflineSession => _offlineUser != null;
-
-  Stream<AppUser?> get userSessionStream => authStateChanges();
-
-  Stream<AppUser?> authStateChanges() async* {
-    yield currentUser;
-    yield* _authStateController.stream;
-  }
+  Stream<User?> authStateChanges() => _firebaseAuth.authStateChanges();
 
   Map<String, String>? get cachedGoogleDriveHeaders => _googleDriveHeaders;
 
   bool get hasGoogleDriveHeaders => _googleDriveHeaders != null;
-
-  void dispose() {
-    _firebaseAuthSubscription?.cancel();
-    _authStateController.close();
-  }
-
-  Future<AppUser> signInOffline({
-    String uid = 'offline_local_user',
-    String? email,
-    String? displayName,
-  }) async {
-    final user = AppUser.offline(
-      uid: uid,
-      email: email ?? 'offline@filerflow.local',
-      displayName: displayName ?? 'Offline User',
-    );
-    _offlineUser = user;
-    try {
-      await _storage.write(key: _activeOfflineKey, value: 'true');
-      await _storage.write(key: _activeOfflineUidKey, value: user.uid);
-      await _storage.write(key: _activeOfflineEmailKey, value: user.email ?? '');
-      await _storage.write(
-        key: _activeOfflineNameKey,
-        value: user.displayName ?? '',
-      );
-    } catch (_) {}
-    _authStateController.add(_offlineUser);
-    return user;
-  }
-
-  Future<void> _cacheOnlineCredentials({
-    required String email,
-    required String password,
-    required String uid,
-    String? displayName,
-  }) async {
-    try {
-      final normalizedEmail = email.toLowerCase().trim();
-      final creds = {
-        'uid': uid,
-        'email': normalizedEmail,
-        'displayName': displayName ?? '',
-        'password': password,
-      };
-      await _storage.write(
-        key: 'offline_cred_$normalizedEmail',
-        value: jsonEncode(creds),
-      );
-    } catch (_) {}
-  }
-
-  Future<AppUser?> verifyAndSignInOfflineCredentials({
-    required String email,
-    required String password,
-  }) async {
-    try {
-      final normalizedEmail = email.toLowerCase().trim();
-      final raw = await _storage.read(key: 'offline_cred_$normalizedEmail');
-      if (raw == null || raw.isEmpty) return null;
-      final data = jsonDecode(raw) as Map<String, dynamic>;
-      final cachedPwd = data['password'] as String?;
-      if (cachedPwd != null && cachedPwd == password) {
-        final uid = data['uid'] as String? ?? 'offline_local_user';
-        final displayName = (data['displayName'] as String?)?.isNotEmpty == true
-            ? data['displayName'] as String
-            : null;
-        return await signInOffline(
-          uid: uid,
-          email: normalizedEmail,
-          displayName: displayName,
-        );
-      }
-    } catch (_) {}
-    return null;
-  }
 
   bool get supportsTotpMfa =>
       kIsWeb ||
@@ -282,7 +120,6 @@ class AuthService {
   }
 
   Future<bool> refreshCurrentUserEmailVerification() async {
-    if (_offlineUser != null) return true;
     final user = _requireCurrentUser();
     try {
       await user.reload();
@@ -293,35 +130,16 @@ class AuthService {
   }
 
   Future<void> updateCurrentUserDisplayName(String displayName) async {
-    if (_offlineUser != null) {
-      _offlineUser = AppUser.offline(
-        uid: _offlineUser!.uid,
-        email: _offlineUser!.email,
-        displayName: displayName.trim(),
-      );
-      try {
-        await _storage.write(
-          key: _activeOfflineNameKey,
-          value: displayName.trim(),
-        );
-      } catch (_) {}
-      _authStateController.add(_offlineUser);
-      return;
-    }
     final user = _requireCurrentUser();
     try {
       await user.updateDisplayName(displayName.trim());
       await user.reload();
-      _authStateController.add(
-        AppUser.fromFirebase(_firebaseAuth.currentUser ?? user),
-      );
     } on FirebaseAuthException catch (error) {
       throw AuthServiceException(_firebaseAuthMessage(error));
     }
   }
 
   Future<void> reloadCurrentUser() async {
-    if (_offlineUser != null) return;
     final user = _requireCurrentUser();
     try {
       await user.reload();
@@ -515,7 +333,7 @@ class AuthService {
     }
   }
 
-  Future<AppUser?> signUpWithEmail({
+  Future<User?> signUpWithEmail({
     required String name,
     required String contactNumber,
     required String email,
@@ -536,68 +354,19 @@ class AuthService {
         }
       }
       await user.reload();
-      await _cacheOnlineCredentials(
-        email: email,
-        password: password,
-        uid: user.uid,
-        displayName: name,
-      );
-      final appUser = AppUser.fromFirebase(user);
-      _authStateController.add(appUser);
-      return appUser;
     }
-    return null;
+    return user;
   }
 
-  Future<AppUser?> signInWithEmail(String email, String password) async {
-    try {
-      final credential = await signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      final user = credential.user;
-      if (user == null) {
-        throw const AuthServiceException(
-          'Email login failed. Please try again.',
-        );
-      }
-      _offlineUser = null;
-      try {
-        await _storage.delete(key: _activeOfflineKey);
-        await _storage.delete(key: _activeOfflineUidKey);
-        await _storage.delete(key: _activeOfflineEmailKey);
-        await _storage.delete(key: _activeOfflineNameKey);
-      } catch (_) {}
-
-      await _cacheOnlineCredentials(
-        email: email,
-        password: password,
-        uid: user.uid,
-        displayName: user.displayName,
-      );
-      final appUser = AppUser.fromFirebase(user);
-      _authStateController.add(appUser);
-      return appUser;
-    } on AuthServiceException catch (error) {
-      final msg = error.message.toLowerCase();
-      final isNetwork =
-          msg.contains('internet') ||
-          msg.contains('network') ||
-          msg.contains('connection');
-      if (isNetwork) {
-        final cached = await verifyAndSignInOfflineCredentials(
-          email: email,
-          password: password,
-        );
-        if (cached != null) {
-          return cached;
-        }
-        throw const AuthServiceException(
-          'Network unavailable and no matching offline credentials found. Check your internet connection or use "Continue in Offline Mode".',
-        );
-      }
-      rethrow;
+  Future<User?> signInWithEmail(String email, String password) async {
+    final credential = await signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    if (credential.user == null) {
+      throw const AuthServiceException('Email login failed. Please try again.');
     }
+    return credential.user;
   }
 
   Future<UserCredential> signInWithGoogle({
@@ -715,24 +484,10 @@ class AuthService {
   Future<void> signOut() async {
     _googleAccount = null;
     _clearDriveCredentials();
-    _offlineUser = null;
-    try {
-      await _storage.delete(key: _activeOfflineKey);
-      await _storage.delete(key: _activeOfflineUidKey);
-      await _storage.delete(key: _activeOfflineEmailKey);
-      await _storage.delete(key: _activeOfflineNameKey);
-    } catch (_) {}
-    try {
-      await Future.wait([_firebaseAuth.signOut(), _googleSignIn.signOut()]);
-    } catch (_) {}
-    _authStateController.add(null);
+    await Future.wait([_firebaseAuth.signOut(), _googleSignIn.signOut()]);
   }
 
   Future<void> deleteCurrentUser() async {
-    if (_offlineUser != null) {
-      await signOut();
-      return;
-    }
     final user = _requireCurrentUser();
     try {
       await user.delete();
@@ -842,12 +597,7 @@ class AuthService {
   }
 
   User _requireCurrentUser() {
-    if (_offlineUser != null) {
-      throw const AuthServiceException(
-        'This feature requires an online account. Connect to the internet and sign in.',
-      );
-    }
-    final user = _firebaseAuth.currentUser;
+    final user = currentUser;
     if (user == null) {
       throw const AuthServiceException('Sign in before managing security.');
     }
