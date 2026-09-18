@@ -123,8 +123,10 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       _isExpense =
           widget.initialIsExpense ??
           (_selectedCategory == null
-              ? true
-              : TransactionCategory.fromName(_selectedCategory!).isExpense);
+              ? (widget.parentCategory != null
+                  ? _categoryPreferences.isExpense(widget.parentCategory!)
+                  : true)
+              : _categoryPreferences.isExpense(_selectedCategory!));
     }
     if (_hasCategoryOptions) {
       _expandedCategory = _selectedCategory;
@@ -165,7 +167,12 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
   void _applySelectedCategoryMode() {
     final selectedCategory = _selectedCategory;
-    if (selectedCategory == null) return;
+    if (selectedCategory == null) {
+      if (widget.initialIsExpense == null && widget.parentCategory != null) {
+        _isExpense = _categoryPreferences.isExpense(widget.parentCategory!);
+      }
+      return;
+    }
     if (_categoryPreferences.isDualMode(selectedCategory)) return;
 
     _isExpense =

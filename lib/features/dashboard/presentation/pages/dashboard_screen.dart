@@ -11,6 +11,7 @@ import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction
 import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction_category.dart';
 import 'package:fbr_tax_helper/features/transactions/services/transaction_report_service.dart';
 import 'package:fbr_tax_helper/features/transactions/services/category_preferences_service.dart';
+import 'package:fbr_tax_helper/features/khata/domain/entities/khata_entry.dart';
 
 import 'package:fbr_tax_helper/core/platform/app_storage.dart';
 import 'package:fbr_tax_helper/core/database/tax_database.dart';
@@ -99,9 +100,65 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
+  void _openAddAssetSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Row(
+              children: [
+                Icon(
+                  Icons.account_balance_rounded,
+                  color: Color(0xFF1E3A2F),
+                  size: 28,
+                ),
+                SizedBox(width: 12),
+                Text(
+                  'Add Asset',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Asset tracking and declaration forms will be available once asset categories are configured.',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => Navigator.pop(sheetContext),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E3A2F),
+                ),
+                child: const Text('Got it'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    const titles = ['Dashboard', 'Transactions', 'Settings', 'More'];
+    const titles = ['Dashboard', 'Khata', 'Assets', 'Settings', 'More'];
     return Scaffold(
       appBar: _selectedIndex == 0
           ? null
@@ -112,55 +169,106 @@ class _DashboardScreenState extends State<DashboardScreen> {
           index: _selectedIndex,
           children: [
             _HomeDashboard(categoryPreferences: _categoryPreferences),
-            _TransactionsPage(
-              categoryPreferences: _categoryPreferences,
-              filter: _transactionFilter,
-              onFilterChanged: (filter) {
-                setState(() => _transactionFilter = filter);
-              },
-            ),
+            const _KhataPage(),
+            const _AssetsPage(),
             _CategorySettingsPage(categoryPreferences: _categoryPreferences),
-            const _MorePage(),
+            _MorePage(categoryPreferences: _categoryPreferences),
           ],
         ),
       ),
-      floatingActionButton: _selectedIndex == 0
-          ? FloatingActionButton.extended(
-              heroTag: 'open-comparison-dashboard',
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => _ComparisonDashboardPage(
-                      categoryPreferences: _categoryPreferences,
-                    ),
+      floatingActionButton: switch (_selectedIndex) {
+        0 => FloatingActionButton(
+            heroTag: 'add-transaction-fab',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => _TransactionsPage(
+                    categoryPreferences: _categoryPreferences,
+                    filter: _transactionFilter,
+                    onFilterChanged: (filter) {
+                      setState(() => _transactionFilter = filter);
+                    },
+                    showAppBar: true,
                   ),
-                );
-              },
-              backgroundColor: AppColors.violet,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.compare_arrows_rounded),
-              label: const Text('Comparison'),
-            )
-          : null,
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
-            label: 'Dashboard',
+                ),
+              );
+            },
+            backgroundColor: const Color(0xFFF7C75F),
+            foregroundColor: const Color(0xFF1E3A2F),
+            elevation: 4,
+            shape: const CircleBorder(),
+            child: const Icon(Icons.add_rounded, size: 30),
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.credit_card_outlined),
-            label: 'Transactions',
+        2 => FloatingActionButton(
+            heroTag: 'add-asset-fab',
+            onPressed: () => _openAddAssetSheet(context),
+            backgroundColor: const Color(0xFFF7C75F),
+            foregroundColor: const Color(0xFF1E3A2F),
+            elevation: 4,
+            shape: const CircleBorder(),
+            child: const Icon(Icons.add_rounded, size: 30),
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'Settings',
+        _ => null,
+      },
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFFAF5DE),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          child: BottomNavigationBar(
+            type: BottomNavigationBarType.fixed,
+            backgroundColor: const Color(0xFFFAF5DE),
+            elevation: 0,
+            currentIndex: _selectedIndex,
+            onTap: _onItemTapped,
+            selectedItemColor: const Color(0xFF1E3A2F),
+            unselectedItemColor: const Color(0xFF6B7280),
+            selectedLabelStyle: const TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+            ),
+            unselectedLabelStyle: const TextStyle(
+              fontWeight: FontWeight.w500,
+              fontSize: 12,
+            ),
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.grid_view_rounded),
+                activeIcon: Icon(Icons.grid_view_rounded),
+                label: 'Dashboard',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.currency_exchange_rounded),
+                activeIcon: Icon(Icons.currency_exchange_rounded),
+                label: 'Khata',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.account_balance_rounded),
+                activeIcon: Icon(Icons.account_balance_rounded),
+                label: 'Assets',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.settings_outlined),
+                activeIcon: Icon(Icons.settings_rounded),
+                label: 'Settings',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.menu_rounded),
+                activeIcon: Icon(Icons.menu_rounded),
+                label: 'More',
+              ),
+            ],
           ),
-          BottomNavigationBarItem(icon: Icon(Icons.menu), label: 'More'),
-        ],
+        ),
       ),
     );
   }
@@ -213,11 +321,13 @@ class _TransactionsPage extends StatefulWidget {
     required this.categoryPreferences,
     required this.filter,
     required this.onFilterChanged,
+    this.showAppBar = false,
   });
 
   final CategoryPreferencesService categoryPreferences;
   final TransactionTypeFilter filter;
   final ValueChanged<TransactionTypeFilter> onFilterChanged;
+  final bool showAppBar;
 
   @override
   State<_TransactionsPage> createState() => _TransactionsPageState();
@@ -234,6 +344,8 @@ class _TransactionsPageState extends State<_TransactionsPage> {
           parentCategory: parentCategory,
           categoryOptions: categoryOptions,
           categoryPreferences: widget.categoryPreferences,
+          initialIsExpense:
+              widget.categoryPreferences.isExpense(parentCategory),
           onViewCategoryHistory: (category, {required includeSubcategories}) {
             Navigator.of(this.context).push(
               MaterialPageRoute(
@@ -291,6 +403,13 @@ class _TransactionsPageState extends State<_TransactionsPage> {
         final categoryCards = _visibleCategoryCards();
 
         return Scaffold(
+          appBar: widget.showAppBar
+              ? AppBar(
+                  title: const Text('Transactions'),
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                )
+              : null,
           body: ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -890,39 +1009,1240 @@ bool transactionBelongsToCategory(
       ).any((child) => child.name == transaction.category);
 }
 
+enum KhataSegmentFilter { payable, receivable, both }
+
+class _KhataPage extends StatefulWidget {
+  const _KhataPage();
+
+  @override
+  State<_KhataPage> createState() => _KhataPageState();
+}
+
+class _KhataPageState extends State<_KhataPage> {
+  KhataSegmentFilter _selectedFilter = KhataSegmentFilter.both;
+  List<KhataEntry> _entries = [];
+  bool _isLoading = true;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEntries();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadEntries() async {
+    setState(() => _isLoading = true);
+    try {
+      final userId = context.read<AuthService>().currentUser?.uid;
+      final rows = await TaxDatabase.instance
+          .fetchKhataEntries(userId: userId)
+          .timeout(const Duration(milliseconds: 300));
+      final list = rows.map((r) => KhataEntry.fromMap(r)).toList();
+      if (mounted) {
+        setState(() {
+          _entries = list;
+        });
+      }
+    } catch (_) {
+      // Gracefully handle in widget tests / unsupported platforms
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  String _formatAmount(double amount) {
+    final formatter = NumberFormat('#,##0.00', 'en_US');
+    return 'Rs ${formatter.format(amount)}';
+  }
+
+  double get _totalPayable => _entries
+      .where((e) => e.isPayable)
+      .fold(0.0, (sum, e) => sum + e.amount);
+
+  double get _totalReceivable => _entries
+      .where((e) => !e.isPayable)
+      .fold(0.0, (sum, e) => sum + e.amount);
+
+  double get _netBalance => _totalReceivable - _totalPayable;
+
+  List<KhataEntry> get _filteredEntries {
+    return _entries.where((entry) {
+      final matchesFilter = switch (_selectedFilter) {
+        KhataSegmentFilter.both => true,
+        KhataSegmentFilter.payable => entry.isPayable,
+        KhataSegmentFilter.receivable => !entry.isPayable,
+      };
+      if (!matchesFilter) return false;
+
+      if (_searchQuery.trim().isEmpty) return true;
+      final q = _searchQuery.toLowerCase().trim();
+      return entry.title.toLowerCase().contains(q) ||
+          entry.party.toLowerCase().contains(q) ||
+          entry.description.toLowerCase().contains(q);
+    }).toList();
+  }
+
+  Widget _buildSegmentTab(String title, KhataSegmentFilter filter) {
+    final isSelected = _selectedFilter == filter;
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          setState(() {
+            _selectedFilter = filter;
+          });
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF0F6B57) : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFF0F6B57).withValues(alpha: 0.25),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Text(
+            title,
+            style: TextStyle(
+              color: isSelected ? Colors.white : const Color(0xFF1E3A2F),
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openAddOrEditEntryDialog({
+    KhataEntry? existingEntry,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final isEditing = existingEntry != null;
+    final titleController =
+        TextEditingController(text: existingEntry?.title ?? '');
+    final amountController = TextEditingController(
+      text: existingEntry != null ? existingEntry.amount.toStringAsFixed(2) : '',
+    );
+    final partyController =
+        TextEditingController(text: existingEntry?.party ?? '');
+    final descriptionController =
+        TextEditingController(text: existingEntry?.description ?? '');
+    DateTime selectedDate = existingEntry?.date ?? DateTime.now();
+    bool isPayable = existingEntry?.isPayable ??
+        (_selectedFilter == KhataSegmentFilter.payable
+            ? true
+            : _selectedFilter == KhataSegmentFilter.receivable
+                ? false
+                : true);
+
+    final formKey = GlobalKey<FormState>();
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (bottomSheetContext) {
+        return StatefulBuilder(
+          builder: (builderContext, setModalState) {
+            return Container(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(builderContext).viewInsets.bottom + 20,
+                top: 20,
+                left: 20,
+                right: 20,
+              ),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        isEditing ? 'Edit Khata Entry' : 'New Khata Entry',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E3A2F),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Type toggle: Payable vs Receivable
+                      Container(
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFAF5DE),
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(color: const Color(0xFFE8DCC0)),
+                        ),
+                        padding: const EdgeInsets.all(3),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () =>
+                                    setModalState(() => isPayable = true),
+                                child: Container(
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: isPayable
+                                        ? const Color(0xFF0F6B57)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    'Payable (You owe)',
+                                    style: TextStyle(
+                                      color: isPayable
+                                          ? Colors.white
+                                          : const Color(0xFF1E3A2F),
+                                      fontWeight: isPayable
+                                          ? FontWeight.bold
+                                          : FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () =>
+                                    setModalState(() => isPayable = false),
+                                child: Container(
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: !isPayable
+                                        ? const Color(0xFF0F6B57)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    'Receivable (Owed to you)',
+                                    style: TextStyle(
+                                      color: !isPayable
+                                          ? Colors.white
+                                          : const Color(0xFF1E3A2F),
+                                      fontWeight: !isPayable
+                                          ? FontWeight.bold
+                                          : FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      TextFormField(
+                        controller: titleController,
+                        decoration: InputDecoration(
+                          labelText: 'Title *',
+                          hintText: 'e.g. Office Supplies, Rent, Invoice',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          prefixIcon: const Icon(Icons.title),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter a title';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: amountController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: InputDecoration(
+                          labelText: 'Amount (PKR) *',
+                          hintText: '0.00',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          prefixIcon: const Icon(Icons.currency_rupee),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter an amount';
+                          }
+                          final parsed = double.tryParse(value.trim());
+                          if (parsed == null || parsed <= 0) {
+                            return 'Enter a valid positive number';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: partyController,
+                        decoration: InputDecoration(
+                          labelText: isPayable
+                              ? 'To (Supplier / Vendor / Person) *'
+                              : 'From (Customer / Client / Debtor) *',
+                          hintText:
+                              isPayable ? 'Who to pay' : 'Who will pay you',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          prefixIcon: Icon(
+                            isPayable
+                                ? Icons.person_outline
+                                : Icons.business_outlined,
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return isPayable
+                                ? 'Please specify who to pay'
+                                : 'Please specify who owes you';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: descriptionController,
+                        maxLines: 2,
+                        decoration: InputDecoration(
+                          labelText: 'Description (Optional)',
+                          hintText: 'e.g. Invoice #9876, terms, notes',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          prefixIcon: const Icon(Icons.description_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      InkWell(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: builderContext,
+                            initialDate: selectedDate,
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null) {
+                            setModalState(() => selectedDate = picked);
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade400),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.calendar_today,
+                                  size: 20, color: Color(0xFF0F6B57)),
+                              const SizedBox(width: 12),
+                              Text(
+                                'Date: ${DateFormat('dd MMM yyyy').format(selectedDate)}',
+                                style: const TextStyle(fontSize: 15),
+                              ),
+                              const Spacer(),
+                              const Icon(Icons.arrow_drop_down),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () =>
+                                  Navigator.pop(bottomSheetContext),
+                              style: OutlinedButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Text('Cancel'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                if (!formKey.currentState!.validate()) return;
+                                final user =
+                                    context.read<AuthService>().currentUser;
+                                final userId = user?.uid ?? '';
+                                final amount =
+                                    double.parse(amountController.text.trim());
+
+                                final entryToSave = KhataEntry(
+                                  id: existingEntry?.id,
+                                  userId: userId,
+                                  title: titleController.text.trim(),
+                                  party: partyController.text.trim(),
+                                  amount: amount,
+                                  isPayable: isPayable,
+                                  date: selectedDate,
+                                  description:
+                                      descriptionController.text.trim(),
+                                  isPaid: false,
+                                );
+
+                                if (isEditing) {
+                                  await TaxDatabase.instance
+                                      .updateKhataEntry(entryToSave.toMap());
+                                } else {
+                                  await TaxDatabase.instance
+                                      .insertKhataEntry(entryToSave.toMap());
+                                }
+
+                                if (bottomSheetContext.mounted) {
+                                  Navigator.pop(bottomSheetContext);
+                                }
+                                _loadEntries();
+                                if (mounted) {
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        isEditing
+                                            ? 'Khata entry updated'
+                                            : 'Khata entry added',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0F6B57),
+                                foregroundColor: Colors.white,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: Text(
+                                  isEditing ? 'Save Changes' : 'Add Entry'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _markAsPaid(KhataEntry entry) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F6B57).withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check_circle_outline,
+                    color: Color(0xFF0F6B57)),
+              ),
+              const SizedBox(width: 10),
+              const Text('Mark as Paid?'),
+            ],
+          ),
+          content: Text(
+            'Settling "${entry.title}" will remove it from Khata and record it as an ${entry.isPayable ? "Expense" : "Income"} of ${_formatAmount(entry.amount)} in your transactions.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0F6B57),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Confirm & Settle'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    if (entry.id != null) {
+      await TaxDatabase.instance.deleteKhataEntry(entry.id!);
+    }
+
+    if (!mounted) return;
+    final user = context.read<AuthService>().currentUser;
+    final userId = user?.uid ?? '';
+
+    context.read<TransactionBloc>().add(
+      AddTransaction(
+        entity.Transaction(
+          userId: userId,
+          title: entry.title,
+          beneficiary: entry.party,
+          purpose: entry.description.trim().isNotEmpty
+              ? entry.description.trim()
+              : (entry.isPayable
+                  ? 'Khata Payable settlement to ${entry.party}'
+                  : 'Khata Receivable settlement from ${entry.party}'),
+          amount: entry.amount,
+          isExpense: entry.isPayable,
+          date: DateTime.now(),
+          category: entry.isPayable ? 'Other' : 'Business Income',
+        ),
+      ),
+    );
+
+    await _loadEntries();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Settled! Added to ${entry.isPayable ? "Expenses" : "Income"}.',
+          ),
+          backgroundColor: const Color(0xFF0F6B57),
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteEntry(KhataEntry entry) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete Khata Entry?'),
+          content: Text('Are you sure you want to delete "${entry.title}"?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade700,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true && entry.id != null) {
+      await TaxDatabase.instance.deleteKhataEntry(entry.id!);
+      _loadEntries();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Khata entry deleted')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _filteredEntries;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF9F9FB),
+      body: RefreshIndicator(
+        onRefresh: _loadEntries,
+        child: ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          children: [
+            // Top Overview Banner
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF1E3A2F), Color(0xFF0F6B57)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF0F6B57).withValues(alpha: 0.2),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Khata Ledger',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color:
+                              const Color(0xFFFAF5DE).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'Net: ${_formatAmount(_netBalance)}',
+                          style: const TextStyle(
+                            color: Color(0xFFF7C75F),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: const [
+                                  Icon(Icons.arrow_upward_rounded,
+                                      size: 14, color: Color(0xFFFF8A80)),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Total Payable',
+                                    style: TextStyle(
+                                        color: Colors.white70, fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                _formatAmount(_totalPayable),
+                                style: const TextStyle(
+                                  color: Color(0xFFFF8A80),
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              const Text(
+                                'You owe',
+                                style: TextStyle(
+                                    color: Colors.white54, fontSize: 10),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: const [
+                                  Icon(Icons.arrow_downward_rounded,
+                                      size: 14, color: Color(0xFFB9F6CA)),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Total Receivable',
+                                    style: TextStyle(
+                                        color: Colors.white70, fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                _formatAmount(_totalReceivable),
+                                style: const TextStyle(
+                                  color: Color(0xFFB9F6CA),
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              const Text(
+                                'Owed to you',
+                                style: TextStyle(
+                                    color: Colors.white54, fontSize: 10),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Segmented Distribution Bar (Payable, Receivable, Both) matching screenshot
+            Container(
+              height: 48,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFAF5DE),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: const Color(0xFFE8DCC0), width: 1),
+              ),
+              padding: const EdgeInsets.all(4),
+              child: Row(
+                children: [
+                  _buildSegmentTab('Payable', KhataSegmentFilter.payable),
+                  _buildSegmentTab('Receivable', KhataSegmentFilter.receivable),
+                  _buildSegmentTab('Both', KhataSegmentFilter.both),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Add Entry Button
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: ElevatedButton.icon(
+                onPressed: () => _openAddOrEditEntryDialog(),
+                icon: const Icon(Icons.add_circle_outline, size: 20),
+                label: const Text(
+                  'Add Payable / Receivable',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0F6B57),
+                  foregroundColor: Colors.white,
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Search Filter
+            if (_entries.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search by title, party or notes...',
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                          )
+                        : null,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                  ),
+                  onChanged: (val) {
+                    setState(() => _searchQuery = val);
+                  },
+                ),
+              ),
+
+            // Content List
+            if (_isLoading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(40),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (filtered.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(32),
+                alignment: Alignment.center,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.book_outlined,
+                      size: 56,
+                      color: Colors.grey.shade400,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      _searchQuery.isNotEmpty
+                          ? 'No matching entries found'
+                          : _selectedFilter == KhataSegmentFilter.payable
+                              ? 'No payables recorded'
+                              : _selectedFilter == KhataSegmentFilter.receivable
+                                  ? 'No receivables recorded'
+                                  : 'Khata ledger is empty',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Tap "Add Payable / Receivable" above to record a new entry.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ...filtered.map((entry) {
+                return Card(
+                  elevation: 0,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(
+                      color: entry.isPayable
+                          ? const Color(0xFFFFCDD2)
+                          : const Color(0xFFC8E6C9),
+                      width: 1,
+                    ),
+                  ),
+                  color: Colors.white,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: entry.isPayable
+                                    ? const Color(0xFFFFEBEE)
+                                    : const Color(0xFFE8F5E9),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    entry.isPayable
+                                        ? Icons.call_made_rounded
+                                        : Icons.call_received_rounded,
+                                    size: 14,
+                                    color: entry.isPayable
+                                        ? const Color(0xFFC62828)
+                                        : const Color(0xFF2E7D32),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    entry.isPayable ? 'Payable' : 'Receivable',
+                                    style: TextStyle(
+                                      color: entry.isPayable
+                                          ? const Color(0xFFC62828)
+                                          : const Color(0xFF2E7D32),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              DateFormat('dd MMM yyyy').format(entry.date),
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    entry.title,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF1E3A2F),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        entry.isPayable ? 'To: ' : 'From: ',
+                                        style: TextStyle(
+                                          color: Colors.grey.shade700,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          entry.party,
+                                          style: const TextStyle(
+                                            color: Color(0xFF0F6B57),
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (entry.description.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      entry.description,
+                                      style: TextStyle(
+                                        color: Colors.grey.shade600,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _formatAmount(entry.amount),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: entry.isPayable
+                                    ? const Color(0xFFC62828)
+                                    : const Color(0xFF2E7D32),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        const Divider(height: 1),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline,
+                                  size: 20, color: Colors.grey),
+                              tooltip: 'Delete',
+                              onPressed: () => _deleteEntry(entry),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: () => _openAddOrEditEntryDialog(
+                                  existingEntry: entry),
+                              icon: const Icon(Icons.edit_outlined, size: 16),
+                              label: const Text('Edit'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF1E3A2F),
+                                side: BorderSide(color: Colors.grey.shade300),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton.icon(
+                              onPressed: () => _markAsPaid(entry),
+                              icon: const Icon(Icons.check_circle_outline,
+                                  size: 16),
+                              label: const Text('Mark as Paid'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0F6B57),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 8),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AssetsPage extends StatelessWidget {
+  const _AssetsPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1E3A2F), Color(0xFF0F6B57)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0F6B57).withValues(alpha: 0.25),
+                  blurRadius: 16,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.account_balance_rounded,
+                    size: 40,
+                    color: Color(0xFFF7C75F),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Assets & Wealth',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Record business assets, real estate, vehicles, bank accounts, and personal wealth statements.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    fontSize: 14,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7C75F).withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: const Color(0xFFF7C75F).withValues(alpha: 0.5),
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.stars_rounded, size: 16, color: Color(0xFFF7C75F)),
+                      SizedBox(width: 6),
+                      Text(
+                        'Coming Soon',
+                        style: TextStyle(
+                          color: Color(0xFFF7C75F),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Planned Features',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          _featureTile(
+            icon: Icons.home_work_outlined,
+            title: 'Real Estate & Properties',
+            description: 'Log commercial and residential property values and acquisition dates.',
+          ),
+          const SizedBox(height: 10),
+          _featureTile(
+            icon: Icons.directions_car_outlined,
+            title: 'Vehicles & Machinery',
+            description: 'Track vehicle registrations, depreciation schedules, and equipment.',
+          ),
+          const SizedBox(height: 10),
+          _featureTile(
+            icon: Icons.savings_outlined,
+            title: 'Bank Accounts & Holdings',
+            description: 'Monitor bank savings, prize bonds, shares, and gold for tax wealth reconciliation.',
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Widget _featureTile({
+    required IconData icon,
+    required String title,
+    required String description,
+  }) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFAF5DE),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: const Color(0xFF1E3A2F), size: 24),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _MorePage extends StatefulWidget {
-  const _MorePage();
+  const _MorePage({this.categoryPreferences});
+
+  final CategoryPreferencesService? categoryPreferences;
 
   @override
   State<_MorePage> createState() => _MorePageState();
 }
 
 class _MorePageState extends State<_MorePage> {
-  static const _profileStorage = FlutterSecureStorage();
-  String? _profileImagePath;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadProfileImage();
-  }
-
-  String _profileImageKey(String? userId) =>
-      'profile_image_${userId ?? 'signed_out'}';
-
-  Future<void> _loadProfileImage() async {
-    final userId = context.read<AuthService>().currentUser?.uid;
-    final storedPath = await _profileStorage.read(
-      key: _profileImageKey(userId),
-    );
-    if (!mounted) return;
-    setState(() {
-      _profileImagePath = storedPath != null && File(storedPath).existsSync()
-          ? storedPath
-          : null;
-    });
-  }
-
   Future<void> _confirmLogout(BuildContext context) async {
     final confirmed =
         await showDialog<bool>(
@@ -950,45 +2270,10 @@ class _MorePageState extends State<_MorePage> {
 
   @override
   Widget build(BuildContext context) {
-    final user = context.read<AuthService>().currentUser;
-    final photoUrl = user?.photoURL;
-    final hasLocalProfileImage =
-        _profileImagePath != null && File(_profileImagePath!).existsSync();
-    final ImageProvider<Object>? profileImage = hasLocalProfileImage
-        ? FileImage(File(_profileImagePath!))
-        : photoUrl != null && photoUrl.isNotEmpty
-        ? NetworkImage(photoUrl)
-        : null;
-
     return Scaffold(
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Card(
-            child: ListTile(
-              contentPadding: const EdgeInsets.all(14),
-              leading: CircleAvatar(
-                radius: 28,
-                backgroundImage: profileImage,
-                child: profileImage == null
-                    ? const Icon(Icons.person_outline, size: 30)
-                    : null,
-              ),
-              title: Text(
-                user?.displayName ?? 'User',
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-              subtitle: Text(user?.email ?? ''),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () async {
-                await Navigator.of(context).push(
-                  MaterialPageRoute(builder: (context) => const _ProfilePage()),
-                );
-                if (context.mounted) await _loadProfileImage();
-              },
-            ),
-          ),
-          const SizedBox(height: 14),
           Card(
             child: Column(
               children: [
@@ -1005,6 +2290,23 @@ class _MorePageState extends State<_MorePage> {
                     );
                   },
                 ),
+                if (widget.categoryPreferences != null) ...[
+                  const Divider(height: 1, indent: 56),
+                  ListTile(
+                    leading: const Icon(Icons.compare_arrows_rounded),
+                    title: const Text('Comparison Dashboard'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => _ComparisonDashboardPage(
+                            categoryPreferences: widget.categoryPreferences!,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
                 const Divider(height: 1, indent: 56),
                 const _DriveSyncButton(asListTile: true),
                 const Divider(height: 1, indent: 56),
@@ -1492,9 +2794,9 @@ class _CategorySettingsPage extends StatelessWidget {
     String parentName,
   ) async {
     final controller = TextEditingController();
-    var isExpense = categoryPreferences.isExpense(parentName);
-    final isDual =
-        categoryPreferences.modeForParent(parentName) == CategoryMode.both;
+    final parentMode = categoryPreferences.modeForParent(parentName);
+    final isDual = parentMode == CategoryMode.both;
+    var isExpense = parentMode == CategoryMode.expense;
 
     final result = await showDialog<bool>(
       context: context,
@@ -1558,7 +2860,7 @@ class _CategorySettingsPage extends StatelessWidget {
         await categoryPreferences.addSubcategory(
           parentName: parentName,
           categoryName: name,
-          isExpense: isExpense,
+          isExpense: isDual ? isExpense : (parentMode == CategoryMode.expense),
         );
         if (!context.mounted) return;
         ScaffoldMessenger.of(context)
@@ -1956,7 +3258,10 @@ class _ProfilePageState extends State<_ProfilePage>
 
   Future<void> _loadBiometricStatus() async {
     final userId = _authService.currentUser?.uid;
-    if (userId == null) return;
+    if (userId == null) {
+      if (mounted) setState(() => _isLoadingBiometric = false);
+      return;
+    }
     try {
       final supported = await _biometricLock.isSupported();
       final enabled = await _biometricLock.isEnabled(userId);
@@ -2828,14 +4133,45 @@ class _HomeDashboard extends StatefulWidget {
 }
 
 class _HomeDashboardState extends State<_HomeDashboard> {
+  static const _profileStorage = FlutterSecureStorage();
   String? _selectedFinancialYear;
   int? _selectedMonth;
+  String? _profileImagePath;
 
   @override
   void initState() {
     super.initState();
     _selectedFinancialYear = null;
     _selectedMonth = null;
+    _loadProfileImage();
+  }
+
+  String _profileImageKey(String? userId) =>
+      'profile_image_${userId ?? 'signed_out'}';
+
+  Future<void> _loadProfileImage() async {
+    final userId = context.read<AuthService>().currentUser?.uid;
+    final storedPath = await _profileStorage.read(
+      key: _profileImageKey(userId),
+    );
+    if (!mounted) return;
+    setState(() {
+      _profileImagePath = storedPath != null && File(storedPath).existsSync()
+          ? storedPath
+          : null;
+    });
+  }
+
+  String _getUserInitial(dynamic user) {
+    final name = (user?.displayName as String?)?.trim();
+    if (name != null && name.isNotEmpty) {
+      return name[0].toUpperCase();
+    }
+    final email = (user?.email as String?)?.trim();
+    if (email != null && email.isNotEmpty) {
+      return email[0].toUpperCase();
+    }
+    return 'W';
   }
 
   Widget _buildDashboardHeader({
@@ -2847,145 +4183,195 @@ class _HomeDashboardState extends State<_HomeDashboard> {
     final effectiveYearValue =
         isSelectedYearPresent ? _selectedFinancialYear : null;
 
+    final user = context.read<AuthService>().currentUser;
+    final photoUrl = user?.photoURL;
+    final hasLocalProfileImage =
+        _profileImagePath != null && File(_profileImagePath!).existsSync();
+    final ImageProvider<Object>? profileImage = hasLocalProfileImage
+        ? FileImage(File(_profileImagePath!))
+        : photoUrl != null && photoUrl.isNotEmpty
+        ? NetworkImage(photoUrl)
+        : null;
+
     return Container(
       width: double.infinity,
-      color: const Color(0xFF06231C),
+      decoration: const BoxDecoration(
+        color: Color(0xFF06231C),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
+      ),
       padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: MediaQuery.of(context).padding.top + 8,
-        bottom: 12,
+        left: 20,
+        right: 20,
+        top: MediaQuery.of(context).padding.top + 10,
+        bottom: 18,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Dashboard',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -0.3,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Dashboard',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.4,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Financial Year Dropdown
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF133E35),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String?>(
+                          value: effectiveYearValue,
+                          dropdownColor: const Color(0xFF0F3A30),
+                          icon: const Icon(
+                            Icons.arrow_drop_down,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          isDense: true,
+                          items: [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text(
+                                'All FY',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            for (final fy in financialYearOptions)
+                              DropdownMenuItem<String?>(
+                                value: fy,
+                                child: Text(
+                                  'FY $fy',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                          ],
+                          onChanged: (newYear) {
+                            setState(() {
+                              _selectedFinancialYear = newYear;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Month Dropdown
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF133E35),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int?>(
+                          value: _selectedMonth,
+                          dropdownColor: const Color(0xFF0F3A30),
+                          icon: const Icon(
+                            Icons.arrow_drop_down,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          isDense: true,
+                          items: [
+                            const DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text(
+                                'All Months',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            for (var m = 1; m <= 12; m++)
+                              DropdownMenuItem<int?>(
+                                value: m,
+                                child: Text(
+                                  dashboardMonthNames[m - 1],
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                          ],
+                          onChanged: (newMonth) {
+                            setState(() {
+                              _selectedMonth = newMonth;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Financial Year Dropdown
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.25),
-                  ),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String?>(
-                    value: effectiveYearValue,
-                    dropdownColor: const Color(0xFF0F3A30),
-                    icon: const Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      color: Colors.white,
-                      size: 18,
+          // User profile avatar button on the top right
+          Semantics(
+            button: true,
+            label: 'Open user profile',
+            child: Tooltip(
+              message: 'Profile',
+              child: InkWell(
+                borderRadius: BorderRadius.circular(22),
+                onTap: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const _ProfilePage(),
                     ),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    isDense: true,
-                    items: [
-                      const DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text(
-                          'All FY',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
+                  );
+                  if (mounted) await _loadProfileImage();
+                },
+                child: CircleAvatar(
+                  radius: 20,
+                  backgroundColor: const Color(0xFFE8B961),
+                  backgroundImage: profileImage,
+                  child: profileImage == null
+                      ? Text(
+                          _getUserInitial(user),
+                          style: const TextStyle(
+                            color: Color(0xFF1E3A2F),
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
                           ),
-                        ),
-                      ),
-                      for (final fy in financialYearOptions)
-                        DropdownMenuItem<String?>(
-                          value: fy,
-                          child: Text(
-                            'FY $fy',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                    ],
-                    onChanged: (newYear) {
-                      setState(() {
-                        _selectedFinancialYear = newYear;
-                      });
-                    },
-                  ),
+                        )
+                      : null,
                 ),
               ),
-              const SizedBox(width: 8),
-              // Month Dropdown
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.25),
-                  ),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<int?>(
-                    value: _selectedMonth,
-                    dropdownColor: const Color(0xFF0F3A30),
-                    icon: const Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    isDense: true,
-                    items: [
-                      const DropdownMenuItem<int?>(
-                        value: null,
-                        child: Text(
-                          'All Months',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      for (var m = 1; m <= 12; m++)
-                        DropdownMenuItem<int?>(
-                          value: m,
-                          child: Text(
-                            dashboardMonthNames[m - 1],
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                    ],
-                    onChanged: (newMonth) {
-                      setState(() {
-                        _selectedMonth = newMonth;
-                      });
-                    },
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ],
       ),
@@ -3052,7 +4438,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                         ),
                       ),
                       const SizedBox(height: 20),
-                      _TopCategoryCharts(
+                      TopCategoryCharts(
                         transactions: visibleTransactions,
                         onCategoryTap: (category) {
                           Navigator.of(context).push(
@@ -3699,8 +5085,9 @@ class KpiMetricCard extends StatelessWidget {
   }
 }
 
-class _TopCategoryCharts extends StatelessWidget {
-  const _TopCategoryCharts({
+class TopCategoryCharts extends StatelessWidget {
+  const TopCategoryCharts({
+    super.key,
     required this.transactions,
     required this.onCategoryTap,
   });
@@ -3730,120 +5117,147 @@ class _TopCategoryCharts extends StatelessWidget {
   Widget build(BuildContext context) {
     final income = _topCategories(isExpense: false);
     final expenses = _topCategories(isExpense: true);
-    final totalActivity = transactions.fold<double>(
-      0,
-      (sum, transaction) => sum + transaction.amount.abs(),
-    );
+    final totalIncome = _totalIncome(transactions);
+    final totalExpenses = _totalExpenses(transactions);
+    final incomeColor = Colors.green.shade600;
+    final expenseColor = Colors.red.shade600;
 
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _TopCategorySectionCard(
+          title: 'Top Income Categories',
+          subtitle:
+              'Top 5 income sources for this period. Tap a category to view all of its transactions.',
+          items: income,
+          totalAmount: totalIncome,
+          isExpense: false,
+          color: incomeColor,
+          icon: Icons.trending_up_rounded,
+          onCategoryTap: onCategoryTap,
+        ),
+        const SizedBox(height: 16),
+        _TopCategorySectionCard(
+          title: 'Top Expense Categories',
+          subtitle:
+              'Top 5 spending categories for this period. Tap a category to view all of its transactions.',
+          items: expenses,
+          totalAmount: totalExpenses,
+          isExpense: true,
+          color: expenseColor,
+          icon: Icons.trending_down_rounded,
+          onCategoryTap: onCategoryTap,
+        ),
+      ],
+    );
+  }
+}
+
+class _TopCategorySectionCard extends StatelessWidget {
+  const _TopCategorySectionCard({
+    required this.title,
+    required this.subtitle,
+    required this.items,
+    required this.totalAmount,
+    required this.isExpense,
+    required this.color,
+    required this.icon,
+    required this.onCategoryTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final List<_CategoryTotal> items;
+  final double totalAmount;
+  final bool isExpense;
+  final Color color;
+  final IconData icon;
+  final ValueChanged<String> onCategoryTap;
+
+  @override
+  Widget build(BuildContext context) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Top Categories',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: color, size: 18),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 4),
             Text(
-              'Top five categories based on range. Tap a category to view all of its transactions.',
+              subtitle,
               style: Theme.of(context).textTheme.bodySmall,
             ),
-            const SizedBox(height: 18),
-            _TopCategoryLollipopChart(
-              incomeItems: income,
-              expenseItems: expenses,
-              totalActivity: totalActivity,
-              onCategoryTap: onCategoryTap,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TopCategoryLollipopChart extends StatelessWidget {
-  const _TopCategoryLollipopChart({
-    required this.incomeItems,
-    required this.expenseItems,
-    required this.totalActivity,
-    required this.onCategoryTap,
-  });
-
-  final List<_CategoryTotal> incomeItems;
-  final List<_CategoryTotal> expenseItems;
-  final double totalActivity;
-  final ValueChanged<String> onCategoryTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final rankedItems = <_CategoryChartBar>[
-      for (final item in incomeItems)
-        _CategoryChartBar(
-          category: item.category,
-          total: item.total,
-          isExpense: false,
-        ),
-      for (final item in expenseItems)
-        _CategoryChartBar(
-          category: item.category,
-          total: item.total,
-          isExpense: true,
-        ),
-    ]..sort((a, b) => b.total.compareTo(a.total));
-    final items = rankedItems.take(5).toList();
-    final incomeColor = Colors.green.shade600;
-    final expenseColor = Colors.red.shade600;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 14, 12, 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 20,
-              runSpacing: 8,
-              children: [
-                _ChartLegend(label: 'Income', color: incomeColor),
-                _ChartLegend(label: 'Expense', color: expenseColor),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (items.isEmpty)
-              const SizedBox(
-                height: 160,
-                child: Center(child: Text('No transactions for this period')),
-              )
-            else
-              Column(
-                children: [
-                  for (var index = 0; index < items.length; index++)
-                    Padding(
-                      padding: EdgeInsets.only(
-                        bottom: index == items.length - 1 ? 0 : 14,
-                      ),
-                      child: _HorizontalCategoryLollipop(
-                        item: items[index],
-                        totalActivity: totalActivity,
-                        color: items[index].isExpense
-                            ? expenseColor
-                            : incomeColor,
-                        onTap: () => onCategoryTap(items[index].category),
-                      ),
-                    ),
-                ],
+            const SizedBox(height: 14),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerLowest,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
               ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
+                child: items.isEmpty
+                    ? SizedBox(
+                        height: 90,
+                        child: Center(
+                          child: Text(
+                            isExpense
+                                ? 'No expense transactions for this period'
+                                : 'No income transactions for this period',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(color: Colors.grey.shade600),
+                          ),
+                        ),
+                      )
+                    : Column(
+                        children: [
+                          for (var index = 0; index < items.length; index++)
+                            Padding(
+                              padding: EdgeInsets.only(
+                                bottom: index == items.length - 1 ? 0 : 14,
+                              ),
+                              child: _HorizontalCategoryLollipop(
+                                item: _CategoryChartBar(
+                                  category: items[index].category,
+                                  total: items[index].total,
+                                  isExpense: isExpense,
+                                ),
+                                totalActivity: totalAmount,
+                                color: color,
+                                onTap: () =>
+                                    onCategoryTap(items[index].category),
+                              ),
+                            ),
+                        ],
+                      ),
+              ),
+            ),
           ],
         ),
       ),
@@ -3874,7 +5288,7 @@ class _HorizontalCategoryLollipop extends StatelessWidget {
     return Semantics(
       button: true,
       label:
-          '${item.category}, $type, ${_formatDashboardMoney(item.total)}, $percentageLabel of total activity',
+          '${item.category}, $type, ${_formatDashboardMoney(item.total)}, $percentageLabel of total ${item.isExpense ? "expenses" : "income"}',
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -4012,29 +5426,6 @@ class _HorizontalCategoryLollipop extends StatelessWidget {
   }
 }
 
-class _ChartLegend extends StatelessWidget {
-  const _ChartLegend({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 7),
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-      ],
-    );
-  }
-}
-
 class _CategoryChartBar {
   const _CategoryChartBar({
     required this.category,
@@ -4060,9 +5451,13 @@ double categoryShareOfActivity(double categoryTotal, double totalActivity) {
 }
 
 String _formatChartPercentage(double percentage) {
+  if (percentage <= 0) return '0%';
   if (percentage > 0 && percentage < 0.1) return '<0.1%';
-  if (percentage < 10) return '${percentage.toStringAsFixed(1)}%';
-  return '${percentage.toStringAsFixed(0)}%';
+  final rounded = double.parse(percentage.toStringAsFixed(2));
+  if (rounded % 1 == 0) return '${rounded.toStringAsFixed(0)}%';
+  final fixed = percentage.toStringAsFixed(2);
+  if (fixed.endsWith('0')) return '${percentage.toStringAsFixed(1)}%';
+  return '$fixed%';
 }
 
 List<entity.Transaction> filterTransactionsForSelection(
@@ -6757,12 +8152,15 @@ class IncomeExpensePiePanel extends StatelessWidget {
 
     final chartTotal = totalExpenses + positiveBalance;
 
-    final spentPct = totalIncome > 0
-        ? ((totalExpenses / totalIncome) * 100).round()
-        : (totalExpenses > 0 ? 100 : 0);
-    final savedPct = totalIncome > 0
-        ? ((netBalance / totalIncome) * 100).clamp(0, 100).round()
-        : 0;
+    final spentPctValue = totalIncome > 0
+        ? (totalExpenses / totalIncome) * 100
+        : (totalExpenses > 0 ? 100.0 : 0.0);
+    final savedPctValue = totalIncome > 0
+        ? ((netBalance / totalIncome) * 100).clamp(0.0, 100.0)
+        : 0.0;
+
+    final spentPct = formatPiePercentage(spentPctValue);
+    final savedPct = formatPiePercentage(savedPctValue);
 
     final isLoss = netBalance < 0;
 
@@ -7032,6 +8430,14 @@ class IncomeExpensePiePanel extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  static String formatPiePercentage(double value) {
+    final rounded = double.parse(value.toStringAsFixed(2));
+    if (rounded % 1 == 0) {
+      return rounded.toStringAsFixed(0);
+    }
+    return value.toStringAsFixed(2);
   }
 }
 

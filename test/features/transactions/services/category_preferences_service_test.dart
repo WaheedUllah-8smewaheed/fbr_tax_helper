@@ -153,4 +153,71 @@ void main() {
       contains('Gardener'),
     );
   });
+
+  test('income parent categories and their subcategories are recognized as income', () async {
+    FlutterSecureStorage.setMockInitialValues({});
+    final service = CategoryPreferencesService();
+    addTearDown(service.dispose);
+
+    await service.loadForUser('user-income-test');
+
+    // Business is a level-2 parent under 'Money In'
+    expect(service.isParentCategory('Business'), isTrue);
+    expect(service.isParentCategory('Salary'), isTrue);
+    expect(service.modeForParent('Business'), CategoryMode.income);
+    expect(service.isExpense('Business'), isFalse);
+
+    // Add custom subcategory under Business
+    await service.addSubcategory(
+      parentName: 'Business',
+      categoryName: 'Online Store',
+    );
+
+    expect(service.isCustomCategory('Online Store'), isTrue);
+    expect(service.parentNameFor('Online Store'), 'Business');
+    expect(service.isExpense('Online Store'), isFalse);
+    expect(
+      service.childrenOf('Business').firstWhere((c) => c.name == 'Online Store').isExpense,
+      isFalse,
+    );
+    expect(
+      service.resolveTransactionTypeForCategory(
+        categoryName: 'Online Store',
+        transactionIsExpense: true,
+      ),
+      isFalse,
+    );
+
+    // Add custom subcategory under Salary
+    await service.addSubcategory(
+      parentName: 'Salary',
+      categoryName: 'Side Gig',
+    );
+    expect(service.isExpense('Side Gig'), isFalse);
+    expect(
+      service.childrenOf('Salary').firstWhere((c) => c.name == 'Side Gig').isExpense,
+      isFalse,
+    );
+  });
+
+  test('loadForUser heals previously poisoned income subcategory classifications', () async {
+    // Simulate corrupted storage where an income subcategory was saved with isExpense = true
+    FlutterSecureStorage.setMockInitialValues({
+      'category_preferences_user-poisoned':
+          '{"custom_subcategories":{"Business":["Online Store"]},"classifications":{"Online Store":true}}',
+    });
+
+    final service = CategoryPreferencesService();
+    addTearDown(service.dispose);
+
+    await service.loadForUser('user-poisoned');
+
+    // The corrupted 'true' should be healed to 'false' based on parent mode
+    expect(service.isExpense('Online Store'), isFalse);
+    expect(
+      service.childrenOf('Business').firstWhere((c) => c.name == 'Online Store').isExpense,
+      isFalse,
+    );
+  });
 }
+

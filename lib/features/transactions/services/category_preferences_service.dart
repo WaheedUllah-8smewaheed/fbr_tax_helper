@@ -41,9 +41,18 @@ class CategoryPreferencesService extends ChangeNotifier {
     return TransactionCategory.parentNameFor(categoryName);
   }
 
+  bool isParentCategory(String name) {
+    if (_customSubcategories.containsKey(name)) return true;
+    for (final superEntry in TransactionCategory.hierarchy.values) {
+      if (superEntry.containsKey(name)) return true;
+    }
+    return false;
+  }
+
   List<TransactionCategory> childrenOf(String parentName) {
     final defaultChildren = TransactionCategory.childrenOf(parentName);
     final customNames = _customSubcategories[parentName] ?? const [];
+    final parentMode = modeForParent(parentName);
 
     final list = <TransactionCategory>[];
     for (final cat in defaultChildren) {
@@ -54,8 +63,9 @@ class CategoryPreferencesService extends ChangeNotifier {
     for (final name in customNames) {
       if (!_removedCategories.contains(name) &&
           !list.any((c) => c.name == name)) {
-        final isExp = _classifications[name] ??
-            (modeForParent(parentName) == CategoryMode.expense);
+        final isExp = parentMode == CategoryMode.both
+            ? (_classifications[name] ?? false)
+            : (parentMode == CategoryMode.expense);
         list.add(TransactionCategory(name: name, isExpense: isExp));
       }
     }
@@ -75,12 +85,15 @@ class CategoryPreferencesService extends ChangeNotifier {
   }
 
   bool isExpense(String categoryName) {
-    if (_classifications.containsKey(categoryName)) {
-      return _classifications[categoryName]!;
+    if (isParentCategory(categoryName)) {
+      return modeForParent(categoryName) == CategoryMode.expense;
     }
     final groupMode = _modeForCategory(categoryName);
     if (groupMode == CategoryMode.income) return false;
     if (groupMode == CategoryMode.expense) return true;
+    if (_classifications.containsKey(categoryName)) {
+      return _classifications[categoryName]!;
+    }
     return TransactionCategory.fromName(categoryName).isExpense;
   }
 
@@ -262,6 +275,18 @@ class CategoryPreferencesService extends ChangeNotifier {
               }
             }
           }
+
+          // Heal existing classifications for custom subcategories under single-mode parents
+          for (final entry in _customSubcategories.entries) {
+            final parent = entry.key;
+            final parentMode = modeForParent(parent);
+            if (parentMode != CategoryMode.both) {
+              final shouldBeExpense = parentMode == CategoryMode.expense;
+              for (final child in entry.value) {
+                _classifications[child] = shouldBeExpense;
+              }
+            }
+          }
         }
       }
     } catch (error) {
@@ -297,9 +322,11 @@ class CategoryPreferencesService extends ChangeNotifier {
     if (!wasCustom) {
       _customSubcategories[trimmedParent] = [...existingList, trimmedName];
     }
-    if (isExpense != null) {
-      _classifications[trimmedName] = isExpense;
-    }
+    final parentMode = modeForParent(trimmedParent);
+    final effectiveIsExpense = parentMode == CategoryMode.both
+        ? (isExpense ?? false)
+        : (parentMode == CategoryMode.expense);
+    _classifications[trimmedName] = effectiveIsExpense;
     notifyListeners();
 
     try {

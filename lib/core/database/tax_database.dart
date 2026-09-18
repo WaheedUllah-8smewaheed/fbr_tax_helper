@@ -20,7 +20,7 @@ class TaxDatabase {
 
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -39,6 +39,18 @@ class TaxDatabase {
           date TEXT NOT NULL,
           category TEXT NOT NULL,
           receiptImagePath TEXT)
+    ''');
+    await db.execute('''
+      CREATE TABLE khata_entries (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          userId TEXT NOT NULL,
+          title TEXT NOT NULL,
+          party TEXT NOT NULL,
+          amount REAL NOT NULL,
+          isPayable INTEGER NOT NULL,
+          date TEXT NOT NULL,
+          description TEXT NOT NULL DEFAULT '',
+          isPaid INTEGER NOT NULL DEFAULT 0)
     ''');
   }
 
@@ -79,6 +91,20 @@ class TaxDatabase {
         whereArgs: ['Tax'],
       );
     }
+    if (oldVersion < 5) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS khata_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            userId TEXT NOT NULL,
+            title TEXT NOT NULL,
+            party TEXT NOT NULL,
+            amount REAL NOT NULL,
+            isPayable INTEGER NOT NULL,
+            date TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            isPaid INTEGER NOT NULL DEFAULT 0)
+      ''');
+    }
   }
 
   Future<void> _addColumnIfMissing(
@@ -109,6 +135,45 @@ class TaxDatabase {
     return await db.update(
       'transactions',
       {'status': status},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<int> insertKhataEntry(Map<String, dynamic> row) async {
+    final db = await instance.database;
+    return await db.insert('khata_entries', row);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchKhataEntries({String? userId}) async {
+    final db = await instance.database;
+    if (userId != null && userId.isNotEmpty) {
+      return await db.query(
+        'khata_entries',
+        where: 'userId = ?',
+        whereArgs: [userId],
+        orderBy: 'date DESC',
+      );
+    }
+    return await db.query('khata_entries', orderBy: 'date DESC');
+  }
+
+  Future<int> updateKhataEntry(Map<String, dynamic> row) async {
+    final db = await instance.database;
+    final id = row['id'] as int?;
+    if (id == null) return 0;
+    return await db.update(
+      'khata_entries',
+      row,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<int> deleteKhataEntry(int id) async {
+    final db = await instance.database;
+    return await db.delete(
+      'khata_entries',
       where: 'id = ?',
       whereArgs: [id],
     );
@@ -182,6 +247,7 @@ class TaxDatabase {
     final receiptPaths = await getReceiptPathsForUser(userId);
     final db = await database;
     await db.delete('transactions', where: 'userId = ?', whereArgs: [userId]);
+    await db.delete('khata_entries', where: 'userId = ?', whereArgs: [userId]);
 
     for (final receiptPath in receiptPaths) {
       final receipt = File(receiptPath);
