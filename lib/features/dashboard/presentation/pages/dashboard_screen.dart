@@ -1009,7 +1009,7 @@ bool transactionBelongsToCategory(
       ).any((child) => child.name == transaction.category);
 }
 
-enum KhataSegmentFilter { payable, receivable, both }
+enum KhataSegmentFilter { payable, receivable }
 
 class _KhataPage extends StatefulWidget {
   const _KhataPage();
@@ -1019,7 +1019,7 @@ class _KhataPage extends StatefulWidget {
 }
 
 class _KhataPageState extends State<_KhataPage> {
-  KhataSegmentFilter _selectedFilter = KhataSegmentFilter.both;
+  KhataSegmentFilter _selectedFilter = KhataSegmentFilter.payable;
   List<KhataEntry> _entries = [];
   bool _isLoading = true;
   String _searchQuery = '';
@@ -1079,7 +1079,6 @@ class _KhataPageState extends State<_KhataPage> {
   List<KhataEntry> get _filteredEntries {
     return _entries.where((entry) {
       final matchesFilter = switch (_selectedFilter) {
-        KhataSegmentFilter.both => true,
         KhataSegmentFilter.payable => entry.isPayable,
         KhataSegmentFilter.receivable => !entry.isPayable,
       };
@@ -1135,9 +1134,13 @@ class _KhataPageState extends State<_KhataPage> {
 
   Future<void> _openAddOrEditEntryDialog({
     KhataEntry? existingEntry,
+    bool? isPayableDefault,
   }) async {
     final messenger = ScaffoldMessenger.of(context);
     final isEditing = existingEntry != null;
+    final bool isPayable = existingEntry?.isPayable ??
+        (isPayableDefault ??
+            (_selectedFilter == KhataSegmentFilter.payable));
     final titleController =
         TextEditingController(text: existingEntry?.title ?? '');
     final amountController = TextEditingController(
@@ -1148,12 +1151,6 @@ class _KhataPageState extends State<_KhataPage> {
     final descriptionController =
         TextEditingController(text: existingEntry?.description ?? '');
     DateTime selectedDate = existingEntry?.date ?? DateTime.now();
-    bool isPayable = existingEntry?.isPayable ??
-        (_selectedFilter == KhataSegmentFilter.payable
-            ? true
-            : _selectedFilter == KhataSegmentFilter.receivable
-                ? false
-                : true);
 
     final formKey = GlobalKey<FormState>();
 
@@ -1194,82 +1191,13 @@ class _KhataPageState extends State<_KhataPage> {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        isEditing ? 'Edit Khata Entry' : 'New Khata Entry',
+                        isEditing
+                            ? (isPayable ? 'Edit Payable' : 'Edit Receivable')
+                            : (isPayable ? 'New Payable' : 'New Receivable'),
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF1E3A2F),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      // Type toggle: Payable vs Receivable
-                      Container(
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFAF5DE),
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(color: const Color(0xFFE8DCC0)),
-                        ),
-                        padding: const EdgeInsets.all(3),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: () =>
-                                    setModalState(() => isPayable = true),
-                                child: Container(
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: isPayable
-                                        ? const Color(0xFF0F6B57)
-                                        : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    'Payable (You owe)',
-                                    style: TextStyle(
-                                      color: isPayable
-                                          ? Colors.white
-                                          : const Color(0xFF1E3A2F),
-                                      fontWeight: isPayable
-                                          ? FontWeight.bold
-                                          : FontWeight.w600,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: () =>
-                                    setModalState(() => isPayable = false),
-                                child: Container(
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: !isPayable
-                                        ? const Color(0xFF0F6B57)
-                                        : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    'Receivable (Owed to you)',
-                                    style: TextStyle(
-                                      color: !isPayable
-                                          ? Colors.white
-                                          : const Color(0xFF1E3A2F),
-                                      fontWeight: !isPayable
-                                          ? FontWeight.bold
-                                          : FontWeight.w600,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
                         ),
                       ),
                       const SizedBox(height: 18),
@@ -1447,8 +1375,12 @@ class _KhataPageState extends State<_KhataPage> {
                                     SnackBar(
                                       content: Text(
                                         isEditing
-                                            ? 'Khata entry updated'
-                                            : 'Khata entry added',
+                                            ? (isPayable
+                                                ? 'Payable updated'
+                                                : 'Receivable updated')
+                                            : (isPayable
+                                                ? 'Payable added'
+                                                : 'Receivable added'),
                                       ),
                                     ),
                                   );
@@ -1463,8 +1395,11 @@ class _KhataPageState extends State<_KhataPage> {
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
-                              child: Text(
-                                  isEditing ? 'Save Changes' : 'Add Entry'),
+                              child: Text(isEditing
+                                  ? 'Save Changes'
+                                  : (isPayable
+                                      ? 'Add Payable'
+                                      : 'Add Receivable')),
                             ),
                           ),
                         ],
@@ -1758,7 +1693,7 @@ class _KhataPageState extends State<_KhataPage> {
             ),
             const SizedBox(height: 14),
 
-            // Segmented Distribution Bar (Payable, Receivable, Both) matching screenshot
+            // Segmented Distribution Bar (Payable, Receivable)
             Container(
               height: 48,
               decoration: BoxDecoration(
@@ -1771,22 +1706,27 @@ class _KhataPageState extends State<_KhataPage> {
                 children: [
                   _buildSegmentTab('Payable', KhataSegmentFilter.payable),
                   _buildSegmentTab('Receivable', KhataSegmentFilter.receivable),
-                  _buildSegmentTab('Both', KhataSegmentFilter.both),
                 ],
               ),
             ),
             const SizedBox(height: 12),
 
-            // Add Entry Button
+            // Add Entry Button (+ button for Payable / Receivable)
             SizedBox(
               width: double.infinity,
               height: 46,
               child: ElevatedButton.icon(
-                onPressed: () => _openAddOrEditEntryDialog(),
+                onPressed: () => _openAddOrEditEntryDialog(
+                  isPayableDefault:
+                      _selectedFilter == KhataSegmentFilter.payable,
+                ),
                 icon: const Icon(Icons.add_circle_outline, size: 20),
-                label: const Text(
-                  'Add Payable / Receivable',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                label: Text(
+                  _selectedFilter == KhataSegmentFilter.payable
+                      ? 'Add Payable'
+                      : 'Add Receivable',
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.bold),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF0F6B57),
@@ -1860,9 +1800,7 @@ class _KhataPageState extends State<_KhataPage> {
                           ? 'No matching entries found'
                           : _selectedFilter == KhataSegmentFilter.payable
                               ? 'No payables recorded'
-                              : _selectedFilter == KhataSegmentFilter.receivable
-                                  ? 'No receivables recorded'
-                                  : 'Khata ledger is empty',
+                              : 'No receivables recorded',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -1871,7 +1809,9 @@ class _KhataPageState extends State<_KhataPage> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Tap "Add Payable / Receivable" above to record a new entry.',
+                      _selectedFilter == KhataSegmentFilter.payable
+                          ? 'Tap "Add Payable" above to record a new payable.'
+                          : 'Tap "Add Receivable" above to record a new receivable.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 13,

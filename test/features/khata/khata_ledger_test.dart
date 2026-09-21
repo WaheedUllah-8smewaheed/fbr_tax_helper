@@ -123,7 +123,7 @@ void main() {
 
   group('Khata Ledger UI tests', () {
     testWidgets(
-        'renders segmented filter tabs and opens Add Entry sheet with dynamic labels',
+        'renders 2 segmented filter tabs (Payable, Receivable) and adds directly without asking',
         (tester) async {
       FlutterSecureStorage.setMockInitialValues({});
       final authService = FakeKhataAuthService();
@@ -154,41 +154,51 @@ void main() {
       await tester.tap(find.text('Khata'));
       await tester.pumpAndSettle();
 
-      // Verify header and distribution tabs
+      // Verify header and only 2 distribution tabs (Payable and Receivable; no Both)
       expect(find.text('Khata Ledger'), findsOneWidget);
       expect(find.text('Payable'), findsWidgets);
       expect(find.text('Receivable'), findsWidgets);
-      expect(find.text('Both'), findsOneWidget);
+      expect(find.text('Both'), findsNothing);
 
-      // Verify Add button
-      final addBtn = find.text('Add Payable / Receivable');
-      expect(addBtn, findsOneWidget);
+      // Verify Add Payable button when on Payable tab
+      final addPayableBtn = find.text('Add Payable');
+      expect(addPayableBtn, findsOneWidget);
 
-      // Open Add dialog/sheet
-      await tester.tap(addBtn);
+      // Open Add Payable sheet
+      await tester.tap(addPayableBtn);
       await tester.pumpAndSettle();
 
-      // Check sheet fields
-      expect(find.text('New Khata Entry'), findsOneWidget);
-      expect(find.text('Title *'), findsOneWidget);
-      expect(find.text('Amount (PKR) *'), findsOneWidget);
-      expect(find.text('Payable (You owe)'), findsOneWidget);
-      expect(find.text('Receivable (Owed to you)'), findsOneWidget);
-
-      // By default when Payable is selected, dynamic party label is "To"
+      // Check sheet has no type toggle asking the user
+      expect(find.text('New Payable'), findsOneWidget);
+      expect(find.text('Payable (You owe)'), findsNothing);
+      expect(find.text('Receivable (Owed to you)'), findsNothing);
       expect(find.text('To (Supplier / Vendor / Person) *'), findsOneWidget);
 
-      // Tap Receivable toggle
-      await tester.tap(find.text('Receivable (Owed to you)'));
-      await tester.pumpAndSettle();
-
-      // Dynamic party label should now be "From"
-      expect(find.text('From (Customer / Client / Debtor) *'), findsOneWidget);
-
-      // Close the modal sheet
+      // Close the sheet
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
-      expect(find.text('New Khata Entry'), findsNothing);
+
+      // Switch to Receivable tab
+      await tester.tap(find.text('Receivable').first);
+      await tester.pumpAndSettle();
+
+      // Verify button is now Add Receivable
+      final addReceivableBtn = find.text('Add Receivable');
+      expect(addReceivableBtn, findsOneWidget);
+
+      // Open Add Receivable sheet
+      await tester.tap(addReceivableBtn);
+      await tester.pumpAndSettle();
+
+      // Check sheet automatically adds Receivable without asking
+      expect(find.text('New Receivable'), findsOneWidget);
+      expect(find.text('Payable (You owe)'), findsNothing);
+      expect(find.text('Receivable (Owed to you)'), findsNothing);
+      expect(find.text('From (Customer / Client / Debtor) *'), findsOneWidget);
+
+      // Close the sheet
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
     });
 
     test('Unsettled entries do not impact transactions repository', () async {

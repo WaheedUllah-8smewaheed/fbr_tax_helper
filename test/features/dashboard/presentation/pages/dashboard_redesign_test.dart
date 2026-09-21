@@ -264,7 +264,7 @@ void main() {
     await tester.tap(find.text('Khata'));
     await tester.pumpAndSettle();
     expect(find.text('Khata Ledger'), findsOneWidget);
-    expect(find.text('Add Payable / Receivable'), findsOneWidget);
+    expect(find.text('Add Payable'), findsOneWidget);
     expect(find.byType(FloatingActionButton), findsNothing);
 
     // Switch to Assets tab: FAB exists for adding assets
