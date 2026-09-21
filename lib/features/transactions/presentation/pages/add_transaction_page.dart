@@ -295,10 +295,12 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       beneficiary: _beneficiaryController.text.trim(),
       purpose: _purposeController.text.trim(),
       amount: double.parse(_amountController.text.trim().replaceAll(',', '')),
-      isExpense: _categoryPreferences.resolveTransactionTypeForCategory(
-        categoryName: _selectedCategory!,
-        transactionIsExpense: _isExpense,
-      ),
+      isExpense: !_hasCategoryOptions
+          ? _isExpense
+          : _categoryPreferences.resolveTransactionTypeForCategory(
+              categoryName: _selectedCategory!,
+              transactionIsExpense: _isExpense,
+            ),
       date: _selectedDate,
       category: _selectedCategory!,
       receiptImagePath: _receiptImagePath,
@@ -329,8 +331,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       builder: (context, _) {
         final canSelectTransactionType =
             !_isLoadingCategoryPreferences &&
-            _selectedCategory != null &&
-            _categoryPreferences.isDualMode(_selectedCategory!);
+            (!_hasCategoryOptions ||
+                (_selectedCategory != null &&
+                    _categoryPreferences.isDualMode(_selectedCategory!)));
 
         return Scaffold(
           appBar: AppBar(

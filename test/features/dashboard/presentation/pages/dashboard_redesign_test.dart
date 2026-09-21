@@ -260,34 +260,148 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
 
-    // Switch to Khata tab: NO floating button
+    // Switch to Khata tab: Global Transaction FAB persists
     await tester.tap(find.text('Khata'));
     await tester.pumpAndSettle();
-    expect(find.text('Khata Ledger'), findsOneWidget);
+    expect(find.text('Khata'), findsOneWidget);
     expect(find.text('Add Payable'), findsOneWidget);
-    expect(find.byType(FloatingActionButton), findsNothing);
+    expect(find.byType(FloatingActionButton), findsOneWidget);
 
-    // Switch to Assets tab: FAB exists for adding assets
+    // Switch to Assets tab: Real asset module with global FAB
     await tester.tap(find.text('Assets'));
     await tester.pumpAndSettle();
-    expect(find.text('Assets & Wealth'), findsOneWidget);
-    expect(find.text('Coming Soon'), findsOneWidget);
-    final assetFab = find.byType(FloatingActionButton);
-    expect(assetFab, findsOneWidget);
-    await tester.tap(assetFab);
-    await tester.pumpAndSettle();
+    expect(find.text('Total Assets Value'), findsOneWidget);
     expect(find.text('Add Asset'), findsOneWidget);
-    await tester.tap(find.text('Got it'));
-    await tester.pumpAndSettle();
+    expect(find.byType(FloatingActionButton), findsOneWidget);
 
-    // Switch to More tab: NO profile button, NO FAB
+    // Switch to More tab: Global FAB persists, grouped sections rendered
     await tester.tap(find.text('More'));
     await tester.pumpAndSettle();
-    expect(find.byType(FloatingActionButton), findsNothing);
+    expect(find.byType(FloatingActionButton), findsOneWidget);
     expect(find.text('Tax Calculator'), findsOneWidget);
     expect(find.text('Comparison Dashboard'), findsOneWidget);
     expect(find.text('Logout'), findsOneWidget);
     expect(find.text('User'), findsNothing);
+  });
+
+  testWidgets('DashboardScreen tabs fit compact phone screen (360x640) without overflow',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    FlutterSecureStorage.setMockInitialValues({});
+    final authService = FakeAuthService();
+    final repo = FakeTransactionRepository();
+    final bloc = TransactionBloc(
+      transactionRepository: repo,
+      authService: authService,
+    );
+    addTearDown(bloc.close);
+
+    await tester.pumpWidget(
+      MultiRepositoryProvider(
+        providers: [
+          RepositoryProvider<AuthService>.value(value: authService),
+          RepositoryProvider<TransactionRepository>.value(value: repo),
+        ],
+        child: BlocProvider<TransactionBloc>.value(
+          value: bloc,
+          child: const MaterialApp(
+            home: DashboardScreen(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify Dashboard tab on compact screen
+    expect(tester.takeException(), isNull);
+
+    // Switch to Khata on compact screen
+    await tester.tap(find.text('Khata'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Khata'), findsOneWidget);
+
+    // Switch to Assets on compact screen and verify content renders without overflow
+    await tester.tap(find.text('Assets'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Total Assets Value'), findsOneWidget);
+    expect(find.text('Add Asset'), findsOneWidget);
+    await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(find.text('No assets recorded yet'), findsOneWidget);
+
+    // Switch to Settings on compact screen
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Category Settings'), findsOneWidget);
+
+    // Switch to More on compact screen and verify logout tile scrolls
+    await tester.tap(find.text('More'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Logout'), findsOneWidget);
+  });
+
+  testWidgets('Transactions page allows switching to Expense and displays expense categories',
+      (tester) async {
+    FlutterSecureStorage.setMockInitialValues({});
+    final authService = FakeAuthService();
+    final repo = FakeTransactionRepository();
+    final bloc = TransactionBloc(
+      transactionRepository: repo,
+      authService: authService,
+    );
+    addTearDown(bloc.close);
+
+    await tester.pumpWidget(
+      MultiRepositoryProvider(
+        providers: [
+          RepositoryProvider<AuthService>.value(value: authService),
+          RepositoryProvider<TransactionRepository>.value(value: repo),
+        ],
+        child: BlocProvider<TransactionBloc>.value(
+          value: bloc,
+          child: const MaterialApp(
+            home: DashboardScreen(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Tap + FAB on Dashboard to open Transactions page
+    final transactionFab = find.byType(FloatingActionButton);
+    expect(transactionFab, findsOneWidget);
+    await tester.tap(transactionFab);
+    await tester.pumpAndSettle();
+
+    // Verify Income is selected initially and Income categories are visible
+    expect(find.text('Income'), findsOneWidget);
+    expect(find.text('Expense'), findsOneWidget);
+    expect(find.text('Salary'), findsOneWidget);
+
+    // Switch to Expense segment
+    await tester.tap(find.text('Expense'));
+    await tester.pumpAndSettle();
+
+    // Verify Expense categories are now visible
+    expect(find.text('Bills'), findsOneWidget);
+
+    // Tap an Expense category (Bills)
+    await tester.tap(find.text('Bills'));
+    await tester.pumpAndSettle();
+
+    // Verify AddTransactionPage opens for Bills with expense subcategories
+    expect(find.text('Bills'), findsWidgets);
+    expect(find.text('Electricity'), findsOneWidget);
   });
 }
 

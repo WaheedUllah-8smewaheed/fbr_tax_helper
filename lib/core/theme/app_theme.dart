@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 abstract final class AppColors {
   static const primary = Color(0xFF0F6B57);
   static const primaryDark = Color(0xFF092B29);
+  // Shared Khata-inspired brand palette for authenticated screens.
+  static const forest = Color(0xFF1E3A2F);
+  static const cream = Color(0xFFFAF5DE);
+  static const warmGold = Color(0xFFF7C75F);
   static const ink = Color(0xFF123D36);
   static const mint = Color(0xFF4DDBC4);
   static const mintSurface = Color(0xFFE7F0EA);
@@ -24,19 +28,19 @@ abstract final class AppTheme {
   static ThemeData get authenticated {
     final base = light;
     final scheme = base.colorScheme.copyWith(
-      secondary: AppColors.violet,
-      onSecondary: Colors.white,
-      secondaryContainer: AppColors.violetSurface,
-      onSecondaryContainer: const Color(0xFF2E2461),
+      secondary: AppColors.warmGold,
+      onSecondary: AppColors.forest,
+      secondaryContainer: AppColors.goldSurface,
+      onSecondaryContainer: AppColors.primaryDark,
       tertiary: AppColors.coral,
       onTertiary: Colors.white,
       tertiaryContainer: AppColors.coralSurface,
       onTertiaryContainer: const Color(0xFF6B2525),
       surfaceContainerLowest: Colors.white,
-      surfaceContainerLow: const Color(0xFFFFFBF4),
-      surfaceContainer: const Color(0xFFF2FAF7),
-      surfaceContainerHigh: AppColors.violetSurface,
-      surfaceContainerHighest: AppColors.blueSurface,
+      surfaceContainerLow: AppColors.cream,
+      surfaceContainer: AppColors.mintSoft,
+      surfaceContainerHigh: AppColors.mintSurface,
+      surfaceContainerHighest: AppColors.goldSurface,
     );
 
     return base.copyWith(
@@ -44,22 +48,22 @@ abstract final class AppTheme {
       cardTheme: base.cardTheme.copyWith(
         color: const Color(0xFFFFFEFC),
         elevation: 2,
-        shadowColor: AppColors.violet.withValues(alpha: 0.18),
+        shadowColor: AppColors.forest.withValues(alpha: 0.14),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
           side: const BorderSide(color: Color(0xFFBFE9DD)),
         ),
       ),
       inputDecorationTheme: base.inputDecorationTheme.copyWith(
-        fillColor: const Color(0xFFF5F2FF),
-        prefixIconColor: AppColors.violet,
+        fillColor: AppColors.mintSoft,
+        prefixIconColor: AppColors.primary,
         suffixIconColor: AppColors.primary,
       ),
       dialogTheme: base.dialogTheme.copyWith(
         backgroundColor: const Color(0xFFFFFCF7),
-        shadowColor: AppColors.violet.withValues(alpha: 0.3),
+        shadowColor: AppColors.forest.withValues(alpha: 0.22),
         elevation: 18,
-        iconColor: AppColors.violet,
+        iconColor: AppColors.primary,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(26),
           side: const BorderSide(color: Color(0xFFD9D0FF)),
@@ -71,7 +75,7 @@ abstract final class AppTheme {
         modalBarrierColor: AppColors.primaryDark.withValues(alpha: 0.38),
         elevation: 14,
         modalElevation: 18,
-        dragHandleColor: AppColors.violet,
+        dragHandleColor: AppColors.primary,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
           side: BorderSide(color: Color(0xFF9DE1CF)),
@@ -80,7 +84,7 @@ abstract final class AppTheme {
       popupMenuTheme: base.popupMenuTheme.copyWith(
         color: const Color(0xFFFFFBF2),
         elevation: 12,
-        shadowColor: AppColors.violet.withValues(alpha: 0.24),
+        shadowColor: AppColors.forest.withValues(alpha: 0.18),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
           side: const BorderSide(color: Color(0xFFFFD779)),
@@ -120,7 +124,7 @@ abstract final class AppTheme {
       ),
       datePickerTheme: base.datePickerTheme.copyWith(
         backgroundColor: const Color(0xFFFFFCF7),
-        headerBackgroundColor: AppColors.violet,
+        headerBackgroundColor: AppColors.forest,
         headerForegroundColor: Colors.white,
         todayBackgroundColor: const WidgetStatePropertyAll(
           AppColors.coralSurface,
@@ -133,12 +137,12 @@ abstract final class AppTheme {
       ),
       timePickerTheme: TimePickerThemeData(
         backgroundColor: const Color(0xFFFFFCF7),
-        hourMinuteColor: AppColors.violetSurface,
-        hourMinuteTextColor: AppColors.violet,
+        hourMinuteColor: AppColors.mintSurface,
+        hourMinuteTextColor: AppColors.primary,
         dayPeriodColor: AppColors.goldSurface,
         dayPeriodTextColor: AppColors.primaryDark,
-        dialBackgroundColor: AppColors.blueSurface,
-        dialHandColor: AppColors.violet,
+        dialBackgroundColor: AppColors.mintSoft,
+        dialHandColor: AppColors.primary,
         dialTextColor: AppColors.ink,
         entryModeIconColor: AppColors.coral,
         shape: RoundedRectangleBorder(
@@ -187,9 +191,9 @@ abstract final class AppTheme {
         ),
       ),
       progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: AppColors.violet,
-        linearTrackColor: AppColors.violetSurface,
-        circularTrackColor: AppColors.blueSurface,
+        color: AppColors.primary,
+        linearTrackColor: AppColors.mintSurface,
+        circularTrackColor: AppColors.goldSurface,
       ),
     );
   }

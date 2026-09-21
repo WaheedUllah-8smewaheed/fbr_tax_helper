@@ -4,6 +4,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart' show User;
 import 'package:fbr_tax_helper/features/khata/domain/entities/khata_entry.dart';
+import 'package:fbr_tax_helper/features/assets/domain/entities/asset.dart';
+import 'package:fbr_tax_helper/features/wealth/domain/entities/wealth_summary.dart';
 import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction.dart'
     as entity;
 import 'package:fbr_tax_helper/features/transactions/domain/repositories/transaction_repository.dart';
@@ -155,7 +157,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Verify header and only 2 distribution tabs (Payable and Receivable; no Both)
-      expect(find.text('Khata Ledger'), findsOneWidget);
+      expect(find.text('Khata'), findsOneWidget);
       expect(find.text('Payable'), findsWidgets);
       expect(find.text('Receivable'), findsWidgets);
       expect(find.text('Both'), findsNothing);
@@ -216,7 +218,105 @@ void main() {
         date: DateTime(2026, 9, 1),
       );
       expect(entry.isPayable, isTrue);
+      expect(entry.remainingAmount, 15000.0);
       expect(await repo.getTransactions('khata-user-123'), isEmpty);
+    });
+
+    test('Partial and full settlement calculate remaining amount correctly', () {
+      final entry = KhataEntry(
+        id: 10,
+        userId: 'u1',
+        title: 'Wholesale Stock',
+        party: 'Kamran & Co',
+        amount: 50000.0,
+        isPayable: true,
+        date: DateTime(2026, 9, 1),
+      );
+
+      expect(entry.remainingAmount, 50000.0);
+      expect(entry.isPaid, isFalse);
+
+      // Partial settlement of 20,000
+      final partial = entry.copyWith(settledAmount: 20000.0);
+      expect(partial.settledAmount, 20000.0);
+      expect(partial.remainingAmount, 30000.0);
+      expect(partial.isPaid, isFalse);
+
+      // Full settlement of remaining 30,000
+      final fullyPaid = partial.copyWith(
+        settledAmount: 50000.0,
+        isPaid: true,
+      );
+      expect(fullyPaid.settledAmount, 50000.0);
+      expect(fullyPaid.remainingAmount, 0.0);
+      expect(fullyPaid.isPaid, isTrue);
+    });
+
+    test('Write off marks debt closed with zero transactions created', () async {
+      final repo = FakeKhataTransactionRepository();
+      final badDebt = KhataEntry(
+        id: 99,
+        userId: 'u1',
+        title: 'Unrecoverable loan',
+        party: 'Defaulted Debtor',
+        amount: 10000.0,
+        isPayable: false,
+        date: DateTime(2026, 8, 1),
+      );
+
+      final writtenOff = badDebt.copyWith(
+        isWrittenOff: true,
+        isPaid: true,
+      );
+
+      expect(writtenOff.isWrittenOff, isTrue);
+      expect(writtenOff.isPaid, isTrue);
+      // Verify no transaction added to repo
+      expect(await repo.getTransactions('u1'), isEmpty);
+    });
+
+    test('Asset entity serialization and category mapping', () {
+      final now = DateTime(2026, 9, 21, 10, 0);
+      final asset = Asset(
+        id: 5,
+        userId: 'u1',
+        name: 'Toyota Yaris 2022',
+        category: AssetCategory.vehicle,
+        value: 4200000.0,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      final map = asset.toMap();
+      expect(map['id'], 5);
+      expect(map['userId'], 'u1');
+      expect(map['name'], 'Toyota Yaris 2022');
+      expect(map['category'], 'Vehicle');
+      expect(map['value'], 4200000.0);
+
+      final fromMap = Asset.fromMap(map);
+      expect(fromMap.id, 5);
+      expect(fromMap.name, 'Toyota Yaris 2022');
+      expect(fromMap.category, AssetCategory.vehicle);
+      expect(fromMap.value, 4200000.0);
+    });
+
+    test('Wealth reconciliation formula aligns with spec', () {
+      // Total Wealth = Cash (cumulative income - expense) + Assets + Receivables (open) - Payables (open)
+      const wealth = WealthSummary(
+        cumulativeIncome: 500000.0,
+        cumulativeExpense: 300000.0,
+        openPayables: 50000.0,
+        openReceivables: 80000.0,
+        totalAssets: 1000000.0,
+      );
+
+      expect(wealth.cash, 200000.0); // 500k - 300k
+      expect(wealth.openPayables, 50000.0);
+      expect(wealth.openReceivables, 80000.0);
+      expect(wealth.totalAssets, 1000000.0);
+      // 200,000 + 1,000,000 + 80,000 - 50,000 = 1,230,000
+      expect(wealth.totalWealth, 1230000.0);
     });
 
     test('Mark as paid adds Expense for Payable and Income for Receivable',
@@ -251,7 +351,9 @@ void main() {
             amount: payableEntry.amount,
             isExpense: payableEntry.isPayable,
             date: DateTime(2026, 9, 18),
-            category: payableEntry.isPayable ? 'Other' : 'Business Income',
+            category: "Khata Ada'igi",
+            khataEntryId: payableEntry.id,
+            linkedCounterpartyOrAsset: payableEntry.party,
           ),
         ),
       );
@@ -263,6 +365,8 @@ void main() {
       expect(txs.first.isExpense, isTrue); // Payable becomes Expense
       expect(txs.first.amount, 35000.0);
       expect(txs.first.beneficiary, 'Landlord Mr. Khan');
+      expect(txs.first.category, "Khata Ada'igi");
+      expect(txs.first.khataEntryId, 1);
 
       // Simulate marking a Receivable entry as paid:
       final receivableEntry = KhataEntry(
@@ -286,7 +390,9 @@ void main() {
             amount: receivableEntry.amount,
             isExpense: receivableEntry.isPayable,
             date: DateTime(2026, 9, 18),
-            category: receivableEntry.isPayable ? 'Other' : 'Business Income',
+            category: 'Khata Wasooli',
+            khataEntryId: receivableEntry.id,
+            linkedCounterpartyOrAsset: receivableEntry.party,
           ),
         ),
       );
@@ -299,6 +405,8 @@ void main() {
       expect(receivableTx.isExpense, isFalse); // Receivable becomes Income
       expect(receivableTx.amount, 75000.0);
       expect(receivableTx.beneficiary, 'FinTech Corp');
+      expect(receivableTx.category, 'Khata Wasooli');
+      expect(receivableTx.khataEntryId, 2);
     });
   });
 }

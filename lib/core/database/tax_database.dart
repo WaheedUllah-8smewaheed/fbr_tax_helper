@@ -20,7 +20,7 @@ class TaxDatabase {
 
     return await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -38,7 +38,10 @@ class TaxDatabase {
           isExpense INTEGER NOT NULL,
           date TEXT NOT NULL,
           category TEXT NOT NULL,
-          receiptImagePath TEXT)
+          receiptImagePath TEXT,
+          khataEntryId INTEGER,
+          assetId INTEGER,
+          linkedCounterpartyOrAsset TEXT)
     ''');
     await db.execute('''
       CREATE TABLE khata_entries (
@@ -49,8 +52,21 @@ class TaxDatabase {
           amount REAL NOT NULL,
           isPayable INTEGER NOT NULL,
           date TEXT NOT NULL,
+          dueDate TEXT,
           description TEXT NOT NULL DEFAULT '',
-          isPaid INTEGER NOT NULL DEFAULT 0)
+          isPaid INTEGER NOT NULL DEFAULT 0,
+          settledAmount REAL NOT NULL DEFAULT 0.0,
+          isWrittenOff INTEGER NOT NULL DEFAULT 0)
+    ''');
+    await db.execute('''
+      CREATE TABLE assets (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          userId TEXT NOT NULL,
+          name TEXT NOT NULL,
+          category TEXT NOT NULL,
+          value REAL NOT NULL,
+          createdAt TEXT NOT NULL,
+          updatedAt TEXT NOT NULL)
     ''');
   }
 
@@ -103,6 +119,54 @@ class TaxDatabase {
             date TEXT NOT NULL,
             description TEXT NOT NULL DEFAULT '',
             isPaid INTEGER NOT NULL DEFAULT 0)
+      ''');
+    }
+    if (oldVersion < 6) {
+      await _addColumnIfMissing(
+        db,
+        table: 'transactions',
+        column: 'khataEntryId',
+        definition: 'INTEGER',
+      );
+      await _addColumnIfMissing(
+        db,
+        table: 'transactions',
+        column: 'assetId',
+        definition: 'INTEGER',
+      );
+      await _addColumnIfMissing(
+        db,
+        table: 'transactions',
+        column: 'linkedCounterpartyOrAsset',
+        definition: 'TEXT',
+      );
+      await _addColumnIfMissing(
+        db,
+        table: 'khata_entries',
+        column: 'dueDate',
+        definition: 'TEXT',
+      );
+      await _addColumnIfMissing(
+        db,
+        table: 'khata_entries',
+        column: 'settledAmount',
+        definition: 'REAL NOT NULL DEFAULT 0.0',
+      );
+      await _addColumnIfMissing(
+        db,
+        table: 'khata_entries',
+        column: 'isWrittenOff',
+        definition: 'INTEGER NOT NULL DEFAULT 0',
+      );
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS assets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            userId TEXT NOT NULL,
+            name TEXT NOT NULL,
+            category TEXT NOT NULL,
+            value REAL NOT NULL,
+            createdAt TEXT NOT NULL,
+            updatedAt TEXT NOT NULL)
       ''');
     }
   }
@@ -243,11 +307,187 @@ class TaxDatabase {
         .toList();
   }
 
+  Future<int> insertAsset(Map<String, dynamic> row) async {
+    final db = await instance.database;
+    return await db.insert('assets', row);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchAssets({String? userId}) async {
+    final db = await instance.database;
+    if (userId != null && userId.isNotEmpty) {
+      return await db.query(
+        'assets',
+        where: 'userId = ?',
+        whereArgs: [userId],
+        orderBy: 'updatedAt DESC',
+      );
+    }
+    return await db.query('assets', orderBy: 'updatedAt DESC');
+  }
+
+  Future<int> updateAsset(Map<String, dynamic> row) async {
+    final db = await instance.database;
+    final id = row['id'] as int?;
+    if (id == null) return 0;
+    return await db.update(
+      'assets',
+      row,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<int> deleteAsset(int id) async {
+    final db = await instance.database;
+    return await db.delete(
+      'assets',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> handleTransactionDeletionReversal(
+    Map<String, dynamic> transactionRow,
+  ) async {
+    final db = await instance.database;
+    final khataEntryId = transactionRow['khataEntryId'] as int?;
+    final assetId = transactionRow['assetId'] as int?;
+    final amount = (transactionRow['amount'] as num?)?.toDouble() ?? 0.0;
+    final category = transactionRow['category'] as String? ?? '';
+
+    if (khataEntryId != null) {
+      final rows = await db.query(
+        'khata_entries',
+        where: 'id = ?',
+        whereArgs: [khataEntryId],
+      );
+      if (rows.isNotEmpty) {
+        final khata = rows.first;
+        final totalAmount = (khata['amount'] as num?)?.toDouble() ?? 0.0;
+        final currentSettled =
+            (khata['settledAmount'] as num?)?.toDouble() ?? 0.0;
+        final newSettled = (currentSettled - amount).clamp(0.0, totalAmount);
+        final isPaid = newSettled >= totalAmount ? 1 : 0;
+        await db.update(
+          'khata_entries',
+          {'settledAmount': newSettled, 'isPaid': isPaid},
+          where: 'id = ?',
+          whereArgs: [khataEntryId],
+        );
+      }
+    }
+
+    if (assetId != null) {
+      final rows = await db.query(
+        'assets',
+        where: 'id = ?',
+        whereArgs: [assetId],
+      );
+      if (rows.isNotEmpty) {
+        final asset = rows.first;
+        final currentValue = (asset['value'] as num?)?.toDouble() ?? 0.0;
+        final double newValue;
+        if (category == 'Asset Purchase') {
+          newValue = (currentValue - amount).clamp(0.0, double.infinity);
+        } else if (category == 'Asset Sale') {
+          newValue = currentValue + amount;
+        } else {
+          final isExpense = (transactionRow['isExpense'] as int? ?? 1) == 1;
+          newValue = isExpense
+              ? (currentValue - amount).clamp(0.0, double.infinity)
+              : currentValue + amount;
+        }
+        await db.update(
+          'assets',
+          {
+            'value': newValue,
+            'updatedAt': DateTime.now().toIso8601String(),
+          },
+          where: 'id = ?',
+          whereArgs: [assetId],
+        );
+      }
+    }
+  }
+
+  Future<void> handleTransactionUpdateReversal({
+    required Map<String, dynamic> oldTransactionRow,
+    required Map<String, dynamic> newTransactionRow,
+  }) async {
+    final db = await instance.database;
+    final khataEntryId = newTransactionRow['khataEntryId'] as int? ??
+        oldTransactionRow['khataEntryId'] as int?;
+    final assetId = newTransactionRow['assetId'] as int? ??
+        oldTransactionRow['assetId'] as int?;
+    final oldAmount = (oldTransactionRow['amount'] as num?)?.toDouble() ?? 0.0;
+    final newAmount = (newTransactionRow['amount'] as num?)?.toDouble() ?? 0.0;
+    final amountDiff = newAmount - oldAmount;
+    final category = newTransactionRow['category'] as String? ??
+        oldTransactionRow['category'] as String? ??
+        '';
+
+    if (khataEntryId != null && amountDiff != 0.0) {
+      final rows = await db.query(
+        'khata_entries',
+        where: 'id = ?',
+        whereArgs: [khataEntryId],
+      );
+      if (rows.isNotEmpty) {
+        final khata = rows.first;
+        final totalAmount = (khata['amount'] as num?)?.toDouble() ?? 0.0;
+        final currentSettled =
+            (khata['settledAmount'] as num?)?.toDouble() ?? 0.0;
+        final newSettled =
+            (currentSettled + amountDiff).clamp(0.0, totalAmount);
+        final isPaid = newSettled >= totalAmount ? 1 : 0;
+        await db.update(
+          'khata_entries',
+          {'settledAmount': newSettled, 'isPaid': isPaid},
+          where: 'id = ?',
+          whereArgs: [khataEntryId],
+        );
+      }
+    }
+
+    if (assetId != null && amountDiff != 0.0) {
+      final rows = await db.query(
+        'assets',
+        where: 'id = ?',
+        whereArgs: [assetId],
+      );
+      if (rows.isNotEmpty) {
+        final asset = rows.first;
+        final currentValue = (asset['value'] as num?)?.toDouble() ?? 0.0;
+        final double newValue;
+        if (category == 'Asset Purchase') {
+          newValue = (currentValue + amountDiff).clamp(0.0, double.infinity);
+        } else if (category == 'Asset Sale') {
+          newValue = (currentValue - amountDiff).clamp(0.0, double.infinity);
+        } else {
+          final isExpense = (newTransactionRow['isExpense'] as int? ?? 1) == 1;
+          newValue = isExpense
+              ? (currentValue + amountDiff).clamp(0.0, double.infinity)
+              : (currentValue - amountDiff).clamp(0.0, double.infinity);
+        }
+        await db.update(
+          'assets',
+          {
+            'value': newValue,
+            'updatedAt': DateTime.now().toIso8601String(),
+          },
+          where: 'id = ?',
+          whereArgs: [assetId],
+        );
+      }
+    }
+  }
+
   Future<void> deleteDataForUser(String userId) async {
     final receiptPaths = await getReceiptPathsForUser(userId);
     final db = await database;
     await db.delete('transactions', where: 'userId = ?', whereArgs: [userId]);
     await db.delete('khata_entries', where: 'userId = ?', whereArgs: [userId]);
+    await db.delete('assets', where: 'userId = ?', whereArgs: [userId]);
 
     for (final receiptPath in receiptPaths) {
       final receipt = File(receiptPath);

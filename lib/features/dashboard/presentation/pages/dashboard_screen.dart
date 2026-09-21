@@ -12,6 +12,7 @@ import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction
 import 'package:fbr_tax_helper/features/transactions/services/transaction_report_service.dart';
 import 'package:fbr_tax_helper/features/transactions/services/category_preferences_service.dart';
 import 'package:fbr_tax_helper/features/khata/domain/entities/khata_entry.dart';
+import 'package:fbr_tax_helper/features/assets/domain/entities/asset.dart';
 
 import 'package:fbr_tax_helper/core/platform/app_storage.dart';
 import 'package:fbr_tax_helper/core/database/tax_database.dart';
@@ -20,6 +21,7 @@ import 'package:fbr_tax_helper/features/auth/services/biometric_lock_service.dar
 import 'package:fbr_tax_helper/features/backup/services/drive_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
@@ -39,6 +41,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
   TransactionTypeFilter _transactionFilter = TransactionTypeFilter.income;
   late final CategoryPreferencesService _categoryPreferences;
+  final _homeDashboardKey = GlobalKey<_HomeDashboardState>();
+  final _khataPageKey = GlobalKey<_KhataPageState>();
+  final _assetsPageKey = GlobalKey<_AssetsPageState>();
 
   @override
   void initState() {
@@ -95,65 +100,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _onItemTapped(int index) {
+    final isReturningToDashboard = index == 0 && _selectedIndex != 0;
     setState(() {
       _selectedIndex = index;
     });
-  }
-
-  void _openAddAssetSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Row(
-              children: [
-                Icon(
-                  Icons.account_balance_rounded,
-                  color: Color(0xFF1E3A2F),
-                  size: 28,
-                ),
-                SizedBox(width: 12),
-                Text(
-                  'Add Asset',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Asset tracking and declaration forms will be available once asset categories are configured.',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () => Navigator.pop(sheetContext),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF1E3A2F),
-                ),
-                child: const Text('Got it'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    if (isReturningToDashboard) {
+      _homeDashboardKey.currentState?._loadKhataAndAssetMetrics();
+    }
+    if (index == 1) {
+      _khataPageKey.currentState?._loadEntries();
+    } else if (index == 2) {
+      _assetsPageKey.currentState?._loadAssets();
+    }
   }
 
   @override
@@ -168,51 +126,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
         builder: (context, _) => IndexedStack(
           index: _selectedIndex,
           children: [
-            _HomeDashboard(categoryPreferences: _categoryPreferences),
-            const _KhataPage(),
-            const _AssetsPage(),
+            _HomeDashboard(
+              key: _homeDashboardKey,
+              categoryPreferences: _categoryPreferences,
+            ),
+            _KhataPage(key: _khataPageKey),
+            _AssetsPage(key: _assetsPageKey),
             _CategorySettingsPage(categoryPreferences: _categoryPreferences),
             _MorePage(categoryPreferences: _categoryPreferences),
           ],
         ),
       ),
-      floatingActionButton: switch (_selectedIndex) {
-        0 => FloatingActionButton(
-            heroTag: 'add-transaction-fab',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => _TransactionsPage(
-                    categoryPreferences: _categoryPreferences,
-                    filter: _transactionFilter,
-                    onFilterChanged: (filter) {
-                      setState(() => _transactionFilter = filter);
-                    },
-                    showAppBar: true,
+      floatingActionButton: _selectedIndex == 0
+          ? FloatingActionButton(
+              heroTag: 'add-transaction-fab',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => _TransactionsPage(
+                      categoryPreferences: _categoryPreferences,
+                      filter: _transactionFilter,
+                      onFilterChanged: (filter) {
+                        setState(() => _transactionFilter = filter);
+                      },
+                      showAppBar: true,
+                    ),
                   ),
-                ),
-              );
-            },
-            backgroundColor: const Color(0xFFF7C75F),
-            foregroundColor: const Color(0xFF1E3A2F),
-            elevation: 4,
-            shape: const CircleBorder(),
-            child: const Icon(Icons.add_rounded, size: 30),
-          ),
-        2 => FloatingActionButton(
-            heroTag: 'add-asset-fab',
-            onPressed: () => _openAddAssetSheet(context),
-            backgroundColor: const Color(0xFFF7C75F),
-            foregroundColor: const Color(0xFF1E3A2F),
-            elevation: 4,
-            shape: const CircleBorder(),
-            child: const Icon(Icons.add_rounded, size: 30),
-          ),
-        _ => null,
-      },
+                );
+              },
+              backgroundColor: AppColors.warmGold,
+              foregroundColor: AppColors.forest,
+              elevation: 4,
+              shape: const CircleBorder(),
+              child: const Icon(Icons.add_rounded, size: 30),
+            )
+          : null,
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFFFAF5DE),
+          color: AppColors.cream,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           boxShadow: [
             BoxShadow(
@@ -222,51 +173,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ],
         ),
-        child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          child: BottomNavigationBar(
-            type: BottomNavigationBarType.fixed,
-            backgroundColor: const Color(0xFFFAF5DE),
-            elevation: 0,
-            currentIndex: _selectedIndex,
-            onTap: _onItemTapped,
-            selectedItemColor: const Color(0xFF1E3A2F),
-            unselectedItemColor: const Color(0xFF6B7280),
-            selectedLabelStyle: const TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 12,
+        child: SafeArea(
+          top: false,
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            child: BottomNavigationBar(
+              type: BottomNavigationBarType.fixed,
+              backgroundColor: AppColors.cream,
+              elevation: 0,
+              currentIndex: _selectedIndex,
+              onTap: _onItemTapped,
+              selectedItemColor: AppColors.forest,
+              unselectedItemColor: const Color(0xFF6B7280),
+              selectedLabelStyle: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontWeight: FontWeight.w500,
+                fontSize: 12,
+              ),
+              items: const [
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.grid_view_rounded),
+                  activeIcon: Icon(Icons.grid_view_rounded),
+                  label: 'Dashboard',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.currency_exchange_rounded),
+                  activeIcon: Icon(Icons.currency_exchange_rounded),
+                  label: 'Khata',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.account_balance_rounded),
+                  activeIcon: Icon(Icons.account_balance_rounded),
+                  label: 'Assets',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.settings_outlined),
+                  activeIcon: Icon(Icons.settings_rounded),
+                  label: 'Settings',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.menu_rounded),
+                  activeIcon: Icon(Icons.menu_rounded),
+                  label: 'More',
+                ),
+              ],
             ),
-            unselectedLabelStyle: const TextStyle(
-              fontWeight: FontWeight.w500,
-              fontSize: 12,
-            ),
-            items: const [
-              BottomNavigationBarItem(
-                icon: Icon(Icons.grid_view_rounded),
-                activeIcon: Icon(Icons.grid_view_rounded),
-                label: 'Dashboard',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.currency_exchange_rounded),
-                activeIcon: Icon(Icons.currency_exchange_rounded),
-                label: 'Khata',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.account_balance_rounded),
-                activeIcon: Icon(Icons.account_balance_rounded),
-                label: 'Assets',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.settings_outlined),
-                activeIcon: Icon(Icons.settings_rounded),
-                label: 'Settings',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.menu_rounded),
-                activeIcon: Icon(Icons.menu_rounded),
-                label: 'More',
-              ),
-            ],
           ),
         ),
       ),
@@ -334,6 +288,22 @@ class _TransactionsPage extends StatefulWidget {
 }
 
 class _TransactionsPageState extends State<_TransactionsPage> {
+  late TransactionTypeFilter _filter;
+
+  @override
+  void initState() {
+    super.initState();
+    _filter = widget.filter;
+  }
+
+  @override
+  void didUpdateWidget(covariant _TransactionsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.filter != widget.filter) {
+      _filter = widget.filter;
+    }
+  }
+
   void _openParentTransaction(
     String parentCategory,
     List<TransactionCategory> categoryOptions,
@@ -344,8 +314,11 @@ class _TransactionsPageState extends State<_TransactionsPage> {
           parentCategory: parentCategory,
           categoryOptions: categoryOptions,
           categoryPreferences: widget.categoryPreferences,
-          initialIsExpense:
-              widget.categoryPreferences.isExpense(parentCategory),
+          initialIsExpense: _filter == TransactionTypeFilter.expense
+              ? true
+              : (_filter == TransactionTypeFilter.income
+                    ? false
+                    : widget.categoryPreferences.isExpense(parentCategory)),
           onViewCategoryHistory: (category, {required includeSubcategories}) {
             Navigator.of(this.context).push(
               MaterialPageRoute(
@@ -364,7 +337,7 @@ class _TransactionsPageState extends State<_TransactionsPage> {
 
   bool _isVisible(TransactionCategory category) {
     if (!widget.categoryPreferences.isEnabled(category.name)) return false;
-    return switch (widget.filter) {
+    return switch (_filter) {
       TransactionTypeFilter.income =>
         widget.categoryPreferences.shouldShowCategoryInSection(
           categoryName: category.name,
@@ -402,6 +375,7 @@ class _TransactionsPageState extends State<_TransactionsPage> {
       builder: (context, _) {
         final categoryCards = _visibleCategoryCards();
 
+        final bottomPadding = MediaQuery.paddingOf(context).bottom + 90.0;
         return Scaffold(
           appBar: widget.showAppBar
               ? AppBar(
@@ -411,79 +385,84 @@ class _TransactionsPageState extends State<_TransactionsPage> {
                 )
               : null,
           body: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPadding),
             children: [
               SegmentedButton<TransactionTypeFilter>(
                 expandedInsets: EdgeInsets.zero,
                 showSelectedIcon: false,
                 segments: const [
-              ButtonSegment(
-                value: TransactionTypeFilter.income,
-                label: Text('Income'),
-              ),
-              ButtonSegment(
-                value: TransactionTypeFilter.expense,
-                label: Text('Expense'),
-              ),
-              ButtonSegment(
-                value: TransactionTypeFilter.both,
-                label: Text('Both'),
-              ),
-            ],
-            selected: {widget.filter},
-            onSelectionChanged: (selection) {
-              widget.onFilterChanged(selection.first);
-            },
-          ),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => _AllTransactionsPage(
-                    categoryPreferences: widget.categoryPreferences,
+                  ButtonSegment(
+                    value: TransactionTypeFilter.income,
+                    label: Text('Income'),
                   ),
-                ),
-              );
-            },
-            icon: const Icon(Icons.receipt_long_outlined),
-            label: const Text('View All Transactions'),
-          ),
-          const SizedBox(height: 20),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 280),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            child: LayoutBuilder(
-              key: ValueKey(widget.filter),
-              builder: (context, constraints) => GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: categoryCards.length,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: constraints.maxWidth < 360 ? 1.12 : 1.3,
-                ),
-                itemBuilder: (context, index) {
-                  final card = categoryCards[index];
-                  return _AnimatedTransactionCategoryCard(
-                    key: ValueKey('${widget.filter.name}-${card.categoryName}'),
-                    data: card,
-                    index: index,
-                    onTap: () =>
-                        _openParentTransaction(card.categoryName, card.options),
-                  );
+                  ButtonSegment(
+                    value: TransactionTypeFilter.expense,
+                    label: Text('Expense'),
+                  ),
+                  ButtonSegment(
+                    value: TransactionTypeFilter.both,
+                    label: Text('Both'),
+                  ),
+                ],
+                selected: {_filter},
+                onSelectionChanged: (selection) {
+                  setState(() {
+                    _filter = selection.first;
+                  });
+                  widget.onFilterChanged(selection.first);
                 },
               ),
-            ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => _AllTransactionsPage(
+                        categoryPreferences: widget.categoryPreferences,
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.receipt_long_outlined),
+                label: const Text('View All Transactions'),
+              ),
+              const SizedBox(height: 20),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 280),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                child: LayoutBuilder(
+                  key: ValueKey(_filter),
+                  builder: (context, constraints) => GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: categoryCards.length,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: constraints.maxWidth < 360 ? 1.12 : 1.3,
+                    ),
+                    itemBuilder: (context, index) {
+                      final card = categoryCards[index];
+                      return _AnimatedTransactionCategoryCard(
+                        key: ValueKey('${_filter.name}-${card.categoryName}'),
+                        data: card,
+                        index: index,
+                        onTap: () => _openParentTransaction(
+                          card.categoryName,
+                          card.options,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
-  },
-);
   }
 }
 
@@ -814,8 +793,9 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
               categoryPreferences: widget.categoryPreferences,
             );
 
+            final bottomPadding = MediaQuery.paddingOf(context).bottom + 90.0;
             return ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPadding),
               children: [
                 SegmentedButton<_TransactionDateFilter>(
                   expandedInsets: EdgeInsets.zero,
@@ -966,7 +946,8 @@ class _TransactionFilterSummary extends StatelessWidget {
     ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700);
 
     final showIncome = mode == CategoryMode.income || mode == CategoryMode.both;
-    final showExpense = mode == CategoryMode.expense || mode == CategoryMode.both;
+    final showExpense =
+        mode == CategoryMode.expense || mode == CategoryMode.both;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1012,7 +993,7 @@ bool transactionBelongsToCategory(
 enum KhataSegmentFilter { payable, receivable }
 
 class _KhataPage extends StatefulWidget {
-  const _KhataPage();
+  const _KhataPage({super.key});
 
   @override
   State<_KhataPage> createState() => _KhataPageState();
@@ -1043,7 +1024,7 @@ class _KhataPageState extends State<_KhataPage> {
       final userId = context.read<AuthService>().currentUser?.uid;
       final rows = await TaxDatabase.instance
           .fetchKhataEntries(userId: userId)
-          .timeout(const Duration(milliseconds: 300));
+          .timeout(const Duration(seconds: 2));
       final list = rows.map((r) => KhataEntry.fromMap(r)).toList();
       if (mounted) {
         setState(() {
@@ -1067,17 +1048,18 @@ class _KhataPageState extends State<_KhataPage> {
   }
 
   double get _totalPayable => _entries
-      .where((e) => e.isPayable)
-      .fold(0.0, (sum, e) => sum + e.amount);
+      .where((e) => e.isPayable && !e.isPaid && !e.isWrittenOff)
+      .fold(0.0, (sum, e) => sum + e.remainingAmount);
 
   double get _totalReceivable => _entries
-      .where((e) => !e.isPayable)
-      .fold(0.0, (sum, e) => sum + e.amount);
+      .where((e) => !e.isPayable && !e.isPaid && !e.isWrittenOff)
+      .fold(0.0, (sum, e) => sum + e.remainingAmount);
 
   double get _netBalance => _totalReceivable - _totalPayable;
 
   List<KhataEntry> get _filteredEntries {
     return _entries.where((entry) {
+      if (entry.isPaid || entry.isWrittenOff) return false;
       final matchesFilter = switch (_selectedFilter) {
         KhataSegmentFilter.payable => entry.isPayable,
         KhataSegmentFilter.receivable => !entry.isPayable,
@@ -1088,11 +1070,18 @@ class _KhataPageState extends State<_KhataPage> {
       final q = _searchQuery.toLowerCase().trim();
       return entry.title.toLowerCase().contains(q) ||
           entry.party.toLowerCase().contains(q) ||
-          entry.description.toLowerCase().contains(q);
+          entry.description.toLowerCase().contains(q) ||
+          entry.amount.toString().contains(q) ||
+          entry.amount.toStringAsFixed(2).contains(q) ||
+          (entry.isPayable ? 'payable' : 'receivable').contains(q);
     }).toList();
   }
 
-  Widget _buildSegmentTab(String title, KhataSegmentFilter filter) {
+  Widget _buildSegmentTab(
+    String title,
+    String subtitle,
+    KhataSegmentFilter filter,
+  ) {
     final isSelected = _selectedFilter == filter;
     return Expanded(
       child: GestureDetector(
@@ -1106,6 +1095,7 @@ class _KhataPageState extends State<_KhataPage> {
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeInOut,
           alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(vertical: 4),
           decoration: BoxDecoration(
             color: isSelected ? const Color(0xFF0F6B57) : Colors.transparent,
             borderRadius: BorderRadius.circular(20),
@@ -1119,13 +1109,26 @@ class _KhataPageState extends State<_KhataPage> {
                   ]
                 : null,
           ),
-          child: Text(
-            title,
-            style: TextStyle(
-              color: isSelected ? Colors.white : const Color(0xFF1E3A2F),
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-              fontSize: 13,
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : const Color(0xFF1E3A2F),
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  color: isSelected ? Colors.white70 : Colors.black54,
+                  fontSize: 9.5,
+                  fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1138,353 +1141,494 @@ class _KhataPageState extends State<_KhataPage> {
   }) async {
     final messenger = ScaffoldMessenger.of(context);
     final isEditing = existingEntry != null;
-    final bool isPayable = existingEntry?.isPayable ??
-        (isPayableDefault ??
-            (_selectedFilter == KhataSegmentFilter.payable));
-    final titleController =
-        TextEditingController(text: existingEntry?.title ?? '');
-    final amountController = TextEditingController(
-      text: existingEntry != null ? existingEntry.amount.toStringAsFixed(2) : '',
+    final bool isPayable =
+        existingEntry?.isPayable ??
+        (isPayableDefault ?? (_selectedFilter == KhataSegmentFilter.payable));
+    final titleController = TextEditingController(
+      text: existingEntry?.title ?? '',
     );
-    final partyController =
-        TextEditingController(text: existingEntry?.party ?? '');
-    final descriptionController =
-        TextEditingController(text: existingEntry?.description ?? '');
-    DateTime selectedDate = existingEntry?.date ?? DateTime.now();
-
+    final amountController = TextEditingController(
+      text: existingEntry != null
+          ? existingEntry.amount.toStringAsFixed(2)
+          : '',
+    );
+    final partyController = TextEditingController(
+      text: existingEntry?.party ?? '',
+    );
     final formKey = GlobalKey<FormState>();
 
-    await showModalBottomSheet(
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (bottomSheetContext) => Scaffold(
+          appBar: AppBar(
+            title: Text(
+              isEditing
+                  ? (isPayable ? 'Edit Payable' : 'Edit Receivable')
+                  : (isPayable ? 'Add Payable' : 'Add Receivable'),
+            ),
+          ),
+          body: SafeArea(
+            top: false,
+            child: StatefulBuilder(
+              builder: (builderContext, setModalState) {
+                final mediaQuery = MediaQuery.of(builderContext);
+                return Container(
+                  width: double.infinity,
+                  height: double.infinity,
+                  padding: EdgeInsets.only(
+                    bottom:
+                        mediaQuery.viewInsets.bottom +
+                        mediaQuery.padding.bottom +
+                        20,
+                    top: 20,
+                    left: 20,
+                    right: 20,
+                  ),
+                  decoration: const BoxDecoration(color: Colors.white),
+                  child: SingleChildScrollView(
+                    child: Form(
+                      key: formKey,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Center(
+                            child: Container(
+                              width: 40,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade300,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            isEditing
+                                ? (isPayable
+                                      ? 'Edit Payable'
+                                      : 'Edit Receivable')
+                                : (isPayable
+                                      ? 'New Payable'
+                                      : 'New Receivable'),
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1E3A2F),
+                            ),
+                          ),
+                          Text(
+                            isPayable
+                                ? 'Record a payable'
+                                : 'Record a receivable',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          TextFormField(
+                            controller: titleController,
+                            decoration: InputDecoration(
+                              hintText: 'Title',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Please enter a title';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                          TextFormField(
+                            controller: partyController,
+                            decoration: InputDecoration(
+                              hintText: isPayable ? 'To' : 'From',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return isPayable
+                                    ? 'Please specify who to pay'
+                                    : 'Please specify who owes you';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                          TextFormField(
+                            controller: amountController,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'^\d*\.?\d{0,2}'),
+                              ),
+                            ],
+                            decoration: InputDecoration(
+                              hintText: 'Amount',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Please enter an amount';
+                              }
+                              final parsed = double.tryParse(value.trim());
+                              if (parsed == null || parsed <= 0) {
+                                return 'Enter a valid positive number';
+                              }
+                              if (existingEntry != null &&
+                                  parsed < existingEntry.settledAmount) {
+                                return 'Amount cannot be less than already settled (Rs ${existingEntry.settledAmount.toStringAsFixed(0)})';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 22),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () =>
+                                      Navigator.pop(bottomSheetContext),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 14,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child: const Text('Cancel'),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: () async {
+                                    if (!formKey.currentState!.validate())
+                                      return;
+                                    final user = context
+                                        .read<AuthService>()
+                                        .currentUser;
+                                    final userId = user?.uid ?? '';
+                                    final amount = double.parse(
+                                      amountController.text.trim(),
+                                    );
+
+                                    final entryToSave = KhataEntry(
+                                      id: existingEntry?.id,
+                                      userId: userId,
+                                      title: titleController.text.trim(),
+                                      party: partyController.text.trim(),
+                                      amount: amount,
+                                      isPayable: isPayable,
+                                      date:
+                                          existingEntry?.date ?? DateTime.now(),
+                                      dueDate: existingEntry?.dueDate,
+                                      description:
+                                          existingEntry?.description ?? '',
+                                      isPaid: existingEntry != null
+                                          ? (existingEntry.settledAmount >=
+                                                amount)
+                                          : false,
+                                      settledAmount:
+                                          existingEntry?.settledAmount ?? 0.0,
+                                      isWrittenOff:
+                                          existingEntry?.isWrittenOff ?? false,
+                                    );
+
+                                    if (isEditing) {
+                                      await TaxDatabase.instance
+                                          .updateKhataEntry(
+                                            entryToSave.toMap(),
+                                          );
+                                    } else {
+                                      await TaxDatabase.instance
+                                          .insertKhataEntry(
+                                            entryToSave.toMap(),
+                                          );
+                                    }
+
+                                    if (bottomSheetContext.mounted) {
+                                      Navigator.pop(bottomSheetContext);
+                                    }
+                                    _loadEntries();
+                                    if (mounted) {
+                                      messenger.showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            isEditing
+                                                ? (isPayable
+                                                      ? 'Payable updated'
+                                                      : 'Receivable updated')
+                                                : (isPayable
+                                                      ? 'Payable added'
+                                                      : 'Receivable added'),
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF0F6B57),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 14,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    isEditing
+                                        ? 'Save Changes'
+                                        : (isPayable
+                                              ? 'Add Payable'
+                                              : 'Add Receivable'),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openSettlementDialog(KhataEntry entry) async {
+    final authService = context.read<AuthService>();
+    final transactionBloc = context.read<TransactionBloc>();
+    final remaining = entry.remainingAmount;
+    final settleAmountController = TextEditingController(
+      text: remaining.toStringAsFixed(2),
+    );
+    final notesController = TextEditingController();
+    DateTime settlementDate = DateTime.now();
+    final formKey = GlobalKey<FormState>();
+
+    final confirmed = await showDialog<bool>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (bottomSheetContext) {
+      builder: (dialogContext) {
         return StatefulBuilder(
-          builder: (builderContext, setModalState) {
-            return Container(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(builderContext).viewInsets.bottom + 20,
-                top: 20,
-                left: 20,
-                right: 20,
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
               ),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F6B57).withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check_circle_outline,
+                      color: Color(0xFF0F6B57),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      entry.isPayable ? 'Settle Payable' : 'Settle Receivable',
+                      style: const TextStyle(fontSize: 18),
+                    ),
+                  ),
+                ],
               ),
-              child: SingleChildScrollView(
+              content: SingleChildScrollView(
                 child: Form(
                   key: formKey,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Center(
-                        child: Container(
-                          width: 40,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade300,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
+                      Text(
+                        'Party: ${entry.party}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Total: ${_formatAmount(entry.amount)} | Remaining: ${_formatAmount(remaining)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
                         ),
                       ),
                       const SizedBox(height: 16),
-                      Text(
-                        isEditing
-                            ? (isPayable ? 'Edit Payable' : 'Edit Receivable')
-                            : (isPayable ? 'New Payable' : 'New Receivable'),
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E3A2F),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
                       TextFormField(
-                        controller: titleController,
-                        decoration: InputDecoration(
-                          labelText: 'Title *',
-                          hintText: 'e.g. Office Supplies, Rent, Invoice',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          prefixIcon: const Icon(Icons.title),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Please enter a title';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: amountController,
+                        controller: settleAmountController,
                         keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
+                          decimal: true,
+                        ),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                            RegExp(r'^\d*\.?\d{0,2}'),
+                          ),
+                        ],
                         decoration: InputDecoration(
-                          labelText: 'Amount (PKR) *',
-                          hintText: '0.00',
+                          hintText: 'Amount',
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          prefixIcon: const Icon(Icons.currency_rupee),
+                          helperText: 'Enter full or partial payment amount',
                         ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
-                            return 'Please enter an amount';
+                            return 'Enter settlement amount';
                           }
                           final parsed = double.tryParse(value.trim());
                           if (parsed == null || parsed <= 0) {
-                            return 'Enter a valid positive number';
+                            return 'Enter a positive amount';
+                          }
+                          if (parsed > remaining + 0.01) {
+                            return 'Cannot exceed remaining balance';
                           }
                           return null;
                         },
                       ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: partyController,
-                        decoration: InputDecoration(
-                          labelText: isPayable
-                              ? 'To (Supplier / Vendor / Person) *'
-                              : 'From (Customer / Client / Debtor) *',
-                          hintText:
-                              isPayable ? 'Who to pay' : 'Who will pay you',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          prefixIcon: Icon(
-                            isPayable
-                                ? Icons.person_outline
-                                : Icons.business_outlined,
-                          ),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return isPayable
-                                ? 'Please specify who to pay'
-                                : 'Please specify who owes you';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: descriptionController,
-                        maxLines: 2,
-                        decoration: InputDecoration(
-                          labelText: 'Description (Optional)',
-                          hintText: 'e.g. Invoice #9876, terms, notes',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          prefixIcon: const Icon(Icons.description_outlined),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 12),
                       InkWell(
                         onTap: () async {
                           final picked = await showDatePicker(
-                            context: builderContext,
-                            initialDate: selectedDate,
+                            context: dialogContext,
+                            initialDate: settlementDate,
                             firstDate: DateTime(2000),
                             lastDate: DateTime(2100),
                           );
                           if (picked != null) {
-                            setModalState(() => selectedDate = picked);
+                            setDialogState(() => settlementDate = picked);
                           }
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 12),
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
                           decoration: BoxDecoration(
                             border: Border.all(color: Colors.grey.shade400),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.calendar_today,
-                                  size: 20, color: Color(0xFF0F6B57)),
-                              const SizedBox(width: 12),
-                              Text(
-                                'Date: ${DateFormat('dd MMM yyyy').format(selectedDate)}',
-                                style: const TextStyle(fontSize: 15),
+                              const Icon(
+                                Icons.calendar_today,
+                                size: 16,
+                                color: Color(0xFF0F6B57),
                               ),
-                              const Spacer(),
-                              const Icon(Icons.arrow_drop_down),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Date: ${DateFormat('dd MMM yyyy').format(settlementDate)}',
+                                style: const TextStyle(fontSize: 13),
+                              ),
                             ],
                           ),
                         ),
                       ),
-                      const SizedBox(height: 22),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () =>
-                                  Navigator.pop(bottomSheetContext),
-                              style: OutlinedButton.styleFrom(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              child: const Text('Cancel'),
-                            ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: notesController,
+                        decoration: InputDecoration(
+                          labelText: 'Notes (Optional)',
+                          hintText: 'e.g. Paid via bank transfer / cash',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: () async {
-                                if (!formKey.currentState!.validate()) return;
-                                final user =
-                                    context.read<AuthService>().currentUser;
-                                final userId = user?.uid ?? '';
-                                final amount =
-                                    double.parse(amountController.text.trim());
-
-                                final entryToSave = KhataEntry(
-                                  id: existingEntry?.id,
-                                  userId: userId,
-                                  title: titleController.text.trim(),
-                                  party: partyController.text.trim(),
-                                  amount: amount,
-                                  isPayable: isPayable,
-                                  date: selectedDate,
-                                  description:
-                                      descriptionController.text.trim(),
-                                  isPaid: false,
-                                );
-
-                                if (isEditing) {
-                                  await TaxDatabase.instance
-                                      .updateKhataEntry(entryToSave.toMap());
-                                } else {
-                                  await TaxDatabase.instance
-                                      .insertKhataEntry(entryToSave.toMap());
-                                }
-
-                                if (bottomSheetContext.mounted) {
-                                  Navigator.pop(bottomSheetContext);
-                                }
-                                _loadEntries();
-                                if (mounted) {
-                                  messenger.showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        isEditing
-                                            ? (isPayable
-                                                ? 'Payable updated'
-                                                : 'Receivable updated')
-                                            : (isPayable
-                                                ? 'Payable added'
-                                                : 'Receivable added'),
-                                      ),
-                                    ),
-                                  );
-                                }
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF0F6B57),
-                                foregroundColor: Colors.white,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              child: Text(isEditing
-                                  ? 'Save Changes'
-                                  : (isPayable
-                                      ? 'Add Payable'
-                                      : 'Add Receivable')),
-                            ),
-                          ),
-                        ],
+                          prefixIcon: const Icon(Icons.note_alt_outlined),
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (formKey.currentState!.validate()) {
+                      Navigator.pop(dialogContext, true);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F6B57),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Confirm Settlement'),
+                ),
+              ],
             );
           },
-        );
-      },
-    );
-  }
-
-  Future<void> _markAsPaid(KhataEntry entry) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F6B57).withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.check_circle_outline,
-                    color: Color(0xFF0F6B57)),
-              ),
-              const SizedBox(width: 10),
-              const Text('Mark as Paid?'),
-            ],
-          ),
-          content: Text(
-            'Settling "${entry.title}" will remove it from Khata and record it as an ${entry.isPayable ? "Expense" : "Income"} of ${_formatAmount(entry.amount)} in your transactions.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0F6B57),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Confirm & Settle'),
-            ),
-          ],
         );
       },
     );
 
     if (confirmed != true) return;
 
-    if (entry.id != null) {
-      await TaxDatabase.instance.deleteKhataEntry(entry.id!);
-    }
-
-    if (!mounted) return;
-    final user = context.read<AuthService>().currentUser;
+    final settlementAmount = double.parse(settleAmountController.text.trim());
+    final user = authService.currentUser;
     final userId = user?.uid ?? '';
+    final newSettledAmount = entry.settledAmount + settlementAmount;
+    final isFullySettled = newSettledAmount >= entry.amount - 0.001;
 
-    context.read<TransactionBloc>().add(
+    // 1. Create Transaction
+    final transactionCategory = entry.isPayable
+        ? "Khata Ada'igi"
+        : "Khata Wasooli";
+    final note = notesController.text.trim();
+    final purposeText = note.isNotEmpty
+        ? note
+        : (entry.description.trim().isNotEmpty
+              ? entry.description.trim()
+              : (entry.isPayable
+                    ? 'Khata Payable settlement to ${entry.party}'
+                    : 'Khata Receivable settlement from ${entry.party}'));
+
+    transactionBloc.add(
       AddTransaction(
         entity.Transaction(
           userId: userId,
           title: entry.title,
           beneficiary: entry.party,
-          purpose: entry.description.trim().isNotEmpty
-              ? entry.description.trim()
-              : (entry.isPayable
-                  ? 'Khata Payable settlement to ${entry.party}'
-                  : 'Khata Receivable settlement from ${entry.party}'),
-          amount: entry.amount,
+          purpose: purposeText,
+          amount: settlementAmount,
           isExpense: entry.isPayable,
-          date: DateTime.now(),
-          category: entry.isPayable ? 'Other' : 'Business Income',
+          date: settlementDate,
+          category: transactionCategory,
+          khataEntryId: entry.id,
+          linkedCounterpartyOrAsset: entry.party,
         ),
       ),
+    );
+
+    // 2. Update Khata Entry in database
+    await TaxDatabase.instance.updateKhataEntry(
+      entry
+          .copyWith(settledAmount: newSettledAmount, isPaid: isFullySettled)
+          .toMap(),
     );
 
     await _loadEntries();
@@ -1493,13 +1637,55 @@ class _KhataPageState extends State<_KhataPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Settled! Added to ${entry.isPayable ? "Expenses" : "Income"}.',
+            isFullySettled
+                ? 'Fully settled! Added to ${entry.isPayable ? "Expenses" : "Income"}.'
+                : 'Partial payment of ${_formatAmount(settlementAmount)} recorded in ${entry.isPayable ? "Expenses" : "Income"}.',
           ),
           backgroundColor: const Color(0xFF0F6B57),
         ),
       );
     }
   }
+
+  // Future<void> _writeOffEntry(KhataEntry entry) async {
+  //   final confirmed = await showDialog<bool>(
+  //     context: context,
+  //     builder: (dialogContext) {
+  //       return AlertDialog(
+  //         title: const Text('Write Off Bad Debt?'),
+  //         content: Text(
+  //           'Write off "${entry.title}" (${_formatAmount(entry.remainingAmount)}) as bad debt? This will close the entry without creating any income or expense transaction.',
+  //         ),
+  //         actions: [
+  //           TextButton(
+  //             onPressed: () => Navigator.pop(dialogContext, false),
+  //             child: const Text('Cancel'),
+  //           ),
+  //           ElevatedButton(
+  //             onPressed: () => Navigator.pop(dialogContext, true),
+  //             style: ElevatedButton.styleFrom(
+  //               backgroundColor: Colors.red.shade700,
+  //               foregroundColor: Colors.white,
+  //             ),
+  //             child: const Text('Write Off'),
+  //           ),
+  //         ],
+  //       );
+  //     },
+  //   );
+
+  //   if (confirmed == true && entry.id != null) {
+  //     await TaxDatabase.instance.updateKhataEntry(
+  //       entry.copyWith(isWrittenOff: true, isPaid: true).toMap(),
+  //     );
+  //     _loadEntries();
+  //     if (mounted) {
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         const SnackBar(content: Text('Entry written off as bad debt')),
+  //       );
+  //     }
+  //   }
+  // }
 
   Future<void> _deleteEntry(KhataEntry entry) async {
     final confirmed = await showDialog<bool>(
@@ -1530,9 +1716,9 @@ class _KhataPageState extends State<_KhataPage> {
       await TaxDatabase.instance.deleteKhataEntry(entry.id!);
       _loadEntries();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Khata entry deleted')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Khata entry deleted')));
       }
     }
   }
@@ -1540,92 +1726,109 @@ class _KhataPageState extends State<_KhataPage> {
   @override
   Widget build(BuildContext context) {
     final filtered = _filteredEntries;
+    final bottomPadding = MediaQuery.paddingOf(context).bottom + 96.0;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF9F9FB),
-      body: RefreshIndicator(
-        onRefresh: _loadEntries,
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          children: [
-            // Top Overview Banner
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF1E3A2F), Color(0xFF0F6B57)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF0F6B57).withValues(alpha: 0.2),
-                    blurRadius: 12,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
+    return RefreshIndicator(
+      onRefresh: _loadEntries,
+      child: ListView(
+        padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPadding),
+        children: [
+          // Top Overview Banner
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppColors.forest, AppColors.primary],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Khata Ledger',
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.2),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Khata',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color:
-                              const Color(0xFFFAF5DE).withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          'Net: ${_formatAmount(_netBalance)}',
-                          style: const TextStyle(
-                            color: Color(0xFFF7C75F),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.cream.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Net: ${_formatAmount(_netBalance)}',
+                        style: const TextStyle(
+                          color: AppColors.warmGold,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: const [
-                                  Icon(Icons.arrow_upward_rounded,
-                                      size: 14, color: Color(0xFFFF8A80)),
-                                  SizedBox(width: 4),
-                                  Text(
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: const [
+                                Icon(
+                                  Icons.arrow_upward_rounded,
+                                  size: 14,
+                                  color: Color(0xFFFF8A80),
+                                ),
+                                SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
                                     'Total Payable',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                        color: Colors.white70, fontSize: 12),
+                                      color: Colors.white70,
+                                      fontSize: 12,
+                                    ),
                                   ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
                                 _formatAmount(_totalPayable),
                                 style: const TextStyle(
                                   color: Color(0xFFFF8A80),
@@ -1633,42 +1836,59 @@ class _KhataPageState extends State<_KhataPage> {
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              const SizedBox(height: 2),
-                              const Text(
-                                'You owe',
-                                style: TextStyle(
-                                    color: Colors.white54, fontSize: 10),
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Open balance',
+                              style: TextStyle(
+                                color: Colors.white54,
+                                fontSize: 10,
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: const [
-                                  Icon(Icons.arrow_downward_rounded,
-                                      size: 14, color: Color(0xFFB9F6CA)),
-                                  SizedBox(width: 4),
-                                  Text(
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: const [
+                                Icon(
+                                  Icons.arrow_downward_rounded,
+                                  size: 14,
+                                  color: Color(0xFFB9F6CA),
+                                ),
+                                SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
                                     'Total Receivable',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                        color: Colors.white70, fontSize: 12),
+                                      color: Colors.white70,
+                                      fontSize: 12,
+                                    ),
                                   ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
                                 _formatAmount(_totalReceivable),
                                 style: const TextStyle(
                                   color: Color(0xFFB9F6CA),
@@ -1676,498 +1896,1385 @@ class _KhataPageState extends State<_KhataPage> {
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              const SizedBox(height: 2),
-                              const Text(
-                                'Owed to you',
-                                style: TextStyle(
-                                    color: Colors.white54, fontSize: 10),
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Open balance',
+                              style: TextStyle(
+                                color: Colors.white54,
+                                fontSize: 10,
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // Segmented Distribution Bar (Payable, Receivable)
-            Container(
-              height: 48,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFAF5DE),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: const Color(0xFFE8DCC0), width: 1),
-              ),
-              padding: const EdgeInsets.all(4),
-              child: Row(
-                children: [
-                  _buildSegmentTab('Payable', KhataSegmentFilter.payable),
-                  _buildSegmentTab('Receivable', KhataSegmentFilter.receivable),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Add Entry Button (+ button for Payable / Receivable)
-            SizedBox(
-              width: double.infinity,
-              height: 46,
-              child: ElevatedButton.icon(
-                onPressed: () => _openAddOrEditEntryDialog(
-                  isPayableDefault:
-                      _selectedFilter == KhataSegmentFilter.payable,
-                ),
-                icon: const Icon(Icons.add_circle_outline, size: 20),
-                label: Text(
-                  _selectedFilter == KhataSegmentFilter.payable
-                      ? 'Add Payable'
-                      : 'Add Receivable',
-                  style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.bold),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0F6B57),
-                  foregroundColor: Colors.white,
-                  elevation: 1,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Search Filter
-            if (_entries.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: 'Search by title, party or notes...',
-                    prefixIcon: const Icon(Icons.search, size: 20),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear, size: 18),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() => _searchQuery = '');
-                            },
-                          )
-                        : null,
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                  ),
-                  onChanged: (val) {
-                    setState(() => _searchQuery = val);
-                  },
-                ),
-              ),
-
-            // Content List
-            if (_isLoading)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(40),
-                  child: CircularProgressIndicator(),
-                ),
-              )
-            else if (filtered.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(32),
-                alignment: Alignment.center,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.book_outlined,
-                      size: 56,
-                      color: Colors.grey.shade400,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      _searchQuery.isNotEmpty
-                          ? 'No matching entries found'
-                          : _selectedFilter == KhataSegmentFilter.payable
-                              ? 'No payables recorded'
-                              : 'No receivables recorded',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey.shade700,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _selectedFilter == KhataSegmentFilter.payable
-                          ? 'Tap "Add Payable" above to record a new payable.'
-                          : 'Tap "Add Receivable" above to record a new receivable.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade500,
                       ),
                     ),
                   ],
                 ),
-              )
-            else
-              ...filtered.map((entry) {
-                return Card(
-                  elevation: 0,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(
-                      color: entry.isPayable
-                          ? const Color(0xFFFFCDD2)
-                          : const Color(0xFFC8E6C9),
-                      width: 1,
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Segmented Distribution Bar (Payable, Receivable) with plain Urdu/English hints
+          Container(
+            height: 52,
+            decoration: BoxDecoration(
+              color: AppColors.cream,
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(color: const Color(0xFFE8DCC0), width: 1),
+            ),
+            padding: const EdgeInsets.all(4),
+            child: Row(
+              children: [
+                _buildSegmentTab(
+                  'Payable',
+                  'Payable',
+                  KhataSegmentFilter.payable,
+                ),
+                _buildSegmentTab(
+                  'Receivable',
+                  'Receivable',
+                  KhataSegmentFilter.receivable,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Add Entry Button (+ button for Payable / Receivable)
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: ElevatedButton.icon(
+              onPressed: () => _openAddOrEditEntryDialog(
+                isPayableDefault: _selectedFilter == KhataSegmentFilter.payable,
+              ),
+              icon: const Icon(Icons.add_circle_outline, size: 20),
+              label: Text(
+                _selectedFilter == KhataSegmentFilter.payable
+                    ? 'Add Payable'
+                    : 'Add Receivable',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 1,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Search Filter
+          if (_entries.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search',
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
+                ),
+                onChanged: (val) {
+                  setState(() => _searchQuery = val);
+                },
+              ),
+            ),
+
+          // Content List
+          if (_isLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(40),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (filtered.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(32),
+              alignment: Alignment.center,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.book_outlined,
+                    size: 56,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _searchQuery.isNotEmpty
+                        ? 'No matching entries found'
+                        : _selectedFilter == KhataSegmentFilter.payable
+                        ? 'No open payables'
+                        : 'No open receivables',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade700,
                     ),
                   ),
-                  color: Colors.white,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: entry.isPayable
-                                    ? const Color(0xFFFFEBEE)
-                                    : const Color(0xFFE8F5E9),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    entry.isPayable
-                                        ? Icons.call_made_rounded
-                                        : Icons.call_received_rounded,
-                                    size: 14,
+                  const SizedBox(height: 6),
+                  Text(
+                    _selectedFilter == KhataSegmentFilter.payable
+                        ? 'Tap "Add Payable" above to create a payable.'
+                        : 'Tap "Add Receivable" above to create a receivable.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                  ),
+                ],
+              ),
+            )
+          else
+            ...filtered.map((entry) {
+              final isPartiallySettled = entry.settledAmount > 0;
+              return Card(
+                elevation: 0,
+                margin: const EdgeInsets.only(bottom: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(
+                    color: entry.isPayable
+                        ? const Color(0xFFFFCDD2)
+                        : const Color(0xFFC8E6C9),
+                    width: 1,
+                  ),
+                ),
+                color: Colors.white,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: entry.isPayable
+                                  ? const Color(0xFFFFEBEE)
+                                  : const Color(0xFFE8F5E9),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  entry.isPayable
+                                      ? Icons.call_made_rounded
+                                      : Icons.call_received_rounded,
+                                  size: 14,
+                                  color: entry.isPayable
+                                      ? const Color(0xFFC62828)
+                                      : const Color(0xFF2E7D32),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  entry.isPayable
+                                      ? 'Payable (Dena hai)'
+                                      : 'Receivable (Lena hai)',
+                                  style: TextStyle(
                                     color: entry.isPayable
                                         ? const Color(0xFFC62828)
                                         : const Color(0xFF2E7D32),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
                                   ),
-                                  const SizedBox(width: 4),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            DateFormat('dd MMM yyyy').format(entry.date),
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  entry.title,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1E3A2F),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Text(
+                                      entry.isPayable ? 'To: ' : 'From: ',
+                                      style: TextStyle(
+                                        color: Colors.grey.shade700,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Text(
+                                        entry.party,
+                                        style: const TextStyle(
+                                          color: Color(0xFF0F6B57),
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (entry.description.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
                                   Text(
-                                    entry.isPayable ? 'Payable' : 'Receivable',
+                                    entry.description,
                                     style: TextStyle(
-                                      color: entry.isPayable
-                                          ? const Color(0xFFC62828)
-                                          : const Color(0xFF2E7D32),
-                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey.shade600,
                                       fontSize: 12,
                                     ),
                                   ),
                                 ],
-                              ),
-                            ),
-                            Text(
-                              DateFormat('dd MMM yyyy').format(entry.date),
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    entry.title,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF1E3A2F),
-                                    ),
-                                  ),
+                                if (entry.dueDate != null) ...[
                                   const SizedBox(height: 4),
                                   Row(
                                     children: [
-                                      Text(
-                                        entry.isPayable ? 'To: ' : 'From: ',
-                                        style: TextStyle(
-                                          color: Colors.grey.shade700,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w500,
-                                        ),
+                                      const Icon(
+                                        Icons.event_available,
+                                        size: 13,
+                                        color: Colors.orange,
                                       ),
-                                      Expanded(
-                                        child: Text(
-                                          entry.party,
-                                          style: const TextStyle(
-                                            color: Color(0xFF0F6B57),
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Due: ${DateFormat('dd MMM yyyy').format(entry.dueDate!)}',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.orange,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
                                     ],
                                   ),
-                                  if (entry.description.isNotEmpty) ...[
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      entry.description,
-                                      style: TextStyle(
-                                        color: Colors.grey.shade600,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
                                 ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                _formatAmount(entry.remainingAmount),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: entry.isPayable
+                                      ? const Color(0xFFC62828)
+                                      : const Color(0xFF2E7D32),
+                                ),
                               ),
+                              if (isPartiallySettled) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  'of ${_formatAmount(entry.amount)}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade600,
+                                    decoration: TextDecoration.lineThrough,
+                                  ),
+                                ),
+                                Text(
+                                  'Paid: ${_formatAmount(entry.settledAmount)}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF0F6B57),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      const Divider(height: 1),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        alignment: WrapAlignment.end,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          IconButton(
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              size: 20,
+                              color: Colors.red,
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              _formatAmount(entry.amount),
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: entry.isPayable
-                                    ? const Color(0xFFC62828)
-                                    : const Color(0xFF2E7D32),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        const Divider(height: 1),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline,
-                                  size: 20, color: Colors.grey),
-                              tooltip: 'Delete',
-                              onPressed: () => _deleteEntry(entry),
-                            ),
+                            tooltip: 'Delete',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => _deleteEntry(entry),
+                          ),
+                          // TextButton(
+                          //   onPressed: () => _writeOffEntry(entry),
+                          //   style: TextButton.styleFrom(
+                          //     foregroundColor: Colors.red.shade700,
+                          //     padding: const EdgeInsets.symmetric(
+                          //       horizontal: 10,
+                          //       vertical: 6,
+                          //     ),
+                          //   ),
+                          // child: const Text(
+                          //   'Write Off',
+                          //   style: TextStyle(fontSize: 12),
+                          // ),
+                          // ),
+                          if (!isPartiallySettled)
                             OutlinedButton.icon(
                               onPressed: () => _openAddOrEditEntryDialog(
-                                  existingEntry: entry),
+                                existingEntry: entry,
+                              ),
                               icon: const Icon(Icons.edit_outlined, size: 16),
                               label: const Text('Edit'),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: const Color(0xFF1E3A2F),
                                 side: BorderSide(color: Colors.grey.shade300),
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 8),
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
                                 shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10)),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            ElevatedButton.icon(
-                              onPressed: () => _markAsPaid(entry),
-                              icon: const Icon(Icons.check_circle_outline,
-                                  size: 16),
-                              label: const Text('Mark as Paid'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF0F6B57),
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 8),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10)),
+                          ElevatedButton.icon(
+                            onPressed: () => _openSettlementDialog(entry),
+                            icon: const Icon(
+                              Icons.check_circle_outline,
+                              size: 16,
+                            ),
+                            label: Text(
+                              isPartiallySettled ? 'Settle Rest' : 'Settle',
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0F6B57),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 8,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
                               ),
                             ),
-                          ],
-                        ),
-                      ],
-                    ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                );
-              }),
-          ],
-        ),
+                ),
+              );
+            }),
+        ],
       ),
     );
   }
 }
 
-class _AssetsPage extends StatelessWidget {
-  const _AssetsPage();
+class _AssetsPage extends StatefulWidget {
+  const _AssetsPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF1E3A2F), Color(0xFF0F6B57)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF0F6B57).withValues(alpha: 0.25),
-                  blurRadius: 16,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
+  State<_AssetsPage> createState() => _AssetsPageState();
+}
+
+class _AssetsPageState extends State<_AssetsPage> {
+  List<Asset> _assets = [];
+  bool _isLoading = true;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAssets();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadAssets() async {
+    setState(() => _isLoading = true);
+    try {
+      final userId = context.read<AuthService>().currentUser?.uid;
+      final rows = await TaxDatabase.instance
+          .fetchAssets(userId: userId)
+          .timeout(const Duration(seconds: 2));
+      final list = rows.map((r) => Asset.fromMap(r)).toList();
+      if (mounted) {
+        setState(() {
+          _assets = list;
+        });
+      }
+    } catch (_) {
+      // Gracefully handle in tests
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  String _formatAmount(double amount) {
+    final formatter = NumberFormat('#,##0.00', 'en_US');
+    return 'Rs ${formatter.format(amount)}';
+  }
+
+  double get _totalAssetsValue => _assets.fold(0.0, (sum, a) => sum + a.value);
+
+  List<Asset> get _filteredAssets {
+    return _assets.where((asset) {
+      if (_searchQuery.trim().isEmpty) return true;
+      final q = _searchQuery.toLowerCase().trim();
+      return asset.name.toLowerCase().contains(q) ||
+          asset.category.displayName.toLowerCase().contains(q) ||
+          asset.value.toString().contains(q) ||
+          asset.value.toStringAsFixed(2).contains(q);
+    }).toList();
+  }
+
+  IconData _iconForCategory(AssetCategory category) {
+    return switch (category) {
+      AssetCategory.cash => Icons.payments_outlined,
+      AssetCategory.bank => Icons.account_balance_outlined,
+      AssetCategory.property => Icons.home_work_outlined,
+      AssetCategory.vehicle => Icons.directions_car_outlined,
+      AssetCategory.investment => Icons.trending_up_rounded,
+      AssetCategory.other => Icons.category_outlined,
+    };
+  }
+
+  Color _colorForCategory(AssetCategory category) {
+    return switch (category) {
+      AssetCategory.cash => const Color(0xFF2E7D32),
+      AssetCategory.bank => const Color(0xFF1565C0),
+      AssetCategory.property => const Color(0xFFE65100),
+      AssetCategory.vehicle => const Color(0xFF4527A0),
+      AssetCategory.investment => const Color(0xFF6A1B9A),
+      AssetCategory.other => const Color(0xFF00695C),
+    };
+  }
+
+  Future<void> _openAddAssetSheet() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final nameController = TextEditingController();
+    final valueController = TextEditingController();
+    AssetCategory selectedCategory = AssetCategory.cash;
+    final formKey = GlobalKey<FormState>();
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (bottomSheetContext) => Scaffold(
+          appBar: AppBar(title: const Text('Add Asset')),
+          body: SafeArea(
+            top: false,
+            child: StatefulBuilder(
+              builder: (builderContext, setModalState) {
+                final mediaQuery = MediaQuery.of(builderContext);
+                return Container(
+                  width: double.infinity,
+                  height: double.infinity,
+                  padding: EdgeInsets.only(
+                    bottom:
+                        mediaQuery.viewInsets.bottom +
+                        mediaQuery.padding.bottom +
+                        20,
+                    top: 20,
+                    left: 20,
+                    right: 20,
                   ),
-                  child: const Icon(
-                    Icons.account_balance_rounded,
-                    size: 40,
-                    color: Color(0xFFF7C75F),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Assets & Wealth',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Record business assets, real estate, vehicles, bank accounts, and personal wealth statements.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.85),
-                    fontSize: 14,
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF7C75F).withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: const Color(0xFFF7C75F).withValues(alpha: 0.5),
+                  decoration: const BoxDecoration(color: Colors.white),
+                  child: SingleChildScrollView(
+                    child: Form(
+                      key: formKey,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Center(
+                            child: Container(
+                              width: 40,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade300,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Add Asset',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1E3A2F),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Initial asset record (opening balance). No expense/income will be logged.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          TextFormField(
+                            controller: nameController,
+                            decoration: InputDecoration(
+                              hintText: 'Title',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            validator: (v) => (v == null || v.trim().isEmpty)
+                                ? 'Please enter a name'
+                                : null,
+                          ),
+                          const SizedBox(height: 14),
+                          DropdownButtonFormField<AssetCategory>(
+                            initialValue: selectedCategory,
+                            decoration: InputDecoration(
+                              hintText: 'Category',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            items: AssetCategory.values.map((cat) {
+                              return DropdownMenuItem(
+                                value: cat,
+                                child: Text(cat.displayName),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                setModalState(() => selectedCategory = val);
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                          TextFormField(
+                            controller: valueController,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'^\d*\.?\d{0,2}'),
+                              ),
+                            ],
+                            decoration: InputDecoration(
+                              hintText: 'Amount',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) {
+                                return 'Please enter value';
+                              }
+                              final parsed = double.tryParse(v.trim());
+                              if (parsed == null || parsed < 0) {
+                                return 'Enter a valid non-negative number';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 22),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () =>
+                                      Navigator.pop(bottomSheetContext),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 14,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child: const Text('Cancel'),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: () async {
+                                    if (!formKey.currentState!.validate())
+                                      return;
+                                    final user = context
+                                        .read<AuthService>()
+                                        .currentUser;
+                                    final userId = user?.uid ?? '';
+                                    final val = double.parse(
+                                      valueController.text.trim(),
+                                    );
+
+                                    final now = DateTime.now();
+                                    final newAsset = Asset(
+                                      userId: userId,
+                                      name: nameController.text.trim(),
+                                      category: selectedCategory,
+                                      value: val,
+                                      createdAt: now,
+                                      updatedAt: now,
+                                    );
+
+                                    await TaxDatabase.instance.insertAsset(
+                                      newAsset.toMap(),
+                                    );
+
+                                    if (bottomSheetContext.mounted) {
+                                      Navigator.pop(bottomSheetContext);
+                                    }
+                                    _loadAssets();
+                                    if (mounted) {
+                                      messenger.showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Asset added to ledger',
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF0F6B57),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 14,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child: const Text('Add Asset'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.stars_rounded, size: 16, color: Color(0xFFF7C75F)),
-                      SizedBox(width: 6),
-                      Text(
-                        'Coming Soon',
-                        style: TextStyle(
-                          color: Color(0xFFF7C75F),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                );
+              },
             ),
           ),
-          const SizedBox(height: 24),
-          const Text(
-            'Planned Features',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          _featureTile(
-            icon: Icons.home_work_outlined,
-            title: 'Real Estate & Properties',
-            description: 'Log commercial and residential property values and acquisition dates.',
-          ),
-          const SizedBox(height: 10),
-          _featureTile(
-            icon: Icons.directions_car_outlined,
-            title: 'Vehicles & Machinery',
-            description: 'Track vehicle registrations, depreciation schedules, and equipment.',
-          ),
-          const SizedBox(height: 10),
-          _featureTile(
-            icon: Icons.savings_outlined,
-            title: 'Bank Accounts & Holdings',
-            description: 'Monitor bank savings, prize bonds, shares, and gold for tax wealth reconciliation.',
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  static Widget _featureTile({
-    required IconData icon,
-    required String title,
-    required String description,
-  }) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.grey.shade200),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFAF5DE),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: const Color(0xFF1E3A2F), size: 24),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+  Future<void> _openEditAssetSheet(Asset asset) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final nameController = TextEditingController(text: asset.name);
+    final valueController = TextEditingController(
+      text: asset.value.toStringAsFixed(2),
+    );
+    AssetCategory selectedCategory = asset.category;
+    final formKey = GlobalKey<FormState>();
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (bottomSheetContext) => Scaffold(
+          appBar: AppBar(title: const Text('Edit Asset')),
+          body: SafeArea(
+            top: false,
+            child: StatefulBuilder(
+              builder: (builderContext, setModalState) {
+                return Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.only(
+                    bottom:
+                        MediaQuery.of(builderContext).viewInsets.bottom +
+                        MediaQuery.of(builderContext).padding.bottom +
+                        20,
+                    top: 20,
+                    left: 20,
+                    right: 20,
                   ),
-                  const SizedBox(height: 4),
+                  decoration: const BoxDecoration(color: Colors.white),
+                  child: SingleChildScrollView(
+                    child: Form(
+                      key: formKey,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Center(
+                            child: Container(
+                              width: 40,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade300,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Edit "${asset.name}"',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1E3A2F),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Current recorded value: ${_formatAmount(asset.value)}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          TextFormField(
+                            controller: nameController,
+                            decoration: InputDecoration(
+                              labelText: 'Asset Name / Title *',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            validator: (v) => (v == null || v.trim().isEmpty)
+                                ? 'Please enter a name'
+                                : null,
+                          ),
+                          const SizedBox(height: 14),
+                          DropdownButtonFormField<AssetCategory>(
+                            initialValue: selectedCategory,
+                            decoration: InputDecoration(
+                              labelText: 'Category *',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            items: AssetCategory.values.map((cat) {
+                              return DropdownMenuItem(
+                                value: cat,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      _iconForCategory(cat),
+                                      size: 18,
+                                      color: _colorForCategory(cat),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(cat.displayName),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                setModalState(() => selectedCategory = val);
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                          TextFormField(
+                            controller: valueController,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'^\d*\.?\d{0,2}'),
+                              ),
+                            ],
+                            decoration: InputDecoration(
+                              labelText: 'New Value (PKR) *',
+                              hintText: '0.00',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) {
+                                return 'Please enter value';
+                              }
+                              final parsed = double.tryParse(v.trim());
+                              if (parsed == null || parsed < 0) {
+                                return 'Enter a valid non-negative number';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 22),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () =>
+                                      Navigator.pop(bottomSheetContext),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 14,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child: const Text('Cancel'),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: () async {
+                                    if (!formKey.currentState!.validate())
+                                      return;
+                                    final user = context
+                                        .read<AuthService>()
+                                        .currentUser;
+                                    final userId = user?.uid ?? '';
+                                    final newValue = double.parse(
+                                      valueController.text.trim(),
+                                    );
+                                    final newName = nameController.text.trim();
+
+                                    final valueChanged =
+                                        (newValue - asset.value).abs() > 0.01;
+
+                                    bool cashInvolved = true;
+                                    if (valueChanged) {
+                                      // Prompt user for cash involvement
+                                      final cashPrompt = await showDialog<bool>(
+                                        context: builderContext,
+                                        builder: (dialogCtx) {
+                                          return AlertDialog(
+                                            title: const Text('Cash Involved?'),
+                                            content: Text(
+                                              'Did cash or bank money leave or enter your hands for this value change of ${_formatAmount((newValue - asset.value).abs())}?\n\n'
+                                              '• Yes: logs an automatic transaction ("Asset Purchase" / "Asset Sale")\n'
+                                              '• No: updates asset value only (gift, inheritance, revaluation, loss)',
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(
+                                                  dialogCtx,
+                                                  false,
+                                                ),
+                                                child: const Text('No Cash'),
+                                              ),
+                                              ElevatedButton(
+                                                onPressed: () => Navigator.pop(
+                                                  dialogCtx,
+                                                  true,
+                                                ),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: const Color(
+                                                    0xFF0F6B57,
+                                                  ),
+                                                  foregroundColor: Colors.white,
+                                                ),
+                                                child: const Text(
+                                                  'Yes (Cash Involved)',
+                                                ),
+                                              ),
+                                            ],
+                                          );
+                                        },
+                                      );
+                                      cashInvolved = cashPrompt ?? true;
+                                    }
+
+                                    final updatedAsset = asset.copyWith(
+                                      name: newName,
+                                      category: selectedCategory,
+                                      value: newValue,
+                                      updatedAt: DateTime.now(),
+                                    );
+
+                                    await TaxDatabase.instance.updateAsset(
+                                      updatedAsset.toMap(),
+                                    );
+
+                                    if (valueChanged &&
+                                        cashInvolved &&
+                                        mounted) {
+                                      final isIncrease = newValue > asset.value;
+                                      final diff = (newValue - asset.value)
+                                          .abs();
+
+                                      context.read<TransactionBloc>().add(
+                                        AddTransaction(
+                                          entity.Transaction(
+                                            userId: userId,
+                                            title: isIncrease
+                                                ? 'Asset Purchase - $newName'
+                                                : 'Asset Sale - $newName',
+                                            beneficiary: newName,
+                                            purpose: isIncrease
+                                                ? 'Additional purchase/investment in $newName'
+                                                : 'Sale/disposal from $newName',
+                                            amount: diff,
+                                            isExpense: isIncrease,
+                                            date: DateTime.now(),
+                                            category: isIncrease
+                                                ? 'Asset Purchase'
+                                                : 'Asset Sale',
+                                            assetId: asset.id,
+                                            linkedCounterpartyOrAsset: newName,
+                                          ),
+                                        ),
+                                      );
+                                    }
+
+                                    if (bottomSheetContext.mounted) {
+                                      Navigator.pop(bottomSheetContext);
+                                    }
+                                    _loadAssets();
+                                    if (mounted) {
+                                      messenger.showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            valueChanged && cashInvolved
+                                                ? 'Asset updated and transaction recorded'
+                                                : 'Asset updated',
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF0F6B57),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 14,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child: const Text('Save Changes'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteAsset(Asset asset) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) {
+        return AlertDialog(
+          title: const Text('Delete Asset?'),
+          content: Text(
+            'Delete "${asset.name}"? Previously recorded transactions will not be deleted.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogCtx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade700,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true && asset.id != null) {
+      await TaxDatabase.instance.deleteAsset(asset.id!);
+      _loadAssets();
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Asset deleted')));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _filteredAssets;
+    final bottomPadding = MediaQuery.paddingOf(context).bottom + 24.0;
+
+    return RefreshIndicator(
+      onRefresh: _loadAssets,
+      child: ListView(
+        padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPadding),
+        children: [
+          // Top Banner
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppColors.forest, AppColors.primary],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.2),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Assets',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.cream.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${_assets.length} assets',
+                        style: const TextStyle(
+                          color: AppColors.warmGold,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    _formatAmount(_totalAssetsValue),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Vehicles, property, savings, cash, and investments',
+                  style: TextStyle(color: Colors.white54, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Add Asset Button
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: ElevatedButton.icon(
+              onPressed: _openAddAssetSheet,
+              icon: const Icon(Icons.add_circle_outline, size: 20),
+              label: const Text(
+                'Add Asset',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 1,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Search Field
+          if (_assets.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search',
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
+                ),
+                onChanged: (val) {
+                  setState(() => _searchQuery = val);
+                },
+              ),
+            ),
+
+          // Content List
+          if (_isLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(40),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (filtered.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(32),
+              alignment: Alignment.center,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.account_balance_outlined,
+                    size: 56,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 12),
                   Text(
-                    description,
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                    _searchQuery.isNotEmpty
+                        ? 'No matching assets found'
+                        : 'No assets recorded yet',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Tap "Add Asset" above to log vehicles, plots, bank savings, or gold.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
                   ),
                 ],
               ),
-            ),
-          ],
-        ),
+            )
+          else
+            ...filtered.map((asset) {
+              final color = _colorForCategory(asset.category);
+              final icon = _iconForCategory(asset.category);
+              return Card(
+                elevation: 0,
+                margin: const EdgeInsets.only(bottom: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(color: Colors.grey.shade200),
+                ),
+                color: Colors.white,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(icon, color: color, size: 24),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  asset.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    color: Color(0xFF1E3A2F),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: color.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    asset.category.displayName,
+                                    style: TextStyle(
+                                      color: color,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _formatAmount(asset.value),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1E3A2F),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      const Divider(height: 1),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Updated: ${DateFormat('dd MMM yyyy').format(asset.updatedAt)}',
+                            style: TextStyle(
+                              color: Colors.grey.shade500,
+                              fontSize: 11,
+                            ),
+                          ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  size: 20,
+                                  color: Colors.grey,
+                                ),
+                                tooltip: 'Delete',
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () => _deleteAsset(asset),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: () => _openEditAssetSheet(asset),
+                                icon: const Icon(Icons.edit_outlined, size: 16),
+                                label: const Text('Edit Value'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF1E3A2F),
+                                  side: BorderSide(color: Colors.grey.shade300),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+        ],
       ),
     );
   }
@@ -2208,86 +3315,150 @@ class _MorePageState extends State<_MorePage> {
     }
   }
 
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8, top: 12),
+      child: Text(
+        title.toUpperCase(),
+        style: const TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF0F6B57),
+          letterSpacing: 0.8,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: Column(
-              children: [
+    final bottomPadding = MediaQuery.paddingOf(context).bottom + 96.0;
+    return ListView(
+      padding: EdgeInsets.fromLTRB(16, 8, 16, bottomPadding),
+      children: [
+        // 1. Account Section
+        _buildSectionHeader('Account'),
+        Card(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: Colors.grey.shade200),
+          ),
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.person_outline),
+                title: const Text('Profile'),
+                subtitle: const Text('Manage your account and tax details'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => const _ProfilePage()),
+                ),
+              ),
+              const Divider(height: 1, indent: 56),
+              ListTile(
+                leading: Icon(Icons.logout, color: Colors.red.shade700),
+                title: Text(
+                  'Logout',
+                  style: TextStyle(
+                    color: Colors.red.shade700,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                onTap: () => _confirmLogout(context),
+              ),
+            ],
+          ),
+        ),
+
+        // 2. Finance Tools Section
+        _buildSectionHeader('Finance Tools'),
+        Card(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: Colors.grey.shade200),
+          ),
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.calculate_outlined),
+                title: const Text('Tax Calculator'),
+                subtitle: const Text(
+                  'Compute salary and business tax brackets',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          TaxCalculatorScreen(appBarTitle: 'Tax Calculator'),
+                    ),
+                  );
+                },
+              ),
+              if (widget.categoryPreferences != null) ...[
+                const Divider(height: 1, indent: 56),
                 ListTile(
-                  leading: const Icon(Icons.calculate_outlined),
-                  title: const Text('Tax Calculator'),
+                  leading: const Icon(Icons.compare_arrows_rounded),
+                  title: const Text('Comparison Dashboard'),
+                  subtitle: const Text(
+                    'Compare year-over-year financial stats',
+                  ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (context) =>
-                            TaxCalculatorScreen(appBarTitle: 'Tax Calculator'),
+                        builder: (context) => _ComparisonDashboardPage(
+                          categoryPreferences: widget.categoryPreferences!,
+                        ),
                       ),
                     );
                   },
                 ),
-                if (widget.categoryPreferences != null) ...[
-                  const Divider(height: 1, indent: 56),
-                  ListTile(
-                    leading: const Icon(Icons.compare_arrows_rounded),
-                    title: const Text('Comparison Dashboard'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => _ComparisonDashboardPage(
-                            categoryPreferences: widget.categoryPreferences!,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-                const Divider(height: 1, indent: 56),
-                const _DriveSyncButton(asListTile: true),
-                const Divider(height: 1, indent: 56),
-                ListTile(
-                  leading: const Icon(Icons.help_outline),
-                  title: const Text('Help & Support'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const _SupportPage(),
-                    ),
-                  ),
-                ),
-                const Divider(height: 1, indent: 30),
-                ListTile(
-                  leading: const Icon(Icons.info_outline),
-                  title: const Text('About'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (context) => const _AboutPage()),
-                  ),
-                ),
               ],
-            ),
+            ],
           ),
-          const SizedBox(height: 14),
-          Card(
-            child: ListTile(
-              leading: Icon(Icons.logout, color: Colors.red.shade700),
-              title: Text(
-                'Logout',
-                style: TextStyle(
-                  color: Colors.red.shade700,
-                  fontWeight: FontWeight.w700,
+        ),
+
+        // 3. Data Section
+        _buildSectionHeader('Data'),
+        Card(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: Colors.grey.shade200),
+          ),
+          child: const _DriveSyncButton(asListTile: true),
+        ),
+
+        // 4. Support Section
+        _buildSectionHeader('Support'),
+        Card(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: Colors.grey.shade200),
+          ),
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.help_outline),
+                title: const Text('Help & Support'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => const _SupportPage()),
                 ),
               ),
-              onTap: () => _confirmLogout(context),
-            ),
+              const Divider(height: 1, indent: 56),
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: const Text('About'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => const _AboutPage()),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -2849,211 +4020,189 @@ class _CategorySettingsPage extends StatelessWidget {
       listenable: categoryPreferences,
       builder: (context, _) {
         if (categoryPreferences.isLoading) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
+          return const Center(child: CircularProgressIndicator());
         }
 
         final hierarchy = categoryPreferences.hierarchy;
+        final bottomPadding = MediaQuery.paddingOf(context).bottom + 96.0;
 
-        return Scaffold(
-          body: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Text(
-                'Category Settings',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Toggle a category to show or hide all its items, customize subcategories, or add new ones.',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              if (categoryPreferences.loadError != null) ...[
-                const SizedBox(height: 12),
-                Card(
-                  color: Theme.of(context).colorScheme.errorContainer,
-                  child: const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: Text(
-                      'Saved category settings could not be loaded. Default classifications are currently shown.',
-                    ),
+        return ListView(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPadding),
+          children: [
+            Text(
+              'Category Settings',
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Toggle a category to show or hide all its items, customize subcategories, or add new ones.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            if (categoryPreferences.loadError != null) ...[
+              const SizedBox(height: 12),
+              Card(
+                color: Theme.of(context).colorScheme.errorContainer,
+                child: const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Text(
+                    'Saved category settings could not be loaded. Default classifications are currently shown.',
                   ),
                 ),
-              ],
-              const SizedBox(height: 20),
-              ...hierarchy.entries.map((superCategory) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Card(
-                    margin: EdgeInsets.zero,
-                    clipBehavior: Clip.antiAlias,
-                    child: ExpansionTile(
-                      leading: Icon(_iconForSuperCategory(superCategory.key)),
-                      title: Text(
-                        superCategory.key,
-                        style: const TextStyle(fontWeight: FontWeight.w800),
-                      ),
-                      children: [
-                        for (final parent in superCategory.value.entries)
-                          ExpansionTile(
-                            tilePadding: const EdgeInsets.only(
-                              left: 28,
-                              right: 16,
-                            ),
-                            childrenPadding: EdgeInsets.zero,
-                            leading: Icon(
-                              _getIconForCategory(parent.key),
-                              size: 21,
-                            ),
-                            title: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    parent.key,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                                Switch(
-                                  value: categoryPreferences.isParentEnabled(
-                                    parent.key,
-                                  ),
-                                  onChanged: (enabled) =>
-                                      _updateParentEnabled(
-                                        context,
-                                        parent.key,
-                                        enabled,
-                                      ),
-                                ),
-                              ],
-                            ),
+              ),
+            ],
+            const SizedBox(height: 20),
+            ...hierarchy.entries.map((superCategory) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Card(
+                  margin: EdgeInsets.zero,
+                  clipBehavior: Clip.antiAlias,
+                  child: ExpansionTile(
+                    leading: Icon(_iconForSuperCategory(superCategory.key)),
+                    title: Text(
+                      superCategory.key,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    children: [
+                      for (final parent in superCategory.value.entries)
+                        ExpansionTile(
+                          tilePadding: const EdgeInsets.only(
+                            left: 28,
+                            right: 16,
+                          ),
+                          childrenPadding: EdgeInsets.zero,
+                          leading: Icon(
+                            _getIconForCategory(parent.key),
+                            size: 21,
+                          ),
+                          title: Row(
                             children: [
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  4,
-                                  16,
-                                  10,
-                                ),
-                                child: SegmentedButton<CategoryMode>(
-                                  expandedInsets: EdgeInsets.zero,
-                                  showSelectedIcon: false,
-                                  style: const ButtonStyle(
-                                    visualDensity: VisualDensity.compact,
+                              Expanded(
+                                child: Text(
+                                  parent.key,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
                                   ),
-                                  segments: const [
-                                    ButtonSegment(
-                                      value: CategoryMode.income,
-                                      label: Text('Income'),
-                                    ),
-                                    ButtonSegment(
-                                      value: CategoryMode.expense,
-                                      label: Text('Expense'),
-                                    ),
-                                    ButtonSegment(
-                                      value: CategoryMode.both,
-                                      label: Text('Both'),
-                                    ),
-                                  ],
-                                  selected: {
-                                    categoryPreferences.modeForParent(
-                                      parent.key,
-                                    ),
-                                  },
-                                  onSelectionChanged: (selection) =>
-                                      _updateParentMode(
-                                        context,
-                                        parent.key,
-                                        selection.first,
-                                      ),
                                 ),
                               ),
-                              for (final category in parent.value)
-                                SwitchListTile(
-                                  contentPadding: const EdgeInsets.only(
-                                    left: 48,
-                                    right: 16,
-                                  ),
-                                  title: Row(
-                                    children: [
-                                      Expanded(child: Text(category.name)),
-                                      IconButton(
-                                        icon: Icon(
-                                          Icons.delete_outline,
-                                          size: 20,
-                                          color: Colors.red.shade400,
-                                        ),
-                                        tooltip: 'Delete subcategory',
-                                        visualDensity: VisualDensity.compact,
-                                        onPressed: () => _deleteSubcategory(
-                                          context,
-                                          parent.key,
-                                          category.name,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  subtitle: Text(
-                                    categoryPreferences.isDualMode(
-                                          category.name,
-                                        )
-                                        ? 'Income or Expense'
-                                        : categoryPreferences.isExpense(
-                                            category.name,
-                                          )
-                                        ? 'Expense'
-                                        : 'Income',
-                                  ),
-                                  value: categoryPreferences.isEnabled(
-                                    category.name,
-                                  ),
-                                  onChanged: (enabled) => _updateEnabled(
-                                    context,
-                                    category.name,
-                                    enabled,
-                                  ),
+                              Switch(
+                                value: categoryPreferences.isParentEnabled(
+                                  parent.key,
                                 ),
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  48,
-                                  4,
-                                  16,
-                                  12,
-                                ),
-                                child: Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: TextButton.icon(
-                                    style: TextButton.styleFrom(
-                                      visualDensity: VisualDensity.compact,
-                                    ),
-                                    icon: const Icon(
-                                      Icons.add_rounded,
-                                      size: 18,
-                                    ),
-                                    label: Text(
-                                      'Add subcategory to ${parent.key}',
-                                    ),
-                                    onPressed: () =>
-                                        _showAddSubcategoryDialog(
-                                          context,
-                                          parent.key,
-                                        ),
-                                  ),
+                                onChanged: (enabled) => _updateParentEnabled(
+                                  context,
+                                  parent.key,
+                                  enabled,
                                 ),
                               ),
                             ],
                           ),
-                      ],
-                    ),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+                              child: SegmentedButton<CategoryMode>(
+                                expandedInsets: EdgeInsets.zero,
+                                showSelectedIcon: false,
+                                style: const ButtonStyle(
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                segments: const [
+                                  ButtonSegment(
+                                    value: CategoryMode.income,
+                                    label: Text('Income'),
+                                  ),
+                                  ButtonSegment(
+                                    value: CategoryMode.expense,
+                                    label: Text('Expense'),
+                                  ),
+                                  ButtonSegment(
+                                    value: CategoryMode.both,
+                                    label: Text('Both'),
+                                  ),
+                                ],
+                                selected: {
+                                  categoryPreferences.modeForParent(parent.key),
+                                },
+                                onSelectionChanged: (selection) =>
+                                    _updateParentMode(
+                                      context,
+                                      parent.key,
+                                      selection.first,
+                                    ),
+                              ),
+                            ),
+                            for (final category in parent.value)
+                              SwitchListTile(
+                                contentPadding: const EdgeInsets.only(
+                                  left: 48,
+                                  right: 16,
+                                ),
+                                title: Row(
+                                  children: [
+                                    Expanded(child: Text(category.name)),
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.delete_outline,
+                                        size: 20,
+                                        color: Colors.red.shade400,
+                                      ),
+                                      tooltip: 'Delete subcategory',
+                                      visualDensity: VisualDensity.compact,
+                                      onPressed: () => _deleteSubcategory(
+                                        context,
+                                        parent.key,
+                                        category.name,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                subtitle: Text(
+                                  categoryPreferences.isDualMode(category.name)
+                                      ? 'Income or Expense'
+                                      : categoryPreferences.isExpense(
+                                          category.name,
+                                        )
+                                      ? 'Expense'
+                                      : 'Income',
+                                ),
+                                value: categoryPreferences.isEnabled(
+                                  category.name,
+                                ),
+                                onChanged: (enabled) => _updateEnabled(
+                                  context,
+                                  category.name,
+                                  enabled,
+                                ),
+                              ),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(48, 4, 16, 12),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: TextButton.icon(
+                                  style: TextButton.styleFrom(
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  icon: const Icon(Icons.add_rounded, size: 18),
+                                  label: Text(
+                                    'Add subcategory to ${parent.key}',
+                                  ),
+                                  onPressed: () => _showAddSubcategoryDialog(
+                                    context,
+                                    parent.key,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
                   ),
-                );
-              }),
-            ],
-          ),
+                ),
+              );
+            }),
+          ],
         );
       },
     );
@@ -3542,9 +4691,7 @@ class _ProfilePageState extends State<_ProfilePage>
       if (!mounted) return;
       Navigator.of(context).popUntil((route) => route.isFirst);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Account permanently removed.'),
-        ),
+        const SnackBar(content: Text('Account permanently removed.')),
       );
     } on RecentLoginRequiredException {
       if (!mounted) return;
@@ -4064,7 +5211,7 @@ class _ConfirmPasswordDialogState extends State<_ConfirmPasswordDialog> {
 }
 
 class _HomeDashboard extends StatefulWidget {
-  const _HomeDashboard({required this.categoryPreferences});
+  const _HomeDashboard({super.key, required this.categoryPreferences});
 
   final CategoryPreferencesService categoryPreferences;
 
@@ -4077,6 +5224,9 @@ class _HomeDashboardState extends State<_HomeDashboard> {
   String? _selectedFinancialYear;
   int? _selectedMonth;
   String? _profileImagePath;
+  double _totalPayable = 0.0;
+  double _totalReceivable = 0.0;
+  double _totalAssets = 0.0;
 
   @override
   void initState() {
@@ -4084,6 +5234,35 @@ class _HomeDashboardState extends State<_HomeDashboard> {
     _selectedFinancialYear = null;
     _selectedMonth = null;
     _loadProfileImage();
+    _loadKhataAndAssetMetrics();
+  }
+
+  Future<void> _loadKhataAndAssetMetrics() async {
+    try {
+      final userId = context.read<AuthService>().currentUser?.uid;
+      final khataRows = await TaxDatabase.instance.fetchKhataEntries(
+        userId: userId,
+      );
+      final khataList = khataRows.map((r) => KhataEntry.fromMap(r)).toList();
+      final openPayable = khataList
+          .where((e) => e.isPayable && !e.isPaid && !e.isWrittenOff)
+          .fold(0.0, (sum, e) => sum + e.remainingAmount);
+      final openReceivable = khataList
+          .where((e) => !e.isPayable && !e.isPaid && !e.isWrittenOff)
+          .fold(0.0, (sum, e) => sum + e.remainingAmount);
+
+      final assetRows = await TaxDatabase.instance.fetchAssets(userId: userId);
+      final assetList = assetRows.map((r) => Asset.fromMap(r)).toList();
+      final assetsVal = assetList.fold(0.0, (sum, a) => sum + a.value);
+
+      if (mounted) {
+        setState(() {
+          _totalPayable = openPayable;
+          _totalReceivable = openReceivable;
+          _totalAssets = assetsVal;
+        });
+      }
+    } catch (_) {}
   }
 
   String _profileImageKey(String? userId) =>
@@ -4118,10 +5297,12 @@ class _HomeDashboardState extends State<_HomeDashboard> {
     required BuildContext context,
     required List<String> financialYearOptions,
   }) {
-    final isSelectedYearPresent = _selectedFinancialYear == null ||
+    final isSelectedYearPresent =
+        _selectedFinancialYear == null ||
         financialYearOptions.contains(_selectedFinancialYear);
-    final effectiveYearValue =
-        isSelectedYearPresent ? _selectedFinancialYear : null;
+    final effectiveYearValue = isSelectedYearPresent
+        ? _selectedFinancialYear
+        : null;
 
     final user = context.read<AuthService>().currentUser;
     final photoUrl = user?.photoURL;
@@ -4164,12 +5345,16 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     // Financial Year Dropdown
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFF133E35),
                         borderRadius: BorderRadius.circular(10),
@@ -4220,10 +5405,12 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
                     // Month Dropdown
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFF133E35),
                         borderRadius: BorderRadius.circular(10),
@@ -4328,8 +5515,8 @@ class _HomeDashboardState extends State<_HomeDashboard> {
           final currentUserId = user?.uid ?? '';
           final storedTransactions =
               state is TransactionLoaded && state.userId == currentUserId
-                  ? state.transactions
-                  : const <entity.Transaction>[];
+              ? state.transactions
+              : const <entity.Transaction>[];
           final transactions = storedTransactions
               .map(
                 (transaction) => transaction.copyWith(
@@ -4367,17 +5554,6 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                     children: [
                       IncomeExpensePiePanel(transactions: visibleTransactions),
                       const SizedBox(height: 14),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: _PrintTransactionsButton(
-                          transactions: visibleTransactions,
-                          filterLabel: _transactionFilterLabel(
-                            selectedFinancialYear: _selectedFinancialYear,
-                            selectedMonth: _selectedMonth,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
                       TopCategoryCharts(
                         transactions: visibleTransactions,
                         onCategoryTap: (category) {
@@ -4391,6 +5567,19 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                           );
                         },
                       ),
+                      const SizedBox(height: 14),
+                      _buildKhataAndAssetsMetricsCards(),
+                      const SizedBox(height: 14),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: _PrintTransactionsButton(
+                          transactions: visibleTransactions,
+                          filterLabel: _transactionFilterLabel(
+                            selectedFinancialYear: _selectedFinancialYear,
+                            selectedMonth: _selectedMonth,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -4399,6 +5588,212 @@ class _HomeDashboardState extends State<_HomeDashboard> {
           );
         },
       ),
+    );
+  }
+
+  Widget _buildKhataAndAssetsMetricsCards() {
+    final formatter = NumberFormat('#,##0.00', 'en_US');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            // Total Payable Card
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFFFCDD2)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.02),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: const [
+                        Icon(
+                          Icons.arrow_upward_rounded,
+                          size: 14,
+                          color: Color(0xFFC62828),
+                        ),
+                        SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            'Total Payable',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFFC62828),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Rs ${formatter.format(_totalPayable)}',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFFC62828),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Open balance',
+                      style: TextStyle(fontSize: 9.5, color: Colors.black54),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            // Total Receivable Card
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFC8E6C9)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.02),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: const [
+                        Icon(
+                          Icons.arrow_downward_rounded,
+                          size: 14,
+                          color: Color(0xFF2E7D32),
+                        ),
+                        SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            'Total Receivable',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF2E7D32),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Rs ${formatter.format(_totalReceivable)}',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF2E7D32),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Open balance',
+                      style: TextStyle(fontSize: 9.5, color: Colors.black54),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        // Total Assets Card
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE8DCC0)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F6B57).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.account_balance_rounded,
+                  size: 20,
+                  color: Color(0xFF0F6B57),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text(
+                      'Total Assets Value',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1E3A2F),
+                      ),
+                    ),
+                    Text(
+                      'Vehicles, property, savings, and investments',
+                      style: TextStyle(fontSize: 10, color: Colors.black54),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                'Rs ${formatter.format(_totalAssets)}',
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF0F6B57),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -4563,6 +5958,15 @@ enum _DriveAction { backup, restore }
 
 IconData _getIconForCategory(String category) {
   switch (category.toLowerCase()) {
+    case 'khata wasooli':
+      return Icons.call_received_rounded;
+    case "khata ada'igi":
+    case 'khata adaigi':
+      return Icons.call_made_rounded;
+    case 'asset sale':
+      return Icons.sell_outlined;
+    case 'asset purchase':
+      return Icons.shopping_cart_outlined;
     case 'salary':
       return Icons.work;
     case 'investment':
@@ -4699,7 +6103,6 @@ String _formatSignedDashboardMoney(num value) {
   final sign = value > 0 ? '+' : (value < 0 ? '-' : '');
   return '${sign}PKR ${buffer.toString()}';
 }
-
 
 const dashboardMonthNames = [
   'January',
@@ -4870,8 +6273,8 @@ class SummaryCards extends StatelessWidget {
         final netSubtitle = netBalance < 0
             ? 'You spent more than you earned'
             : (netBalance > 0
-                ? 'You saved more than you spent'
-                : 'Income equals expenses');
+                  ? 'You saved more than you spent'
+                  : 'Income equals expenses');
 
         final card3 = KpiMetricCard(
           title: 'Net Balance',
@@ -4885,8 +6288,8 @@ class SummaryCards extends StatelessWidget {
           amountColor: netBalance < 0
               ? const Color(0xFFE52E3D)
               : (netBalance > 0
-                  ? const Color(0xFF0F9D58)
-                  : const Color(0xFF111827)),
+                    ? const Color(0xFF0F9D58)
+                    : const Color(0xFF111827)),
           subtitleColor: const Color(0xFF6B7280),
         );
 
@@ -5059,36 +6462,112 @@ class TopCategoryCharts extends StatelessWidget {
     final expenses = _topCategories(isExpense: true);
     final totalIncome = _totalIncome(transactions);
     final totalExpenses = _totalExpenses(transactions);
-    final incomeColor = Colors.green.shade600;
-    final expenseColor = Colors.red.shade600;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Row(
       children: [
-        _TopCategorySectionCard(
-          title: 'Top Income Categories',
-          subtitle:
-              'Top 5 income sources for this period. Tap a category to view all of its transactions.',
-          items: income,
-          totalAmount: totalIncome,
-          isExpense: false,
-          color: incomeColor,
-          icon: Icons.trending_up_rounded,
-          onCategoryTap: onCategoryTap,
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () => _showTopCategories(
+              context,
+              title: 'Top 5 Income',
+              subtitle: 'Your highest income sources for this period.',
+              items: income,
+              totalAmount: totalIncome,
+              isExpense: false,
+              color: Colors.green.shade600,
+              icon: Icons.trending_up_rounded,
+            ),
+            icon: const Icon(Icons.trending_up_rounded, size: 18),
+            label: const Text('Top 5 Income'),
+          ),
         ),
-        const SizedBox(height: 16),
-        _TopCategorySectionCard(
-          title: 'Top Expense Categories',
-          subtitle:
-              'Top 5 spending categories for this period. Tap a category to view all of its transactions.',
-          items: expenses,
-          totalAmount: totalExpenses,
-          isExpense: true,
-          color: expenseColor,
-          icon: Icons.trending_down_rounded,
-          onCategoryTap: onCategoryTap,
+        const SizedBox(width: 10),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () => _showTopCategories(
+              context,
+              title: 'Top 5 Expenses',
+              subtitle: 'Your highest spending categories for this period.',
+              items: expenses,
+              totalAmount: totalExpenses,
+              isExpense: true,
+              color: Colors.red.shade600,
+              icon: Icons.trending_down_rounded,
+            ),
+            icon: const Icon(Icons.trending_down_rounded, size: 18),
+            label: const Text('Top 5 Expenses'),
+          ),
         ),
       ],
+    );
+  }
+
+  void _showTopCategories(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required List<_CategoryTotal> items,
+    required double totalAmount,
+    required bool isExpense,
+    required Color color,
+    required IconData icon,
+  }) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (pageContext) => Scaffold(
+          appBar: AppBar(title: Text(title)),
+          body: SafeArea(
+            top: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(icon, color: color),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          subtitle,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Divider(height: 1, color: Colors.grey.shade200),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: _TopCategorySectionCard(
+                      title: title,
+                      subtitle: subtitle,
+                      items: items,
+                      totalAmount: totalAmount,
+                      isExpense: isExpense,
+                      color: color,
+                      icon: icon,
+                      showHeader: false,
+                      onCategoryTap: (category) {
+                        Navigator.of(pageContext).pop();
+                        onCategoryTap(category);
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -5103,6 +6582,7 @@ class _TopCategorySectionCard extends StatelessWidget {
     required this.color,
     required this.icon,
     required this.onCategoryTap,
+    this.showHeader = true,
   });
 
   final String title;
@@ -5113,6 +6593,7 @@ class _TopCategorySectionCard extends StatelessWidget {
   final Color color;
   final IconData icon;
   final ValueChanged<String> onCategoryTap;
+  final bool showHeader;
 
   @override
   Widget build(BuildContext context) {
@@ -5122,34 +6603,32 @@ class _TopCategorySectionCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
+            if (showHeader) ...[
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, color: color, size: 18),
                   ),
-                  child: Icon(icon, color: color, size: 18),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w800),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 14),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 14),
+            ],
             DecoratedBox(
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surfaceContainerLowest,
@@ -5168,9 +6647,7 @@ class _TopCategorySectionCard extends StatelessWidget {
                             isExpense
                                 ? 'No expense transactions for this period'
                                 : 'No income transactions for this period',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
+                            style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(color: Colors.grey.shade600),
                           ),
                         ),
@@ -8105,7 +9582,7 @@ class IncomeExpensePiePanel extends StatelessWidget {
     final isLoss = netBalance < 0;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -8124,13 +9601,15 @@ class IncomeExpensePiePanel extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Expenses vs Balance',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14.5,
-                      color: const Color(0xFF111827),
-                    ),
+              Expanded(
+                child: Text(
+                  'Expenses vs Balance',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14.5,
+                    color: const Color(0xFF111827),
+                  ),
+                ),
               ),
               IconButton(
                 padding: EdgeInsets.zero,
@@ -8160,9 +9639,9 @@ class IncomeExpensePiePanel extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           SizedBox(
-            height: 230,
+            height: 160,
             child: chartTotal <= 0
                 ? const _EmptyPieChart()
                 : Stack(
@@ -8170,7 +9649,7 @@ class IncomeExpensePiePanel extends StatelessWidget {
                     children: [
                       PieChart(
                         PieChartData(
-                          centerSpaceRadius: 60,
+                          centerSpaceRadius: 43,
                           sectionsSpace: 3,
                           startDegreeOffset: -90,
                           borderData: FlBorderData(show: false),
@@ -8179,11 +9658,11 @@ class IncomeExpensePiePanel extends StatelessWidget {
                               PieChartSectionData(
                                 value: positiveBalance,
                                 color: const Color(0xFF00C853),
-                                radius: 42,
+                                radius: 32,
                                 title: '$savedPct%',
                                 showTitle: true,
                                 titleStyle: const TextStyle(
-                                  fontSize: 12,
+                                  fontSize: 10,
                                   fontWeight: FontWeight.w900,
                                   color: Colors.white,
                                 ),
@@ -8193,11 +9672,11 @@ class IncomeExpensePiePanel extends StatelessWidget {
                               PieChartSectionData(
                                 value: totalExpenses,
                                 color: const Color(0xFFFF1744),
-                                radius: 42,
+                                radius: 32,
                                 title: '$spentPct%',
                                 showTitle: true,
                                 titleStyle: const TextStyle(
-                                  fontSize: 12,
+                                  fontSize: 10,
                                   fontWeight: FontWeight.w900,
                                   color: Colors.white,
                                 ),
@@ -8228,7 +9707,7 @@ class IncomeExpensePiePanel extends StatelessWidget {
                               child: Text(
                                 _formatSignedDashboardMoney(netBalance),
                                 style: TextStyle(
-                                  fontSize: 16.5,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w900,
                                   color: netBalance < 0
                                       ? const Color(0xFFE52E3D)
@@ -8243,7 +9722,7 @@ class IncomeExpensePiePanel extends StatelessWidget {
                     ],
                   ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 10),
           Row(
             children: [
               // Left Chip (Net Surplus / Balance)
@@ -8280,14 +9759,18 @@ class IncomeExpensePiePanel extends StatelessWidget {
                                 : const Color(0xFF0F9D58),
                           ),
                           const SizedBox(width: 4),
-                          Text(
-                            isLoss ? 'Net Deficit' : 'Net Surplus',
-                            style: TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
-                              color: isLoss
-                                  ? const Color(0xFFB91C1C)
-                                  : const Color(0xFF065F46),
+                          Expanded(
+                            child: Text(
+                              isLoss ? 'Net Deficit' : 'Net Surplus',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                                color: isLoss
+                                    ? const Color(0xFFB91C1C)
+                                    : const Color(0xFF065F46),
+                              ),
                             ),
                           ),
                         ],
@@ -8330,20 +9813,24 @@ class IncomeExpensePiePanel extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Row(
+                      Row(
                         children: [
-                          Icon(
+                          const Icon(
                             Icons.trending_down_rounded,
                             size: 14,
                             color: Color(0xFFE52E3D),
                           ),
-                          SizedBox(width: 4),
-                          Text(
-                            'Spent',
-                            style: TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFFB91C1C),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              'Spent',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFFB91C1C),
+                              ),
                             ),
                           ),
                         ],
@@ -8415,16 +9902,20 @@ class NetLossAlertBanner extends StatelessWidget {
         ? const Color(0xFFFFD6D9)
         : (isSurplus ? const Color(0xFFD1F2E0) : const Color(0xFFE5E7EB));
 
-    final title = isLoss ? 'Net Loss' : (isSurplus ? 'Net Surplus' : 'Balanced');
+    final title = isLoss
+        ? 'Net Loss'
+        : (isSurplus ? 'Net Surplus' : 'Balanced');
     final subtitlePrefix = isLoss
         ? 'You are over budget by '
-        : (isSurplus ? 'You are under budget by ' : 'Income matches expenses exactly');
+        : (isSurplus
+              ? 'You are under budget by '
+              : 'Income matches expenses exactly');
 
     final rightSubtitle = isLoss
         ? 'Expenses are $diffPct% higher\nthan income'
         : (isSurplus
-            ? 'Income is $diffPct% higher\nthan expenses'
-            : 'Balanced budget');
+              ? 'Income is $diffPct% higher\nthan expenses'
+              : 'Balanced budget');
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -8438,10 +9929,7 @@ class NetLossAlertBanner extends StatelessWidget {
           Container(
             width: 36,
             height: 36,
-            decoration: BoxDecoration(
-              color: badgeBg,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: badgeBg, shape: BoxShape.circle),
             child: Icon(
               isLoss ? Icons.trending_down_rounded : Icons.trending_up_rounded,
               color: accentColor,
@@ -8464,10 +9952,7 @@ class NetLossAlertBanner extends StatelessWidget {
                 const SizedBox(height: 2),
                 RichText(
                   text: TextSpan(
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade800,
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade800),
                     children: [
                       TextSpan(text: subtitlePrefix),
                       if (netBalance != 0)
@@ -8527,10 +10012,12 @@ class IncomeVsExpensesComparisonPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final maxAmount = math.max(totalIncome, totalExpenses);
-    final incomeBarFraction =
-        maxAmount > 0 ? (totalIncome / maxAmount).clamp(0.02, 1.0) : 0.02;
-    final expenseBarFraction =
-        maxAmount > 0 ? (totalExpenses / maxAmount).clamp(0.02, 1.0) : 0.02;
+    final incomeBarFraction = maxAmount > 0
+        ? (totalIncome / maxAmount).clamp(0.02, 1.0)
+        : 0.02;
+    final expenseBarFraction = maxAmount > 0
+        ? (totalExpenses / maxAmount).clamp(0.02, 1.0)
+        : 0.02;
 
     final incomePctLabel = totalIncome > 0 && totalExpenses > 0
         ? '${((totalIncome / (totalIncome + totalExpenses)) * 100).round()}%'
@@ -8559,10 +10046,10 @@ class IncomeVsExpensesComparisonPanel extends StatelessWidget {
           Text(
             'Income vs Expenses Comparison',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 16,
-                  color: const Color(0xFF111827),
-                ),
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+              color: const Color(0xFF111827),
+            ),
           ),
           const SizedBox(height: 16),
           Column(
@@ -8618,9 +10105,10 @@ class IncomeVsExpensesComparisonPanel extends StatelessWidget {
                           ),
                         ),
                         Flexible(
-                          flex: ((1.0 - incomeBarFraction) * 100)
-                              .round()
-                              .clamp(0, 100),
+                          flex: ((1.0 - incomeBarFraction) * 100).round().clamp(
+                            0,
+                            100,
+                          ),
                           child: const SizedBox.shrink(),
                         ),
                       ],
@@ -8660,7 +10148,10 @@ class IncomeVsExpensesComparisonPanel extends StatelessWidget {
                     child: Row(
                       children: [
                         Flexible(
-                          flex: (expenseBarFraction * 100).round().clamp(2, 100),
+                          flex: (expenseBarFraction * 100).round().clamp(
+                            2,
+                            100,
+                          ),
                           child: Container(
                             height: 18,
                             decoration: BoxDecoration(
@@ -8697,11 +10188,26 @@ class IncomeVsExpensesComparisonPanel extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: const [
-                        Text('0%', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                        Text('25%', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                        Text('50%', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                        Text('75%', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                        Text('100%', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                        Text(
+                          '0%',
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
+                        Text(
+                          '25%',
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
+                        Text(
+                          '50%',
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
+                        Text(
+                          '75%',
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
+                        Text(
+                          '100%',
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -8857,6 +10363,47 @@ class _TransactionTile extends StatelessWidget {
                         transaction.date.toLocal().toString().split(' ')[0],
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
+                      if (transaction.khataEntryId != null) ...[
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE0F2FE),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'via Khata: ${transaction.linkedCounterpartyOrAsset ?? transaction.beneficiary}',
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              color: Color(0xFF0369A1),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ] else if (transaction.assetId != null) ...[
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'via Asset: ${transaction.linkedCounterpartyOrAsset ?? transaction.title}',
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              color: Color(0xFF92400E),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

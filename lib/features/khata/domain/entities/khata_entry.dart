@@ -9,8 +9,11 @@ class KhataEntry extends Equatable {
     required this.amount,
     required this.isPayable,
     required this.date,
+    this.dueDate,
     this.description = '',
     this.isPaid = false,
+    this.settledAmount = 0.0,
+    this.isWrittenOff = false,
   });
 
   final int? id;
@@ -20,8 +23,13 @@ class KhataEntry extends Equatable {
   final double amount;
   final bool isPayable;
   final DateTime date;
+  final DateTime? dueDate;
   final String description;
   final bool isPaid;
+  final double settledAmount;
+  final bool isWrittenOff;
+
+  double get remainingAmount => (amount - settledAmount).clamp(0.0, amount);
 
   KhataEntry copyWith({
     int? id,
@@ -31,8 +39,11 @@ class KhataEntry extends Equatable {
     double? amount,
     bool? isPayable,
     DateTime? date,
+    DateTime? dueDate,
     String? description,
     bool? isPaid,
+    double? settledAmount,
+    bool? isWrittenOff,
   }) {
     return KhataEntry(
       id: id ?? this.id,
@@ -42,8 +53,11 @@ class KhataEntry extends Equatable {
       amount: amount ?? this.amount,
       isPayable: isPayable ?? this.isPayable,
       date: date ?? this.date,
+      dueDate: dueDate ?? this.dueDate,
       description: description ?? this.description,
       isPaid: isPaid ?? this.isPaid,
+      settledAmount: settledAmount ?? this.settledAmount,
+      isWrittenOff: isWrittenOff ?? this.isWrittenOff,
     );
   }
 
@@ -56,8 +70,11 @@ class KhataEntry extends Equatable {
       'amount': amount,
       'isPayable': isPayable ? 1 : 0,
       'date': date.toIso8601String(),
+      if (dueDate != null) 'dueDate': dueDate!.toIso8601String(),
       'description': description,
       'isPaid': isPaid ? 1 : 0,
+      'settledAmount': settledAmount,
+      'isWrittenOff': isWrittenOff ? 1 : 0,
     };
   }
 
@@ -70,8 +87,13 @@ class KhataEntry extends Equatable {
       amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
       isPayable: (map['isPayable'] as int? ?? 1) == 1,
       date: DateTime.tryParse(map['date'] as String? ?? '') ?? DateTime.now(),
+      dueDate: map['dueDate'] != null
+          ? DateTime.tryParse(map['dueDate'] as String)
+          : null,
       description: map['description'] as String? ?? '',
       isPaid: (map['isPaid'] as int? ?? 0) == 1,
+      settledAmount: (map['settledAmount'] as num?)?.toDouble() ?? 0.0,
+      isWrittenOff: (map['isWrittenOff'] as int? ?? 0) == 1,
     );
   }
 
@@ -84,8 +106,11 @@ class KhataEntry extends Equatable {
         amount,
         isPayable,
         date,
+        dueDate,
         description,
         isPaid,
+        settledAmount,
+        isWrittenOff,
       ];
 }
 

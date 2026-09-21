@@ -130,10 +130,10 @@ class _AppThemeFrame extends StatelessWidget {
             end: Alignment.bottomRight,
             colors: isAuthenticated
                 ? const [
-                    Color(0xFFE8FAF4),
-                    Color(0xFFF4F0FF),
-                    Color(0xFFFFF2E5),
-                    Color(0xFFEAF4FF),
+                    AppColors.mintSoft,
+                    Color(0xFFE7F0EA),
+                    AppColors.goldSurface,
+                    AppColors.cream,
                   ]
                 : const [
                     AppColors.mintSoft,
@@ -141,7 +141,7 @@ class _AppThemeFrame extends StatelessWidget {
                     AppColors.goldSurface,
                   ],
             stops: isAuthenticated
-                ? const [0, 0.36, 0.7, 1]
+                ? const [0, 0.42, 0.76, 1]
                 : const [0, 0.62, 1],
           ),
         ),
