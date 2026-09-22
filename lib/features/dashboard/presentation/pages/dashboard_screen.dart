@@ -5538,6 +5538,8 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                                   selectedMonth: _selectedMonth,
                                 ),
                                 accentColor: AppColors.forest,
+                                allTransactions: transactions,
+                                comprehensive: true,
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -6979,12 +6981,16 @@ class _PrintTransactionsButton extends StatefulWidget {
     required this.filterLabel,
     this.buttonLabel = 'Print report',
     this.accentColor,
+    this.allTransactions,
+    this.comprehensive = false,
   });
 
   final List<entity.Transaction> transactions;
   final String filterLabel;
   final String buttonLabel;
   final Color? accentColor;
+  final List<entity.Transaction>? allTransactions;
+  final bool comprehensive;
 
   @override
   State<_PrintTransactionsButton> createState() =>
@@ -6995,13 +7001,32 @@ class _PrintTransactionsButtonState extends State<_PrintTransactionsButton> {
   bool _isPrinting = false;
 
   Future<void> _print() async {
-    if (_isPrinting || widget.transactions.isEmpty) return;
+    if (_isPrinting || (!widget.comprehensive && widget.transactions.isEmpty)) {
+      return;
+    }
     setState(() => _isPrinting = true);
     try {
-      await const TransactionReportService().printReport(
-        transactions: widget.transactions,
-        filterLabel: widget.filterLabel,
-      );
+      if (widget.comprehensive) {
+        final userId = context.read<AuthService>().currentUser?.uid;
+        final assetRows = await TaxDatabase.instance.fetchAssets(
+          userId: userId,
+        );
+        final khataRows = await TaxDatabase.instance.fetchKhataEntries(
+          userId: userId,
+        );
+        await const TransactionReportService().printFinancialReport(
+          periodTransactions: widget.transactions,
+          allTransactions: widget.allTransactions ?? widget.transactions,
+          assets: assetRows.map(Asset.fromMap).toList(),
+          khataEntries: khataRows.map(KhataEntry.fromMap).toList(),
+          periodLabel: _financialPeriodLabel(widget.filterLabel),
+        );
+      } else {
+        await const TransactionReportService().printReport(
+          transactions: widget.transactions,
+          filterLabel: widget.filterLabel,
+        );
+      }
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -7014,9 +7039,16 @@ class _PrintTransactionsButtonState extends State<_PrintTransactionsButton> {
     }
   }
 
+  String _financialPeriodLabel(String label) {
+    if (label == 'All transactions - All dates') return 'All Time';
+    return label.replaceFirst('All transactions - ', '');
+  }
+
   @override
   Widget build(BuildContext context) {
-    final enabled = !_isPrinting && widget.transactions.isNotEmpty;
+    final enabled =
+        !_isPrinting &&
+        (widget.comprehensive || widget.transactions.isNotEmpty);
     final icon = _isPrinting
         ? const SizedBox.square(
             dimension: 18,
@@ -7038,7 +7070,7 @@ class _PrintTransactionsButtonState extends State<_PrintTransactionsButton> {
       label: FittedBox(
         fit: BoxFit.scaleDown,
         child: Text(
-          widget.transactions.isEmpty
+          widget.transactions.isEmpty && !widget.comprehensive
               ? 'No transactions to print'
               : widget.buttonLabel,
         ),

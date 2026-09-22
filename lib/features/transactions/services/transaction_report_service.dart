@@ -2,6 +2,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction.dart';
+import 'package:fbr_tax_helper/features/assets/domain/entities/asset.dart';
+import 'package:fbr_tax_helper/features/khata/domain/entities/khata_entry.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -173,6 +175,133 @@ class TransactionReportService {
     );
   }
 
+  Future<void> printFinancialReport({
+    required List<Transaction> periodTransactions,
+    required List<Transaction> allTransactions,
+    required List<Asset> assets,
+    required List<KhataEntry> khataEntries,
+    required String periodLabel,
+  }) async {
+    await Printing.layoutPdf(
+      name: 'Filer Flow Financial Report',
+      onLayout: (format) => buildFinancialReport(
+        periodTransactions: periodTransactions,
+        allTransactions: allTransactions,
+        assets: assets,
+        khataEntries: khataEntries,
+        periodLabel: periodLabel,
+        pageFormat: format,
+      ),
+    );
+  }
+
+  Future<Uint8List> buildFinancialReport({
+    required List<Transaction> periodTransactions,
+    required List<Transaction> allTransactions,
+    required List<Asset> assets,
+    required List<KhataEntry> khataEntries,
+    required String periodLabel,
+    PdfPageFormat pageFormat = PdfPageFormat.a4,
+  }) async {
+    final generatedAt = DateTime.now();
+    final currentDate = DateFormat('dd MMM yyyy').format(generatedAt);
+    final allIncome = allTransactions
+        .where((transaction) => !transaction.isExpense)
+        .fold<double>(0, (sum, transaction) => sum + transaction.amount);
+    final allExpenses = allTransactions
+        .where((transaction) => transaction.isExpense)
+        .fold<double>(0, (sum, transaction) => sum + transaction.amount);
+    final cash = allIncome - allExpenses;
+    final assetsTotal = assets.fold<double>(
+      0,
+      (sum, asset) => sum + asset.value,
+    );
+    final receivables = khataEntries
+        .where(
+          (entry) => !entry.isPayable && !entry.isPaid && !entry.isWrittenOff,
+        )
+        .fold<double>(0, (sum, entry) => sum + entry.remainingAmount);
+    final payables = khataEntries
+        .where(
+          (entry) => entry.isPayable && !entry.isPaid && !entry.isWrittenOff,
+        )
+        .fold<double>(0, (sum, entry) => sum + entry.remainingAmount);
+    final netWorth = cash + assetsTotal + receivables - payables;
+    final periodIncome = periodTransactions
+        .where((transaction) => !transaction.isExpense)
+        .fold<double>(0, (sum, transaction) => sum + transaction.amount);
+    final periodExpenses = periodTransactions
+        .where((transaction) => transaction.isExpense)
+        .fold<double>(0, (sum, transaction) => sum + transaction.amount);
+    final pdf = pw.Document(
+      title: 'Filer Flow Financial Report',
+      author: 'Filer Flow',
+      subject: periodLabel,
+    );
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageTheme: pw.PageTheme(
+          pageFormat: pageFormat,
+          margin: const pw.EdgeInsets.all(32),
+          buildBackground: (_) => pw.Center(
+            child: pw.Text(
+              'Filer Flow',
+              style: pw.TextStyle(
+                fontSize: 76,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColor.fromHex('#F1F7F5'),
+              ),
+            ),
+          ),
+        ),
+        footer: (context) => _reportFooter(context),
+        build: (context) => [
+          _buildFinancialHeader(periodLabel, generatedAt),
+          pw.SizedBox(height: 18),
+          _financialSectionTitle('Net Worth Summary (as of $currentDate)'),
+          _financialSummaryGrid([
+            ('Cash', _formatMoney(cash)),
+            ('Total assets', _formatMoney(assetsTotal)),
+            ('Receivables', _formatMoney(receivables)),
+            ('Payables', _formatMoney(payables)),
+            ('Total net worth', _formatMoney(netWorth)),
+          ]),
+          pw.SizedBox(height: 18),
+          _financialSectionTitle('Assets Breakdown (as of $currentDate)'),
+          _buildAssetsSection(assets),
+          pw.SizedBox(height: 18),
+          _financialSectionTitle('Khata Breakdown (current open balances)'),
+          _buildKhataSection(khataEntries),
+          pw.SizedBox(height: 18),
+          _financialSectionTitle('Income & Expense Summary ($periodLabel)'),
+          _buildSummary(income: periodIncome, expenses: periodExpenses),
+          pw.SizedBox(height: 18),
+          _financialSectionTitle('Top Categories ($periodLabel)'),
+          _buildCategoryBreakdown(periodTransactions),
+          pw.SizedBox(height: 18),
+          pw.Text(
+            'Transactions ($periodLabel)',
+            style: pw.TextStyle(
+              fontSize: 17,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColor.fromHex('#123D36'),
+            ),
+          ),
+          pw.SizedBox(height: 10),
+          if (periodTransactions.isEmpty)
+            _emptyReportSection('None')
+          else
+            for (final transaction in periodTransactions) ...[
+              _buildTransaction(transaction),
+              pw.SizedBox(height: 8),
+            ],
+        ],
+      ),
+    );
+    return pdf.save();
+  }
+
   Future<Uint8List> buildReport({
     required List<Transaction> transactions,
     required String filterLabel,
@@ -292,6 +421,259 @@ class TransactionReportService {
       ),
     );
     return pdf.save();
+  }
+
+  pw.Widget _reportFooter(pw.Context context) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.only(top: 8),
+      decoration: const pw.BoxDecoration(
+        border: pw.Border(top: pw.BorderSide(color: PdfColors.grey300)),
+      ),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(
+            'Generated by Filer Flow',
+            style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
+          ),
+          pw.Text(
+            'Page ${context.pageNumber} of ${context.pagesCount}',
+            style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildFinancialHeader(String periodLabel, DateTime generatedAt) {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.all(20),
+      decoration: pw.BoxDecoration(
+        color: PdfColor.fromHex('#0F6B57'),
+        borderRadius: pw.BorderRadius.circular(12),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            'Financial Report',
+            style: pw.TextStyle(
+              color: PdfColors.white,
+              fontSize: 24,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+          pw.SizedBox(height: 6),
+          pw.Text(
+            'Period: $periodLabel',
+            style: const pw.TextStyle(color: PdfColors.white, fontSize: 11),
+          ),
+          pw.Text(
+            'Generated: ${DateFormat('dd MMM yyyy, h:mm a').format(generatedAt)}',
+            style: const pw.TextStyle(color: PdfColors.white, fontSize: 9),
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _financialSectionTitle(String title) {
+    return pw.Text(
+      title,
+      style: pw.TextStyle(
+        fontSize: 17,
+        fontWeight: pw.FontWeight.bold,
+        color: PdfColor.fromHex('#123D36'),
+      ),
+    );
+  }
+
+  pw.Widget _financialSummaryGrid(List<(String, String)> values) {
+    return pw.Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: values
+          .map(
+            (value) => pw.Container(
+              width: 160,
+              padding: const pw.EdgeInsets.all(10),
+              decoration: pw.BoxDecoration(
+                color: PdfColor.fromHex(
+                  value.$1 == 'Total net worth' ? '#E7F0EA' : '#F6F7F4',
+                ),
+                borderRadius: pw.BorderRadius.circular(8),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(value.$1, style: const pw.TextStyle(fontSize: 8)),
+                  pw.SizedBox(height: 3),
+                  pw.Text(
+                    value.$2,
+                    style: pw.TextStyle(
+                      fontSize: 11,
+                      fontWeight: pw.FontWeight.bold,
+                      color: value.$1 == 'Total net worth'
+                          ? PdfColor.fromHex('#0F6B57')
+                          : null,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  pw.Widget _buildAssetsSection(List<Asset> assets) {
+    if (assets.isEmpty) return _emptyReportSection('None');
+    return pw.Table(
+      border: pw.TableBorder.all(color: PdfColors.grey300),
+      columnWidths: const {
+        0: pw.FlexColumnWidth(2),
+        1: pw.FlexColumnWidth(1),
+        2: pw.FlexColumnWidth(1),
+      },
+      children: [
+        _tableHeader(['Asset', 'Category', 'Current value']),
+        ...assets.map(
+          (asset) => _tableRow([
+            asset.name,
+            asset.category.displayName,
+            _formatMoney(asset.value),
+          ]),
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _buildCategoryBreakdown(List<Transaction> transactions) {
+    final totals = <String, double>{};
+    final types = <String, bool>{};
+    for (final transaction in transactions) {
+      totals.update(
+        transaction.category,
+        (value) => value + transaction.amount,
+        ifAbsent: () => transaction.amount,
+      );
+      types[transaction.category] = transaction.isExpense;
+    }
+    final categories = totals.entries.toList()
+      ..sort((first, second) => second.value.compareTo(first.value));
+    if (categories.isEmpty) return _emptyReportSection('None');
+    return pw.Table(
+      border: pw.TableBorder.all(color: PdfColors.grey300),
+      children: [
+        _tableHeader(['Category', 'Type', 'Total']),
+        ...categories
+            .take(5)
+            .map(
+              (category) => _tableRow([
+                category.key,
+                types[category.key] == true ? 'Expense' : 'Income',
+                _formatMoney(category.value),
+              ]),
+            ),
+      ],
+    );
+  }
+
+  pw.Widget _buildKhataSection(List<KhataEntry> entries) {
+    final payables = entries
+        .where(
+          (entry) => entry.isPayable && !entry.isPaid && !entry.isWrittenOff,
+        )
+        .toList();
+    final receivables = entries
+        .where(
+          (entry) => !entry.isPayable && !entry.isPaid && !entry.isWrittenOff,
+        )
+        .toList();
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        pw.Text(
+          'Open Payables',
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+        ),
+        _buildKhataTable(payables),
+        pw.SizedBox(height: 10),
+        pw.Text(
+          'Open Receivables',
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+        ),
+        _buildKhataTable(receivables),
+      ],
+    );
+  }
+
+  pw.Widget _buildKhataTable(List<KhataEntry> entries) {
+    if (entries.isEmpty) return _emptyReportSection('None');
+    return pw.Table(
+      border: pw.TableBorder.all(color: PdfColors.grey300),
+      children: [
+        _tableHeader(['Counterparty', 'Amount', 'Due date', 'Status']),
+        ...entries.map((entry) {
+          final dueDate = entry.dueDate;
+          final overdue = dueDate != null && dueDate.isBefore(DateTime.now());
+          final dueText = dueDate == null
+              ? 'Not set'
+              : DateFormat('dd MMM yyyy').format(dueDate);
+          return _tableRow([
+            entry.party,
+            _formatMoney(entry.remainingAmount),
+            dueText,
+            overdue
+                ? '${DateTime.now().difference(dueDate).inDays} days overdue'
+                : 'Open',
+          ]);
+        }),
+      ],
+    );
+  }
+
+  pw.TableRow _tableHeader(List<String> values) {
+    return pw.TableRow(
+      decoration: pw.BoxDecoration(color: PdfColor.fromHex('#E7F0EA')),
+      children: values
+          .map(
+            (value) => pw.Padding(
+              padding: const pw.EdgeInsets.all(6),
+              child: pw.Text(
+                value,
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 8,
+                ),
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  pw.TableRow _tableRow(List<String> values) {
+    return pw.TableRow(
+      children: values
+          .map(
+            (value) => pw.Padding(
+              padding: const pw.EdgeInsets.all(6),
+              child: pw.Text(value, style: const pw.TextStyle(fontSize: 8)),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  pw.Widget _emptyReportSection(String text) {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.all(12),
+      color: PdfColor.fromHex('#F6F7F4'),
+      child: pw.Text(text, textAlign: pw.TextAlign.center),
+    );
   }
 
   pw.Widget _buildHeader(String filterLabel, String generatedAt) {

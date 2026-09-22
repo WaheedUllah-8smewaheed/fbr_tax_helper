@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction.dart';
+import 'package:fbr_tax_helper/features/assets/domain/entities/asset.dart';
+import 'package:fbr_tax_helper/features/khata/domain/entities/khata_entry.dart';
 import 'package:fbr_tax_helper/features/transactions/services/transaction_report_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -70,4 +72,37 @@ void main() {
     expect(bytes.length, greaterThan(1000));
     expect(ascii.decode(bytes.take(4).toList()), '%PDF');
   });
+
+  test('builds a comprehensive financial PDF with current balances', () async {
+    final bytes = await const TransactionReportService().buildFinancialReport(
+      periodTransactions: const [],
+      allTransactions: const [],
+      assets: [
+        Asset(
+          userId: 'user-1',
+          name: 'Savings',
+          category: AssetCategory.bank,
+          value: 50000,
+          createdAt: _reportDate,
+          updatedAt: _reportDate,
+        ),
+      ],
+      khataEntries: [
+        KhataEntry(
+          userId: 'user-1',
+          title: 'Supplier invoice',
+          party: 'Supplier',
+          amount: 10000,
+          isPayable: true,
+          date: _reportDate,
+        ),
+      ],
+      periodLabel: 'All Time',
+    );
+
+    expect(bytes.length, greaterThan(1000));
+    expect(ascii.decode(bytes.take(4).toList()), '%PDF');
+  });
 }
+
+final _reportDate = DateTime(2026, 1, 1);
