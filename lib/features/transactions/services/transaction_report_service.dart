@@ -245,12 +245,15 @@ class TransactionReportService {
           pageFormat: pageFormat,
           margin: const pw.EdgeInsets.all(32),
           buildBackground: (_) => pw.Center(
-            child: pw.Text(
-              'Filer Flow',
-              style: pw.TextStyle(
-                fontSize: 76,
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColor.fromHex('#F1F7F5'),
+            child: pw.Transform.rotate(
+              angle: -0.30,
+              child: pw.Text(
+                'Filer Flow',
+                style: pw.TextStyle(
+                  fontSize: 68,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColor.fromHex('#A8BDB5'),
+                ),
               ),
             ),
           ),
@@ -278,24 +281,7 @@ class TransactionReportService {
           _buildSummary(income: periodIncome, expenses: periodExpenses),
           pw.SizedBox(height: 18),
           _financialSectionTitle('Top Categories ($periodLabel)'),
-          _buildCategoryBreakdown(periodTransactions),
-          pw.SizedBox(height: 18),
-          pw.Text(
-            'Transactions ($periodLabel)',
-            style: pw.TextStyle(
-              fontSize: 17,
-              fontWeight: pw.FontWeight.bold,
-              color: PdfColor.fromHex('#123D36'),
-            ),
-          ),
-          pw.SizedBox(height: 10),
-          if (periodTransactions.isEmpty)
-            _emptyReportSection('None')
-          else
-            for (final transaction in periodTransactions) ...[
-              _buildTransaction(transaction),
-              pw.SizedBox(height: 8),
-            ],
+          _buildTopCategoryCards(periodTransactions),
         ],
       ),
     );
@@ -507,7 +493,7 @@ class TransactionReportService {
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Text(value.$1, style: const pw.TextStyle(fontSize: 8)),
+                  pw.Text(value.$1, style: const pw.TextStyle(fontSize: 9)),
                   pw.SizedBox(height: 3),
                   pw.Text(
                     value.$2,
@@ -549,34 +535,98 @@ class TransactionReportService {
     );
   }
 
-  pw.Widget _buildCategoryBreakdown(List<Transaction> transactions) {
+  pw.Widget _buildTopCategoryCards(List<Transaction> transactions) {
+    return pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Expanded(
+          child: _buildTopCategoryCard(
+            title: 'Top 5 Income',
+            color: '#0F6B57',
+            totals: _topCategoryTotals(transactions, isExpense: false),
+          ),
+        ),
+        pw.SizedBox(width: 10),
+        pw.Expanded(
+          child: _buildTopCategoryCard(
+            title: 'Top 5 Expenses',
+            color: '#B3261E',
+            totals: _topCategoryTotals(transactions, isExpense: true),
+          ),
+        ),
+      ],
+    );
+  }
+
+  List<MapEntry<String, double>> _topCategoryTotals(
+    List<Transaction> transactions, {
+    required bool isExpense,
+  }) {
     final totals = <String, double>{};
-    final types = <String, bool>{};
     for (final transaction in transactions) {
+      if (transaction.isExpense != isExpense) continue;
       totals.update(
         transaction.category,
         (value) => value + transaction.amount,
         ifAbsent: () => transaction.amount,
       );
-      types[transaction.category] = transaction.isExpense;
     }
-    final categories = totals.entries.toList()
+    return totals.entries.toList()
       ..sort((first, second) => second.value.compareTo(first.value));
-    if (categories.isEmpty) return _emptyReportSection('None');
-    return pw.Table(
-      border: pw.TableBorder.all(color: PdfColors.grey300),
-      children: [
-        _tableHeader(['Category', 'Type', 'Total']),
-        ...categories
-            .take(5)
-            .map(
-              (category) => _tableRow([
-                category.key,
-                types[category.key] == true ? 'Expense' : 'Income',
-                _formatMoney(category.value),
-              ]),
+  }
+
+  pw.Widget _buildTopCategoryCard({
+    required String title,
+    required String color,
+    required List<MapEntry<String, double>> totals,
+  }) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(10),
+      decoration: pw.BoxDecoration(
+        color: PdfColor.fromHex('#F6F7F4'),
+        border: pw.Border.all(color: PdfColor.fromHex('#B7C9C3')),
+        borderRadius: pw.BorderRadius.circular(8),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        children: [
+          pw.Text(
+            title,
+            style: pw.TextStyle(
+              fontSize: 12,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColor.fromHex(color),
             ),
-      ],
+          ),
+          pw.SizedBox(height: 6),
+          if (totals.isEmpty)
+            pw.Text('None', style: const pw.TextStyle(fontSize: 9))
+          else
+            for (final category in totals.take(5))
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(vertical: 3),
+                child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Expanded(
+                      child: pw.Text(
+                        category.key,
+                        style: const pw.TextStyle(fontSize: 9),
+                      ),
+                    ),
+                    pw.Text(
+                      _formatMoney(category.value),
+                      style: pw.TextStyle(
+                        fontSize: 9,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColor.fromHex(color),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+        ],
+      ),
     );
   }
 
@@ -636,7 +686,7 @@ class TransactionReportService {
 
   pw.TableRow _tableHeader(List<String> values) {
     return pw.TableRow(
-      decoration: pw.BoxDecoration(color: PdfColor.fromHex('#E7F0EA')),
+      decoration: pw.BoxDecoration(color: PdfColor.fromHex('#B5D7CA')),
       children: values
           .map(
             (value) => pw.Padding(
@@ -645,7 +695,7 @@ class TransactionReportService {
                 value,
                 style: pw.TextStyle(
                   fontWeight: pw.FontWeight.bold,
-                  fontSize: 8,
+                  fontSize: 9,
                 ),
               ),
             ),
@@ -656,11 +706,12 @@ class TransactionReportService {
 
   pw.TableRow _tableRow(List<String> values) {
     return pw.TableRow(
+      decoration: pw.BoxDecoration(color: PdfColors.white),
       children: values
           .map(
             (value) => pw.Padding(
               padding: const pw.EdgeInsets.all(6),
-              child: pw.Text(value, style: const pw.TextStyle(fontSize: 8)),
+              child: pw.Text(value, style: const pw.TextStyle(fontSize: 9)),
             ),
           )
           .toList(),

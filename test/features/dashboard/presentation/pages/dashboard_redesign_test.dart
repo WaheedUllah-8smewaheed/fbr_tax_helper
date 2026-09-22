@@ -183,7 +183,7 @@ void main() {
           body: SingleChildScrollView(
             child: TopCategoryCharts(
               transactions: sampleTransactions,
-              onCategoryTap: (category) => tappedCategory = category,
+              onCategoryTap: (category) => tappedCategory = category, periodLabel: '',
             ),
           ),
         ),
