@@ -130,6 +130,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _HomeDashboard(
               key: _homeDashboardKey,
               categoryPreferences: _categoryPreferences,
+              onOpenKhata: () => _onItemTapped(1),
+              onOpenAssets: () => _onItemTapped(2),
             ),
             _KhataPage(
               key: _khataPageKey,
@@ -5166,9 +5168,16 @@ class _ConfirmPasswordDialogState extends State<_ConfirmPasswordDialog> {
 }
 
 class _HomeDashboard extends StatefulWidget {
-  const _HomeDashboard({super.key, required this.categoryPreferences});
+  const _HomeDashboard({
+    super.key,
+    required this.categoryPreferences,
+    required this.onOpenKhata,
+    required this.onOpenAssets,
+  });
 
   final CategoryPreferencesService categoryPreferences;
+  final VoidCallback onOpenKhata;
+  final VoidCallback onOpenAssets;
 
   @override
   State<_HomeDashboard> createState() => _HomeDashboardState();
@@ -5489,6 +5498,10 @@ class _HomeDashboardState extends State<_HomeDashboard> {
             month: _selectedMonth,
           );
           final financialYearOptions = buildFinancialYearOptions(transactions);
+          final periodLabel = dashboardPeriodLabel(
+            selectedFinancialYear: _selectedFinancialYear,
+            selectedMonth: _selectedMonth,
+          );
 
           return Column(
             children: [
@@ -5511,6 +5524,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                       const SizedBox(height: 14),
                       TopCategoryCharts(
                         transactions: visibleTransactions,
+                        periodLabel: periodLabel,
                         onCategoryTap: (category) {
                           Navigator.of(context).push(
                             MaterialPageRoute(
@@ -5592,153 +5606,22 @@ class _HomeDashboardState extends State<_HomeDashboard> {
 
   Widget _buildKhataAndAssetsMetricsCards() {
     final formatter = NumberFormat('#,##0.00', 'en_US');
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            // Total Payable Card
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFFFCDD2)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.02),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: const [
-                        Icon(
-                          Icons.arrow_upward_rounded,
-                          size: 14,
-                          color: Color(0xFFC62828),
-                        ),
-                        SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            'Total Payable',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFFC62828),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        'Rs ${formatter.format(_totalPayable)}',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFFC62828),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    const Text(
-                      'Open balance',
-                      style: TextStyle(fontSize: 9.5, color: Colors.black54),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            // Total Receivable Card
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFC8E6C9)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.02),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: const [
-                        Icon(
-                          Icons.arrow_downward_rounded,
-                          size: 14,
-                          color: Color(0xFF2E7D32),
-                        ),
-                        SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            'Total Receivable',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF2E7D32),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        'Rs ${formatter.format(_totalReceivable)}',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF2E7D32),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    const Text(
-                      'Open balance',
-                      style: TextStyle(fontSize: 9.5, color: Colors.black54),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        // Total Assets Card
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+
+    Widget balanceCard({
+      required String title,
+      required double amount,
+      required Color color,
+      required Color borderColor,
+    }) {
+      return InkWell(
+        onTap: widget.onOpenKhata,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE8DCC0)),
+            border: Border.all(color: borderColor),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.02),
@@ -5747,49 +5630,143 @@ class _HomeDashboardState extends State<_HomeDashboard> {
               ),
             ],
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F6B57).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.account_balance_rounded,
-                  size: 20,
-                  color: Color(0xFF0F6B57),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'Total Assets Value',
+              Row(
+                children: [
+                  Icon(
+                    title == 'Total Payable'
+                        ? Icons.arrow_upward_rounded
+                        : Icons.arrow_downward_rounded,
+                    size: 14,
+                    color: color,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF1E3A2F),
+                        color: color,
                       ),
                     ),
-                    Text(
-                      'Vehicles, property, savings, and investments',
-                      style: TextStyle(fontSize: 10, color: Colors.black54),
-                    ),
-                  ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'Rs ${formatter.format(amount)}',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                    color: color,
+                  ),
                 ),
               ),
-              Text(
-                'Rs ${formatter.format(_totalAssets)}',
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFF0F6B57),
-                ),
+              const SizedBox(height: 2),
+              const Text(
+                'Open balance',
+                style: TextStyle(fontSize: 9.5, color: Colors.black54),
               ),
             ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: balanceCard(
+                title: 'Total Payable',
+                amount: _totalPayable,
+                color: const Color(0xFFC62828),
+                borderColor: const Color(0xFFFFCDD2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: balanceCard(
+                title: 'Total Receivable',
+                amount: _totalReceivable,
+                color: const Color(0xFF2E7D32),
+                borderColor: const Color(0xFFC8E6C9),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        InkWell(
+          onTap: widget.onOpenAssets,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE8DCC0)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F6B57).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.account_balance_rounded,
+                    size: 20,
+                    color: Color(0xFF0F6B57),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Total Assets Value',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1E3A2F),
+                        ),
+                      ),
+                      Text(
+                        'Vehicles, property, savings, and investments',
+                        style: TextStyle(fontSize: 10, color: Colors.black54),
+                      ),
+                    ],
+                  ),
+                ),
+                Text(
+                  'Rs ${formatter.format(_totalAssets)}',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF0F6B57),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -6484,10 +6461,12 @@ class TopCategoryCharts extends StatelessWidget {
   const TopCategoryCharts({
     super.key,
     required this.transactions,
+    required this.periodLabel,
     required this.onCategoryTap,
   });
 
   final List<entity.Transaction> transactions;
+  final String periodLabel;
   final ValueChanged<String> onCategoryTap;
 
   List<_CategoryTotal> _topCategories({required bool isExpense}) {
@@ -6522,7 +6501,7 @@ class TopCategoryCharts extends StatelessWidget {
             onPressed: () => _showTopCategories(
               context,
               title: 'Top 5 Income',
-              subtitle: 'Your highest income sources for this period.',
+              subtitle: 'Your highest income sources for $periodLabel.',
               items: income,
               totalAmount: totalIncome,
               isExpense: false,
@@ -6543,7 +6522,7 @@ class TopCategoryCharts extends StatelessWidget {
             onPressed: () => _showTopCategories(
               context,
               title: 'Top 5 Expenses',
-              subtitle: 'Your highest spending categories for this period.',
+              subtitle: 'Your highest spending categories for $periodLabel.',
               items: expenses,
               totalAmount: totalExpenses,
               isExpense: true,
@@ -6973,6 +6952,25 @@ String _transactionFilterLabel({
     parts.add(dashboardMonthNames[selectedMonth - 1]);
   }
   return 'All transactions - ${parts.join(', ')}';
+}
+
+String dashboardPeriodLabel({
+  String? selectedFinancialYear,
+  int? selectedMonth,
+}) {
+  if (selectedMonth != null && selectedMonth >= 1 && selectedMonth <= 12) {
+    var year = DateTime.now().year;
+    final financialYear = selectedFinancialYear;
+    if (financialYear != null) {
+      final startYear = int.tryParse(financialYear.split('-').first);
+      if (startYear != null) {
+        year = selectedMonth >= 7 ? startYear : startYear + 1;
+      }
+    }
+    return '${dashboardMonthNames[selectedMonth - 1]} $year';
+  }
+  if (selectedFinancialYear != null) return 'FY $selectedFinancialYear';
+  return 'All Time';
 }
 
 class _PrintTransactionsButton extends StatefulWidget {
