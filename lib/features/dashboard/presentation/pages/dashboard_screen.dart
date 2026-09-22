@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -130,8 +131,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
               key: _homeDashboardKey,
               categoryPreferences: _categoryPreferences,
             ),
-            _KhataPage(key: _khataPageKey),
-            _AssetsPage(key: _assetsPageKey),
+            _KhataPage(
+              key: _khataPageKey,
+              categoryPreferences: _categoryPreferences,
+            ),
+            _AssetsPage(
+              key: _assetsPageKey,
+              categoryPreferences: _categoryPreferences,
+            ),
             _CategorySettingsPage(categoryPreferences: _categoryPreferences),
             _MorePage(categoryPreferences: _categoryPreferences),
           ],
@@ -276,12 +283,20 @@ class _TransactionsPage extends StatefulWidget {
     required this.filter,
     required this.onFilterChanged,
     this.showAppBar = false,
+    this.onParentCategorySelected,
+    this.showTypeFilter = true,
   });
 
   final CategoryPreferencesService categoryPreferences;
   final TransactionTypeFilter filter;
   final ValueChanged<TransactionTypeFilter> onFilterChanged;
   final bool showAppBar;
+  final bool showTypeFilter;
+  final Future<void> Function(
+    String parentCategory,
+    List<TransactionCategory> categoryOptions,
+  )?
+  onParentCategorySelected;
 
   @override
   State<_TransactionsPage> createState() => _TransactionsPageState();
@@ -304,11 +319,15 @@ class _TransactionsPageState extends State<_TransactionsPage> {
     }
   }
 
-  void _openParentTransaction(
+  Future<void> _openParentTransaction(
     String parentCategory,
     List<TransactionCategory> categoryOptions,
-  ) {
-    Navigator.of(context).push(
+  ) async {
+    final onParentCategorySelected = widget.onParentCategorySelected;
+    if (onParentCategorySelected != null) {
+      return onParentCategorySelected(parentCategory, categoryOptions);
+    }
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => AddTransactionPage(
           parentCategory: parentCategory,
@@ -387,46 +406,34 @@ class _TransactionsPageState extends State<_TransactionsPage> {
           body: ListView(
             padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPadding),
             children: [
-              SegmentedButton<TransactionTypeFilter>(
-                expandedInsets: EdgeInsets.zero,
-                showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(
-                    value: TransactionTypeFilter.income,
-                    label: Text('Income'),
-                  ),
-                  ButtonSegment(
-                    value: TransactionTypeFilter.expense,
-                    label: Text('Expense'),
-                  ),
-                  ButtonSegment(
-                    value: TransactionTypeFilter.both,
-                    label: Text('Both'),
-                  ),
-                ],
-                selected: {_filter},
-                onSelectionChanged: (selection) {
-                  setState(() {
-                    _filter = selection.first;
-                  });
-                  widget.onFilterChanged(selection.first);
-                },
-              ),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => _AllTransactionsPage(
-                        categoryPreferences: widget.categoryPreferences,
-                      ),
+              if (widget.showTypeFilter) ...[
+                SegmentedButton<TransactionTypeFilter>(
+                  expandedInsets: EdgeInsets.zero,
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(
+                      value: TransactionTypeFilter.income,
+                      label: Text('Income'),
                     ),
-                  );
-                },
-                icon: const Icon(Icons.receipt_long_outlined),
-                label: const Text('View All Transactions'),
-              ),
-              const SizedBox(height: 20),
+                    ButtonSegment(
+                      value: TransactionTypeFilter.expense,
+                      label: Text('Expense'),
+                    ),
+                    ButtonSegment(
+                      value: TransactionTypeFilter.both,
+                      label: Text('Both'),
+                    ),
+                  ],
+                  selected: {_filter},
+                  onSelectionChanged: (selection) {
+                    setState(() {
+                      _filter = selection.first;
+                    });
+                    widget.onFilterChanged(selection.first);
+                  },
+                ),
+                const SizedBox(height: 20),
+              ],
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 280),
                 switchInCurve: Curves.easeOutCubic,
@@ -993,7 +1000,9 @@ bool transactionBelongsToCategory(
 enum KhataSegmentFilter { payable, receivable }
 
 class _KhataPage extends StatefulWidget {
-  const _KhataPage({super.key});
+  const _KhataPage({super.key, required this.categoryPreferences});
+
+  final CategoryPreferencesService categoryPreferences;
 
   @override
   State<_KhataPage> createState() => _KhataPageState();
@@ -1005,6 +1014,8 @@ class _KhataPageState extends State<_KhataPage> {
   bool _isLoading = true;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  CategoryPreferencesService get _categoryPreferences =>
+      widget.categoryPreferences;
 
   @override
   void initState() {
@@ -1413,218 +1424,48 @@ class _KhataPageState extends State<_KhataPage> {
   }
 
   Future<void> _openSettlementDialog(KhataEntry entry) async {
-    final authService = context.read<AuthService>();
-    final transactionBloc = context.read<TransactionBloc>();
     final remaining = entry.remainingAmount;
-    final settleAmountController = TextEditingController(
-      text: remaining.toStringAsFixed(2),
-    );
-    final notesController = TextEditingController();
-    DateTime settlementDate = DateTime.now();
-    final formKey = GlobalKey<FormState>();
+    if (!mounted) return;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              title: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F6B57).withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.check_circle_outline,
-                      color: Color(0xFF0F6B57),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      entry.isPayable ? 'Settle Payable' : 'Settle Receivable',
-                      style: const TextStyle(fontSize: 18),
-                    ),
-                  ),
-                ],
-              ),
-              content: SingleChildScrollView(
-                child: Form(
-                  key: formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Party: ${entry.party}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Total: ${_formatAmount(entry.amount)} | Remaining: ${_formatAmount(remaining)}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: settleAmountController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                            RegExp(r'^\d*\.?\d{0,2}'),
-                          ),
-                        ],
-                        decoration: InputDecoration(
-                          hintText: 'Amount',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          helperText: 'Enter full or partial payment amount',
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Enter settlement amount';
-                          }
-                          final parsed = double.tryParse(value.trim());
-                          if (parsed == null || parsed <= 0) {
-                            return 'Enter a positive amount';
-                          }
-                          if (parsed > remaining + 0.01) {
-                            return 'Cannot exceed remaining balance';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      InkWell(
-                        onTap: () async {
-                          final picked = await showDatePicker(
-                            context: dialogContext,
-                            initialDate: settlementDate,
-                            firstDate: DateTime(2000),
-                            lastDate: DateTime(2100),
-                          );
-                          if (picked != null) {
-                            setDialogState(() => settlementDate = picked);
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey.shade400),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.calendar_today,
-                                size: 16,
-                                color: Color(0xFF0F6B57),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Date: ${DateFormat('dd MMM yyyy').format(settlementDate)}',
-                                style: const TextStyle(fontSize: 13),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: notesController,
-                        decoration: InputDecoration(
-                          labelText: 'Notes (Optional)',
-                          hintText: 'e.g. Paid via bank transfer / cash',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          prefixIcon: const Icon(Icons.note_alt_outlined),
-                        ),
-                      ),
-                    ],
-                  ),
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) => _TransactionsPage(
+          categoryPreferences: _categoryPreferences,
+          filter: entry.isPayable
+              ? TransactionTypeFilter.expense
+              : TransactionTypeFilter.income,
+          onFilterChanged: (_) {},
+          showAppBar: true,
+          showTypeFilter: false,
+          onParentCategorySelected: (parentCategory, categoryOptions) async {
+            final categorySaved = await Navigator.of(context).push<bool>(
+              MaterialPageRoute(
+                builder: (context) => AddTransactionPage(
+                  parentCategory: parentCategory,
+                  categoryOptions: categoryOptions,
+                  categoryPreferences: _categoryPreferences,
+                  initialIsExpense: entry.isPayable,
+                  initialAmount: remaining,
+                  initialPurpose: entry.party,
+                  initialDate: DateTime.now(),
+                  isSettlement: true,
+                  khataEntryId: entry.id,
+                  linkedCounterpartyOrAsset: entry.party,
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext, false),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    if (formKey.currentState!.validate()) {
-                      Navigator.pop(dialogContext, true);
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0F6B57),
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text('Confirm Settlement'),
-                ),
-              ],
             );
+            if (categorySaved == true && context.mounted) {
+              Navigator.of(context).pop(true);
+            }
           },
-        );
-      },
-    );
-
-    if (confirmed != true) return;
-
-    final settlementAmount = double.parse(settleAmountController.text.trim());
-    final user = authService.currentUser;
-    final userId = user?.uid ?? '';
-    final newSettledAmount = entry.settledAmount + settlementAmount;
-    final isFullySettled = newSettledAmount >= entry.amount - 0.001;
-
-    // 1. Create Transaction
-    final transactionCategory = entry.isPayable
-        ? "Khata Ada'igi"
-        : "Khata Wasooli";
-    final note = notesController.text.trim();
-    final purposeText = note.isNotEmpty
-        ? note
-        : (entry.description.trim().isNotEmpty
-              ? entry.description.trim()
-              : (entry.isPayable
-                    ? 'Khata Payable settlement to ${entry.party}'
-                    : 'Khata Receivable settlement from ${entry.party}'));
-
-    transactionBloc.add(
-      AddTransaction(
-        entity.Transaction(
-          userId: userId,
-          title: entry.title,
-          beneficiary: entry.party,
-          purpose: purposeText,
-          amount: settlementAmount,
-          isExpense: entry.isPayable,
-          date: settlementDate,
-          category: transactionCategory,
-          khataEntryId: entry.id,
-          linkedCounterpartyOrAsset: entry.party,
         ),
       ),
     );
+    if (saved != true || !mounted) return;
 
-    // 2. Update Khata Entry in database
+    final newSettledAmount = entry.amount;
+    final isFullySettled = newSettledAmount >= entry.amount - 0.001;
+
     await TaxDatabase.instance.updateKhataEntry(
       entry
           .copyWith(settledAmount: newSettledAmount, isPaid: isFullySettled)
@@ -1639,7 +1480,7 @@ class _KhataPageState extends State<_KhataPage> {
           content: Text(
             isFullySettled
                 ? 'Fully settled! Added to ${entry.isPayable ? "Expenses" : "Income"}.'
-                : 'Partial payment of ${_formatAmount(settlementAmount)} recorded in ${entry.isPayable ? "Expenses" : "Income"}.',
+                : 'Settlement recorded in ${entry.isPayable ? "Expenses" : "Income"}.',
           ),
           backgroundColor: const Color(0xFF0F6B57),
         ),
@@ -2322,13 +2163,17 @@ class _KhataPageState extends State<_KhataPage> {
 }
 
 class _AssetsPage extends StatefulWidget {
-  const _AssetsPage({super.key});
+  const _AssetsPage({super.key, required this.categoryPreferences});
+
+  final CategoryPreferencesService categoryPreferences;
 
   @override
   State<_AssetsPage> createState() => _AssetsPageState();
 }
 
 class _AssetsPageState extends State<_AssetsPage> {
+  CategoryPreferencesService get _categoryPreferences =>
+      widget.categoryPreferences;
   List<Asset> _assets = [];
   bool _isLoading = true;
   String _searchQuery = '';
@@ -2625,19 +2470,17 @@ class _AssetsPageState extends State<_AssetsPage> {
 
   Future<void> _openEditAssetSheet(Asset asset) async {
     final messenger = ScaffoldMessenger.of(context);
-    final nameController = TextEditingController(text: asset.name);
-    final valueController = TextEditingController(
-      text: asset.value.toStringAsFixed(2),
-    );
-    AssetCategory selectedCategory = asset.category;
+    final changeController = TextEditingController();
+    final reasonController = TextEditingController();
     final formKey = GlobalKey<FormState>();
+    var isIncrease = false;
+    var cashInvolved = true;
 
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (bottomSheetContext) => Scaffold(
-          appBar: AppBar(title: const Text('Edit Asset')),
+        builder: (assetEditContext) => Scaffold(
+          appBar: AppBar(title: Text('Edit "${asset.name}"')),
           body: SafeArea(
-            top: false,
             child: StatefulBuilder(
               builder: (builderContext, setModalState) {
                 return Container(
@@ -2659,17 +2502,7 @@ class _AssetsPageState extends State<_AssetsPage> {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Center(
-                            child: Container(
-                              width: 40,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade300,
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 8),
                           Text(
                             'Edit "${asset.name}"',
                             style: const TextStyle(
@@ -2687,52 +2520,33 @@ class _AssetsPageState extends State<_AssetsPage> {
                             ),
                           ),
                           const SizedBox(height: 18),
-                          TextFormField(
-                            controller: nameController,
-                            decoration: InputDecoration(
-                              labelText: 'Asset Name / Title *',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            validator: (v) => (v == null || v.trim().isEmpty)
-                                ? 'Please enter a name'
-                                : null,
-                          ),
-                          const SizedBox(height: 14),
-                          DropdownButtonFormField<AssetCategory>(
-                            initialValue: selectedCategory,
-                            decoration: InputDecoration(
-                              labelText: 'Category *',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            items: AssetCategory.values.map((cat) {
-                              return DropdownMenuItem(
-                                value: cat,
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      _iconForCategory(cat),
-                                      size: 18,
-                                      color: _colorForCategory(cat),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(cat.displayName),
-                                  ],
+                          const Text('Did the value go up or down? *'),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _assetChoiceButton(
+                                  label: '↓ Decreased',
+                                  selected: !isIncrease,
+                                  onPressed: () =>
+                                      setModalState(() => isIncrease = false),
                                 ),
-                              );
-                            }).toList(),
-                            onChanged: (val) {
-                              if (val != null) {
-                                setModalState(() => selectedCategory = val);
-                              }
-                            },
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _assetChoiceButton(
+                                  label: '↑ Increased',
+                                  selected: isIncrease,
+                                  onPressed: () =>
+                                      setModalState(() => isIncrease = true),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 18),
                           TextFormField(
-                            controller: valueController,
+                            controller: changeController,
+                            onChanged: (_) => setModalState(() {}),
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                             ),
@@ -2742,10 +2556,10 @@ class _AssetsPageState extends State<_AssetsPage> {
                               ),
                             ],
                             decoration: InputDecoration(
-                              labelText: 'New Value (PKR) *',
-                              hintText: '0.00',
+                              labelText: 'By how much (PKR)? *',
+                              hintText: '0',
                               border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(14),
                               ),
                             ),
                             validator: (v) {
@@ -2753,10 +2567,89 @@ class _AssetsPageState extends State<_AssetsPage> {
                                 return 'Please enter value';
                               }
                               final parsed = double.tryParse(v.trim());
-                              if (parsed == null || parsed < 0) {
-                                return 'Enter a valid non-negative number';
+                              if (parsed == null || parsed <= 0) {
+                                return 'Enter a valid positive number';
+                              }
+                              if (!isIncrease && parsed > asset.value) {
+                                return 'Decrease cannot exceed current value';
                               }
                               return null;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: reasonController,
+                            maxLines: 2,
+                            textCapitalization: TextCapitalization.sentences,
+                            decoration: InputDecoration(
+                              labelText: 'Reason (optional)',
+                              hintText: 'Why is this asset value changing?',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFDF0F2),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              children: [
+                                const Expanded(child: Text('Cash involved?')),
+                                _assetChoiceButton(
+                                  label: 'Yes',
+                                  selected: cashInvolved,
+                                  onPressed: () =>
+                                      setModalState(() => cashInvolved = true),
+                                ),
+                                const SizedBox(width: 8),
+                                _assetChoiceButton(
+                                  label: 'No',
+                                  selected: !cashInvolved,
+                                  onPressed: () =>
+                                      setModalState(() => cashInvolved = false),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Builder(
+                            builder: (context) {
+                              final entered =
+                                  double.tryParse(
+                                    changeController.text.trim(),
+                                  ) ??
+                                  0.0;
+                              final preview = isIncrease
+                                  ? asset.value + entered
+                                  : asset.value - entered;
+                              return Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE5F8EC),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Column(
+                                  children: [
+                                    const Text('New value will be'),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      _formatAmount(preview),
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w900,
+                                        color: Color(0xFF008A45),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
                             },
                           ),
                           const SizedBox(height: 22),
@@ -2765,7 +2658,7 @@ class _AssetsPageState extends State<_AssetsPage> {
                               Expanded(
                                 child: OutlinedButton(
                                   onPressed: () =>
-                                      Navigator.pop(bottomSheetContext),
+                                      Navigator.pop(assetEditContext),
                                   style: OutlinedButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(
                                       vertical: 14,
@@ -2783,64 +2676,33 @@ class _AssetsPageState extends State<_AssetsPage> {
                                   onPressed: () async {
                                     if (!formKey.currentState!.validate())
                                       return;
-                                    final user = context
-                                        .read<AuthService>()
-                                        .currentUser;
-                                    final userId = user?.uid ?? '';
-                                    final newValue = double.parse(
-                                      valueController.text.trim(),
+                                    final change = double.parse(
+                                      changeController.text.trim(),
                                     );
-                                    final newName = nameController.text.trim();
-
+                                    final reason = reasonController.text.trim();
+                                    final newValue = isIncrease
+                                        ? asset.value + change
+                                        : asset.value - change;
                                     final valueChanged =
                                         (newValue - asset.value).abs() > 0.01;
 
-                                    bool cashInvolved = true;
-                                    if (valueChanged) {
-                                      // Prompt user for cash involvement
-                                      final cashPrompt = await showDialog<bool>(
-                                        context: builderContext,
-                                        builder: (dialogCtx) {
-                                          return AlertDialog(
-                                            title: const Text('Cash Involved?'),
-                                            content: Text(
-                                              'Did cash or bank money leave or enter your hands for this value change of ${_formatAmount((newValue - asset.value).abs())}?\n\n'
-                                              '• Yes: logs an automatic transaction ("Asset Purchase" / "Asset Sale")\n'
-                                              '• No: updates asset value only (gift, inheritance, revaluation, loss)',
-                                            ),
-                                            actions: [
-                                              TextButton(
-                                                onPressed: () => Navigator.pop(
-                                                  dialogCtx,
-                                                  false,
-                                                ),
-                                                child: const Text('No Cash'),
-                                              ),
-                                              ElevatedButton(
-                                                onPressed: () => Navigator.pop(
-                                                  dialogCtx,
-                                                  true,
-                                                ),
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: const Color(
-                                                    0xFF0F6B57,
-                                                  ),
-                                                  foregroundColor: Colors.white,
-                                                ),
-                                                child: const Text(
-                                                  'Yes (Cash Involved)',
-                                                ),
-                                              ),
-                                            ],
+                                    if (valueChanged && cashInvolved) {
+                                      if (assetEditContext.mounted) {
+                                        Navigator.pop(assetEditContext);
+                                      }
+                                      final transactionSaved =
+                                          await _openAssetAdjustmentTransaction(
+                                            asset,
+                                            change,
+                                            isIncrease,
+                                            reason,
                                           );
-                                        },
-                                      );
-                                      cashInvolved = cashPrompt ?? true;
+                                      if (!transactionSaved || !mounted) {
+                                        return;
+                                      }
                                     }
 
                                     final updatedAsset = asset.copyWith(
-                                      name: newName,
-                                      category: selectedCategory,
                                       value: newValue,
                                       updatedAt: DateTime.now(),
                                     );
@@ -2849,40 +2711,10 @@ class _AssetsPageState extends State<_AssetsPage> {
                                       updatedAsset.toMap(),
                                     );
 
-                                    if (valueChanged &&
-                                        cashInvolved &&
-                                        mounted) {
-                                      final isIncrease = newValue > asset.value;
-                                      final diff = (newValue - asset.value)
-                                          .abs();
-
-                                      context.read<TransactionBloc>().add(
-                                        AddTransaction(
-                                          entity.Transaction(
-                                            userId: userId,
-                                            title: isIncrease
-                                                ? 'Asset Purchase - $newName'
-                                                : 'Asset Sale - $newName',
-                                            beneficiary: newName,
-                                            purpose: isIncrease
-                                                ? 'Additional purchase/investment in $newName'
-                                                : 'Sale/disposal from $newName',
-                                            amount: diff,
-                                            isExpense: isIncrease,
-                                            date: DateTime.now(),
-                                            category: isIncrease
-                                                ? 'Asset Purchase'
-                                                : 'Asset Sale',
-                                            assetId: asset.id,
-                                            linkedCounterpartyOrAsset: newName,
-                                          ),
-                                        ),
-                                      );
+                                    if (assetEditContext.mounted) {
+                                      Navigator.pop(assetEditContext);
                                     }
 
-                                    if (bottomSheetContext.mounted) {
-                                      Navigator.pop(bottomSheetContext);
-                                    }
                                     _loadAssets();
                                     if (mounted) {
                                       messenger.showSnackBar(
@@ -2920,6 +2752,78 @@ class _AssetsPageState extends State<_AssetsPage> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Future<bool> _openAssetAdjustmentTransaction(
+    Asset asset,
+    double amount,
+    bool isIncrease,
+    String reason,
+  ) async {
+    if (!mounted) return false;
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) => _TransactionsPage(
+          categoryPreferences: _categoryPreferences,
+          filter: isIncrease
+              ? TransactionTypeFilter.expense
+              : TransactionTypeFilter.income,
+          onFilterChanged: (_) {},
+          showAppBar: true,
+          showTypeFilter: false,
+          onParentCategorySelected: (parentCategory, categoryOptions) async {
+            final categorySaved = await Navigator.of(context).push<bool>(
+              MaterialPageRoute(
+                builder: (context) => AddTransactionPage(
+                  parentCategory: parentCategory,
+                  categoryOptions: categoryOptions,
+                  categoryPreferences: _categoryPreferences,
+                  initialIsExpense: isIncrease,
+                  initialAmount: amount,
+                  initialPurpose: reason.isEmpty
+                      ? asset.name
+                      : '${asset.name}: $reason',
+                  initialDate: DateTime.now(),
+                  isSettlement: true,
+                  assetId: asset.id,
+                  linkedCounterpartyOrAsset: asset.name,
+                ),
+              ),
+            );
+            if (categorySaved == true && context.mounted) {
+              Navigator.of(context).pop(true);
+            }
+          },
+        ),
+      ),
+    );
+    return saved == true;
+  }
+
+  Widget _assetChoiceButton({
+    required String label,
+    required bool selected,
+    required VoidCallback onPressed,
+  }) {
+    return SizedBox(
+      height: 42,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          backgroundColor: selected
+              ? const Color(0xFF003B2F)
+              : Colors.transparent,
+          foregroundColor: selected ? Colors.white : const Color(0xFF1E3A2F),
+          side: BorderSide(
+            color: selected ? const Color(0xFF003B2F) : const Color(0xFFD2E3DE),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+        child: Text(label),
       ),
     );
   }
@@ -3290,43 +3194,37 @@ class _MorePage extends StatefulWidget {
 }
 
 class _MorePageState extends State<_MorePage> {
-  Future<void> _confirmLogout(BuildContext context) async {
-    final confirmed =
-        await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Log out?'),
-            content: const Text('You will need to sign in again to continue.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Logout'),
-              ),
-            ],
+  Widget _buildSection(String title, List<Widget> items) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8, top: 16),
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1E3A2F),
+            ),
           ),
-        ) ??
-        false;
-    if (confirmed && context.mounted) {
-      await context.read<AuthService>().signOut();
-    }
-  }
-
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 8, top: 12),
-      child: Text(
-        title.toUpperCase(),
-        style: const TextStyle(
-          fontSize: 11.5,
-          fontWeight: FontWeight.w800,
-          color: Color(0xFF0F6B57),
-          letterSpacing: 0.8,
         ),
-      ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final itemWidth = (constraints.maxWidth - 12) / 2;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: items
+                  .map(
+                    (item) =>
+                        SizedBox(width: itemWidth, height: 145, child: item),
+                  )
+                  .toList(),
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -3336,130 +3234,169 @@ class _MorePageState extends State<_MorePage> {
     return ListView(
       padding: EdgeInsets.fromLTRB(16, 8, 16, bottomPadding),
       children: [
-        // 1. Account Section
-        _buildSectionHeader('Account'),
-        Card(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: Colors.grey.shade200),
+        Text(
+          'More Tools',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w900,
+            color: const Color(0xFF1E3A2F),
           ),
-          child: Column(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.person_outline),
-                title: const Text('Profile'),
-                subtitle: const Text('Manage your account and tax details'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (context) => const _ProfilePage()),
-                ),
-              ),
-              const Divider(height: 1, indent: 56),
-              ListTile(
-                leading: Icon(Icons.logout, color: Colors.red.shade700),
-                title: Text(
-                  'Logout',
-                  style: TextStyle(
-                    color: Colors.red.shade700,
-                    fontWeight: FontWeight.w700,
+        ),
+        _buildSection('Financials', [
+          _MoreMenuTile(
+            icon: Icons.calculate_outlined,
+            title: 'Calculators',
+            subtitle: 'Tax, percentage and zakat tools',
+            color: const Color(0xFF0F6B57),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (context) => const _CalculatorsPage()),
+            ),
+          ),
+          if (widget.categoryPreferences != null)
+            _MoreMenuTile(
+              icon: Icons.compare_arrows_rounded,
+              title: 'Comparison',
+              subtitle: 'Compare year-over-year stats',
+              color: const Color(0xFF3949AB),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => _ComparisonDashboardPage(
+                    categoryPreferences: widget.categoryPreferences!,
                   ),
                 ),
-                onTap: () => _confirmLogout(context),
               ),
-            ],
+            ),
+        ]),
+        _buildSection('Backup & Restore', [
+          const _DriveSyncButton(asListTile: true, action: _DriveAction.backup),
+          const _DriveSyncButton(
+            asListTile: true,
+            action: _DriveAction.restore,
           ),
-        ),
-
-        // 2. Finance Tools Section
-        _buildSectionHeader('Finance Tools'),
-        Card(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: Colors.grey.shade200),
+        ]),
+        _buildSection('About & Support', [
+          _MoreMenuTile(
+            icon: Icons.info_outline,
+            title: 'About',
+            subtitle: 'About Filer Flow',
+            color: const Color(0xFF6D4C41),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (context) => const _AboutPage())),
           ),
-          child: Column(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.calculate_outlined),
-                title: const Text('Tax Calculator'),
-                subtitle: const Text(
-                  'Compute salary and business tax brackets',
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          TaxCalculatorScreen(appBarTitle: 'Tax Calculator'),
-                    ),
-                  );
-                },
-              ),
-              if (widget.categoryPreferences != null) ...[
-                const Divider(height: 1, indent: 56),
-                ListTile(
-                  leading: const Icon(Icons.compare_arrows_rounded),
-                  title: const Text('Comparison Dashboard'),
-                  subtitle: const Text(
-                    'Compare year-over-year financial stats',
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => _ComparisonDashboardPage(
-                          categoryPreferences: widget.categoryPreferences!,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ],
+          _MoreMenuTile(
+            icon: Icons.help_outline,
+            title: 'Support',
+            subtitle: 'Get help with Filer Flow',
+            color: const Color(0xFF00897B),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (context) => const _SupportPage()),
+            ),
           ),
-        ),
-
-        // 3. Data Section
-        _buildSectionHeader('Data'),
-        Card(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: Colors.grey.shade200),
-          ),
-          child: const _DriveSyncButton(asListTile: true),
-        ),
-
-        // 4. Support Section
-        _buildSectionHeader('Support'),
-        Card(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: Colors.grey.shade200),
-          ),
-          child: Column(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.help_outline),
-                title: const Text('Help & Support'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (context) => const _SupportPage()),
-                ),
-              ),
-              const Divider(height: 1, indent: 56),
-              ListTile(
-                leading: const Icon(Icons.info_outline),
-                title: const Text('About'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (context) => const _AboutPage()),
-                ),
-              ),
-            ],
-          ),
-        ),
+        ]),
       ],
     );
+  }
+}
+
+class _MoreMenuTile extends StatelessWidget {
+  const _MoreMenuTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: color, size: 28),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11, color: Colors.black54),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CalculatorsPage extends StatelessWidget {
+  const _CalculatorsPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Calculators')),
+      body: GridView.count(
+        padding: const EdgeInsets.all(16),
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1.25,
+        children: [
+          _MoreMenuTile(
+            icon: Icons.account_balance_outlined,
+            title: 'Tax Calculator',
+            subtitle: 'Salary and business tax',
+            color: const Color(0xFF0F6B57),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) =>
+                    const TaxCalculatorScreen(appBarTitle: 'Tax Calculator'),
+              ),
+            ),
+          ),
+          _MoreMenuTile(
+            icon: Icons.percent_rounded,
+            title: 'Percentage Calculator',
+            subtitle: 'Calculate percentages quickly',
+            color: const Color(0xFF3949AB),
+            onTap: () => _showComingSoon(context, 'Percentage Calculator'),
+          ),
+          _MoreMenuTile(
+            icon: Icons.volunteer_activism_outlined,
+            title: 'Zakat Calculator',
+            subtitle: 'Calculate zakat on your wealth',
+            color: const Color(0xFF2E7D32),
+            onTap: () => _showComingSoon(context, 'Zakat Calculator'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static void _showComingSoon(BuildContext context, String title) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$title will be available soon.')));
   }
 }
 
@@ -4788,11 +4725,6 @@ class _ProfilePageState extends State<_ProfilePage>
             onPressed: _isUpdatingProfile ? null : _refreshAccount,
             icon: const Icon(Icons.refresh),
           ),
-          IconButton(
-            tooltip: 'Log out',
-            onPressed: _isUpdatingProfile ? null : _signOut,
-            icon: const Icon(Icons.logout),
-          ),
         ],
       ),
       body: SafeArea(
@@ -4823,6 +4755,13 @@ class _ProfilePageState extends State<_ProfilePage>
                             onPressed: _isPickingImage
                                 ? null
                                 : _pickProfileImage,
+                            style: IconButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              disabledBackgroundColor: AppColors.primary
+                                  .withValues(alpha: 0.65),
+                              disabledForegroundColor: Colors.white70,
+                            ),
                             icon: _isPickingImage
                                 ? const SizedBox.square(
                                     dimension: 18,
@@ -4953,6 +4892,22 @@ class _ProfilePageState extends State<_ProfilePage>
                       onTap: _sendEmailVerification,
                     ),
                   ],
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: Icon(
+                      Icons.logout_rounded,
+                      color: Colors.red.shade700,
+                    ),
+                    title: Text(
+                      'Log out',
+                      style: TextStyle(
+                        color: Colors.red.shade700,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    subtitle: const Text('Sign out of this account'),
+                    onTap: _isUpdatingProfile ? null : _signOut,
+                  ),
                   const Divider(height: 1),
                   ListTile(
                     leading: _isDeletingAccount
@@ -5317,7 +5272,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
-        color: Color(0xFF06231C),
+        color: AppColors.primary,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
       padding: EdgeInsets.only(
@@ -5572,12 +5527,54 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                       const SizedBox(height: 14),
                       Align(
                         alignment: Alignment.centerRight,
-                        child: _PrintTransactionsButton(
-                          transactions: visibleTransactions,
-                          filterLabel: _transactionFilterLabel(
-                            selectedFinancialYear: _selectedFinancialYear,
-                            selectedMonth: _selectedMonth,
-                          ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: _PrintTransactionsButton(
+                                transactions: visibleTransactions,
+                                filterLabel: _transactionFilterLabel(
+                                  selectedFinancialYear: _selectedFinancialYear,
+                                  selectedMonth: _selectedMonth,
+                                ),
+                                accentColor: AppColors.forest,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          _AllTransactionsPage(
+                                            categoryPreferences:
+                                                widget.categoryPreferences,
+                                          ),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.receipt_long_outlined),
+                                label: const FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text('View All Transactions'),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.forest,
+                                  side: const BorderSide(
+                                    color: AppColors.forest,
+                                  ),
+                                  minimumSize: Size.zero,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 12,
+                                  ),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -5799,9 +5796,10 @@ class _HomeDashboardState extends State<_HomeDashboard> {
 }
 
 class _DriveSyncButton extends StatefulWidget {
-  const _DriveSyncButton({this.asListTile = false});
+  const _DriveSyncButton({this.asListTile = false, this.action});
 
   final bool asListTile;
+  final _DriveAction? action;
 
   @override
   State<_DriveSyncButton> createState() => _DriveSyncButtonState();
@@ -5860,11 +5858,12 @@ class _DriveSyncButtonState extends State<_DriveSyncButton> {
       debugPrint('DRIVE BACKUP/RESTORE ERROR: $e');
       debugPrint('STACK TRACE: $stackTrace');
       if (!mounted) return;
+      final message = _isNetworkError(e)
+          ? 'No internet connection. Check your connection and try again.'
+          : 'Google Drive operation failed. Please try again.';
       messenger
         ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(content: Text('Google Drive operation failed: $e')),
-        );
+        ..showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) {
         setState(() {
@@ -5872,6 +5871,20 @@ class _DriveSyncButtonState extends State<_DriveSyncButton> {
         });
       }
     }
+  }
+
+  bool _isNetworkError(Object error) {
+    if (error is SocketException || error is TimeoutException) return true;
+    final message = error.toString().toLowerCase();
+    return message.contains('socketexception') ||
+        message.contains('failed host lookup') ||
+        message.contains('connection refused') ||
+        message.contains('connection reset') ||
+        message.contains('network is unreachable') ||
+        message.contains('timed out') ||
+        message.contains('timeout') ||
+        message.contains('no internet') ||
+        message.contains('internet connection');
   }
 
   Future<bool> _confirmRestore() async {
@@ -5902,6 +5915,43 @@ class _DriveSyncButtonState extends State<_DriveSyncButton> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.action != null) {
+      final isRestore = widget.action == _DriveAction.restore;
+      return Card(
+        margin: EdgeInsets.zero,
+        child: InkWell(
+          onTap: _isWorking ? null : () => _runDriveOperation(widget.action!),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  isRestore
+                      ? Icons.restore_outlined
+                      : Icons.cloud_upload_outlined,
+                  color: const Color(0xFF1565C0),
+                  size: 28,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  isRestore ? 'Restore' : 'Backup',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isRestore ? 'Restore from Google Drive' : 'Back up your data',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11, color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return PopupMenuButton<_DriveAction>(
       tooltip: 'Google Drive backup and restore',
       enabled: !_isWorking,
@@ -6479,6 +6529,10 @@ class TopCategoryCharts extends StatelessWidget {
             ),
             icon: const Icon(Icons.trending_up_rounded, size: 18),
             label: const Text('Top 5 Income'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.forest,
+              side: const BorderSide(color: AppColors.forest),
+            ),
           ),
         ),
         const SizedBox(width: 10),
@@ -6494,8 +6548,16 @@ class TopCategoryCharts extends StatelessWidget {
               color: Colors.red.shade600,
               icon: Icons.trending_down_rounded,
             ),
-            icon: const Icon(Icons.trending_down_rounded, size: 18),
+            icon: Icon(
+              Icons.trending_down_rounded,
+              size: 18,
+              color: Colors.red.shade700,
+            ),
             label: const Text('Top 5 Expenses'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.red.shade700,
+              side: BorderSide(color: Colors.red.shade700),
+            ),
           ),
         ),
       ],
@@ -6762,13 +6824,32 @@ class _HorizontalCategoryLollipop extends StatelessWidget {
                         .toDouble();
 
                     return SizedBox(
-                      height: markerSize,
+                      height: markerSize + 18,
                       child: Stack(
                         children: [
                           Positioned(
+                            left: (markerCenter - 24)
+                                .clamp(0.0, constraints.maxWidth - 48)
+                                .toDouble(),
+                            top: 0,
+                            width: 48,
+                            height: 16,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                percentageLabel,
+                                style: TextStyle(
+                                  color: color,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
                             left: 0,
                             right: 0,
-                            top: 16,
+                            top: 34,
                             height: 4,
                             child: DecoratedBox(
                               decoration: BoxDecoration(
@@ -6779,7 +6860,7 @@ class _HorizontalCategoryLollipop extends StatelessWidget {
                           ),
                           Positioned(
                             left: 0,
-                            top: 16,
+                            top: 34,
                             width: activeLineWidth,
                             height: 4,
                             child: DecoratedBox(
@@ -6791,7 +6872,7 @@ class _HorizontalCategoryLollipop extends StatelessWidget {
                           ),
                           Positioned(
                             left: markerLeft,
-                            top: 0,
+                            top: 18,
                             width: markerSize,
                             height: markerSize,
                             child: DecoratedBox(
@@ -6809,23 +6890,6 @@ class _HorizontalCategoryLollipop extends StatelessWidget {
                                     offset: const Offset(0, 2),
                                   ),
                                 ],
-                              ),
-                              child: Center(
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(4),
-                                    child: Text(
-                                      percentageLabel,
-                                      maxLines: 1,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 8,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
-                                  ),
-                                ),
                               ),
                             ),
                           ),
@@ -6914,11 +6978,13 @@ class _PrintTransactionsButton extends StatefulWidget {
     required this.transactions,
     required this.filterLabel,
     this.buttonLabel = 'Print report',
+    this.accentColor,
   });
 
   final List<entity.Transaction> transactions;
   final String filterLabel;
   final String buttonLabel;
+  final Color? accentColor;
 
   @override
   State<_PrintTransactionsButton> createState() =>
@@ -6958,12 +7024,24 @@ class _PrintTransactionsButtonState extends State<_PrintTransactionsButton> {
           )
         : const Icon(Icons.print_outlined);
     return OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: widget.accentColor,
+        side: widget.accentColor == null
+            ? null
+            : BorderSide(color: widget.accentColor!),
+        minimumSize: Size.zero,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
       onPressed: enabled ? _print : null,
       icon: icon,
-      label: Text(
-        widget.transactions.isEmpty
-            ? 'No transactions to print'
-            : widget.buttonLabel,
+      label: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          widget.transactions.isEmpty
+              ? 'No transactions to print'
+              : widget.buttonLabel,
+        ),
       ),
     );
   }
@@ -9555,6 +9633,20 @@ String _compactChartAmount(double amount) {
   return amount.toStringAsFixed(0);
 }
 
+String _formatPieBalance(double amount) {
+  final absolute = amount.abs();
+  final sign = amount < 0
+      ? '-'
+      : amount > 0
+      ? '+'
+      : '';
+  if (absolute >= 1000000) {
+    final millions = (absolute / 1000000).toStringAsFixed(1);
+    return '$sign${millions}M';
+  }
+  return '$sign${_formatNumber(absolute)}';
+}
+
 class IncomeExpensePiePanel extends StatelessWidget {
   const IncomeExpensePiePanel({super.key, required this.transactions});
 
@@ -9641,7 +9733,7 @@ class IncomeExpensePiePanel extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           SizedBox(
-            height: 160,
+            height: 180,
             child: chartTotal <= 0
                 ? const _EmptyPieChart()
                 : Stack(
@@ -9649,7 +9741,7 @@ class IncomeExpensePiePanel extends StatelessWidget {
                     children: [
                       PieChart(
                         PieChartData(
-                          centerSpaceRadius: 43,
+                          centerSpaceRadius: 50,
                           sectionsSpace: 3,
                           startDegreeOffset: -90,
                           borderData: FlBorderData(show: false),
@@ -9658,11 +9750,11 @@ class IncomeExpensePiePanel extends StatelessWidget {
                               PieChartSectionData(
                                 value: positiveBalance,
                                 color: const Color(0xFF00C853),
-                                radius: 32,
+                                radius: 48,
                                 title: '$savedPct%',
                                 showTitle: true,
                                 titleStyle: const TextStyle(
-                                  fontSize: 10,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.w900,
                                   color: Colors.white,
                                 ),
@@ -9672,11 +9764,11 @@ class IncomeExpensePiePanel extends StatelessWidget {
                               PieChartSectionData(
                                 value: totalExpenses,
                                 color: const Color(0xFFFF1744),
-                                radius: 32,
+                                radius: 48,
                                 title: '$spentPct%',
                                 showTitle: true,
                                 titleStyle: const TextStyle(
-                                  fontSize: 10,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.w900,
                                   color: Colors.white,
                                 ),
@@ -9698,21 +9790,28 @@ class IncomeExpensePiePanel extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 2),
+                          const Text(
+                            'PKR',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.black54,
+                            ),
+                          ),
                           FittedBox(
                             fit: BoxFit.scaleDown,
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 16.0,
+                                horizontal: 12.0,
                               ),
                               child: Text(
-                                _formatSignedDashboardMoney(netBalance),
+                                _formatPieBalance(netBalance),
                                 style: TextStyle(
-                                  fontSize: 14,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.w900,
                                   color: netBalance < 0
                                       ? const Color(0xFFE52E3D)
                                       : const Color(0xFF0F9D58),
-                                  letterSpacing: -0.4,
                                 ),
                               ),
                             ),

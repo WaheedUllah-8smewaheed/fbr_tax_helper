@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppColors {
-  static const primary = Color(0xFF0F6B57);
+  static const primary = Color(0xFF168F73);
   static const primaryDark = Color(0xFF092B29);
   // Shared Khata-inspired brand palette for authenticated screens.
   static const forest = Color(0xFF1E3A2F);
@@ -230,7 +230,7 @@ abstract final class AppTheme {
         displayColor: AppColors.ink,
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.primaryDark,
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
         toolbarHeight: 64,

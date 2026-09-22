@@ -27,6 +27,10 @@ class AddTransactionPage extends StatefulWidget {
     this.categoryPreferences,
     this.onViewCategoryHistory,
     this.appBarActions = const [],
+    this.isSettlement = false,
+    this.khataEntryId,
+    this.assetId,
+    this.linkedCounterpartyOrAsset,
   });
 
   final entity.Transaction? transaction;
@@ -43,6 +47,10 @@ class AddTransactionPage extends StatefulWidget {
   final void Function(String category, {required bool includeSubcategories})?
   onViewCategoryHistory;
   final List<Widget> appBarActions;
+  final bool isSettlement;
+  final int? khataEntryId;
+  final int? assetId;
+  final String? linkedCounterpartyOrAsset;
 
   bool get isEditing => transaction != null;
 
@@ -124,8 +132,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
           widget.initialIsExpense ??
           (_selectedCategory == null
               ? (widget.parentCategory != null
-                  ? _categoryPreferences.isExpense(widget.parentCategory!)
-                  : true)
+                    ? _categoryPreferences.isExpense(widget.parentCategory!)
+                    : true)
               : _categoryPreferences.isExpense(_selectedCategory!));
     }
     if (_hasCategoryOptions) {
@@ -304,6 +312,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       date: _selectedDate,
       category: _selectedCategory!,
       receiptImagePath: _receiptImagePath,
+      khataEntryId: widget.khataEntryId,
+      assetId: widget.assetId,
+      linkedCounterpartyOrAsset: widget.linkedCounterpartyOrAsset,
     );
 
     context.read<TransactionBloc>().add(
@@ -439,14 +450,16 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                           _buildTransactionDetailsFields(),
                           const SizedBox(height: 16),
                         ],
-                        OutlinedButton.icon(
-                          onPressed: _selectDate,
-                          icon: const Icon(Icons.calendar_today_outlined),
-                          label: Text(
-                            _selectedDate.toLocal().toString().split(' ')[0],
+                        if (!widget.isSettlement)
+                          OutlinedButton.icon(
+                            onPressed: _selectDate,
+                            icon: const Icon(Icons.calendar_today_outlined),
+                            label: Text(
+                              _selectedDate.toLocal().toString().split(' ')[0],
+                            ),
                           ),
-                        ),
-                        if (canSelectTransactionType) ...[
+                        if (canSelectTransactionType &&
+                            !widget.isSettlement) ...[
                           const SizedBox(height: 16),
                           SegmentedButton<bool>(
                             expandedInsets: EdgeInsets.zero,
@@ -469,6 +482,16 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                                 _isExpense = selection.first;
                               });
                             },
+                          ),
+                        ],
+                        if (widget.isSettlement) ...[
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: _selectDate,
+                            icon: const Icon(Icons.calendar_today_outlined),
+                            label: Text(
+                              _selectedDate.toLocal().toString().split(' ')[0],
+                            ),
                           ),
                         ],
                         const SizedBox(height: 12),
@@ -511,7 +534,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   void _selectCategory(String category) {
     final categoryChanged = _selectedCategory != category;
     setState(() {
-      if (categoryChanged) {
+      if (categoryChanged && !widget.isSettlement) {
         _purposeController.clear();
         _amountController.clear();
       }
@@ -544,7 +567,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         TextFormField(
           controller: _purposeController,
           decoration: const InputDecoration(
-            labelText: 'Description (optional)',
+            labelText: 'Description',
             border: OutlineInputBorder(),
           ),
           textCapitalization: TextCapitalization.sentences,
@@ -554,6 +577,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         const SizedBox(height: 14),
         TextFormField(
           controller: _amountController,
+          readOnly: widget.isSettlement,
           decoration: const InputDecoration(
             labelText: 'Amount',
             prefixText: 'PKR ',
