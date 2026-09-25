@@ -60,6 +60,7 @@ dependencies:
   sqflite_common_ffi_web: ^1.1.1
   sqflite_common_ffi: ^2.4.0+3
   firebase_app_check: ^0.3.2+10
+  google_mobile_ads: ^9.1.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

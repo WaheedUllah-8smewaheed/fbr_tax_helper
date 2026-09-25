@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fbr_tax_helper/firebase_options.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -31,7 +32,14 @@ void main() async {
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await _activateAppCheck();
+  await _initializeAds();
   runApp(MyApp());
+}
+
+Future<void> _initializeAds() async {
+  if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+    await MobileAds.instance.initialize();
+  }
 }
 
 Future<void> _activateAppCheck() async {

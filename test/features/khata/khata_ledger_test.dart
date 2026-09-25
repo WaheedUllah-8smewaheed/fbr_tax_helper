@@ -153,11 +153,11 @@ void main() {
       await tester.pumpAndSettle();
 
       // Switch to Khata tab
-      await tester.tap(find.text('Khata'));
+      await tester.tap(find.text('Khata').first);
       await tester.pumpAndSettle();
 
       // Verify header and only 2 distribution tabs (Payable and Receivable; no Both)
-      expect(find.text('Khata'), findsOneWidget);
+      expect(find.text('Khata'), findsWidgets);
       expect(find.text('Payable'), findsWidgets);
       expect(find.text('Receivable'), findsWidgets);
       expect(find.text('Both'), findsNothing);

@@ -244,19 +244,6 @@ class TransactionReportService {
         pageTheme: pw.PageTheme(
           pageFormat: pageFormat,
           margin: const pw.EdgeInsets.all(32),
-          buildBackground: (_) => pw.Center(
-            child: pw.Transform.rotate(
-              angle: -0.30,
-              child: pw.Text(
-                'Filer Flow',
-                style: pw.TextStyle(
-                  fontSize: 68,
-                  fontWeight: pw.FontWeight.bold,
-                  color: PdfColor.fromHex('#A8BDB5'),
-                ),
-              ),
-            ),
-          ),
         ),
         footer: (context) => _reportFooter(context),
         build: (context) => [
@@ -327,19 +314,6 @@ class TransactionReportService {
         pageTheme: pw.PageTheme(
           pageFormat: pageFormat,
           margin: const pw.EdgeInsets.all(32),
-          buildBackground: (context) => pw.Center(
-            child: pw.Transform.rotate(
-              angle: -0.30,
-              child: pw.Text(
-                'Filer Flow',
-                style: pw.TextStyle(
-                  fontSize: 76,
-                  fontWeight: pw.FontWeight.bold,
-                  color: PdfColor.fromHex('#F1F7F5'),
-                ),
-              ),
-            ),
-          ),
         ),
         footer: (context) => pw.Container(
           padding: const pw.EdgeInsets.only(top: 8),

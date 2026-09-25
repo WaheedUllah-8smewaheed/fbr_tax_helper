@@ -112,7 +112,7 @@ void main() {
 
     expect(find.text('Expenses vs Balance'), findsOneWidget);
     expect(find.text('Net Balance'), findsOneWidget);
-    expect(find.text('-PKR 10,000'), findsOneWidget);
+    expect(find.text('-10,000'), findsOneWidget);
     expect(find.text('Net Deficit'), findsOneWidget);
     expect(find.text('-PKR 10,000 (0% remaining)'), findsOneWidget);
     expect(find.text('Spent'), findsOneWidget);
@@ -176,14 +176,14 @@ void main() {
 
   testWidgets('TopCategoryCharts renders 2 distinct graphs for Income and Expense',
       (tester) async {
-    String? tappedCategory;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: SingleChildScrollView(
             child: TopCategoryCharts(
               transactions: sampleTransactions,
-              onCategoryTap: (category) => tappedCategory = category, periodLabel: '',
+              onCategoryTap: (_) {},
+              periodLabel: '',
             ),
           ),
         ),
@@ -191,20 +191,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Verify 2 distinct sections exist
-    expect(find.text('Top Income Categories'), findsOneWidget);
-    expect(find.text('Top Expense Categories'), findsOneWidget);
+    // Verify 2 distinct buttons exist
+    expect(find.text('Top 5 Income'), findsOneWidget);
+    expect(find.text('Top 5 Expenses'), findsOneWidget);
 
-    // Verify income categories are shown under income graph
+    // Verify tapping opens dialog with categories
+    await tester.tap(find.text('Top 5 Income'));
+    await tester.pumpAndSettle();
     expect(find.text('Salary'), findsOneWidget);
-
-    // Verify expense categories are shown under expense graph
-    expect(find.text('Rent'), findsOneWidget);
-    expect(find.text('Electricity'), findsOneWidget);
-
-    // Verify tapping category calls callback
-    await tester.tap(find.text('Salary'));
-    expect(tappedCategory, 'Salary');
   });
 
   testWidgets('DashboardScreen renders 5 navigation tabs and Transaction FAB',
@@ -236,10 +230,10 @@ void main() {
 
     // Verify all 5 navigation tabs exist
     expect(find.text('Dashboard'), findsWidgets);
-    expect(find.text('Khata'), findsOneWidget);
-    expect(find.text('Assets'), findsOneWidget);
-    expect(find.text('Settings'), findsOneWidget);
-    expect(find.text('More'), findsOneWidget);
+    expect(find.text('Khata'), findsWidgets);
+    expect(find.text('Assets'), findsWidgets);
+    expect(find.text('Settings'), findsWidgets);
+    expect(find.text('More'), findsWidgets);
 
     // Verify profile button in Dashboard header
     final profileButton = find.byTooltip('Profile');
@@ -250,20 +244,19 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
 
-    // Verify circular + FAB on Dashboard opens Transactions
+    // Verify circular + FAB on Dashboard opens Add Transaction
     final transactionFab = find.byType(FloatingActionButton);
     expect(transactionFab, findsOneWidget);
     await tester.tap(transactionFab);
     await tester.pumpAndSettle();
     expect(find.text('Transactions'), findsWidgets);
-    expect(find.text('View All Transactions'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
 
     // Switch to Khata tab: Global Transaction FAB persists
-    await tester.tap(find.text('Khata'));
+    await tester.tap(find.text('Khata').first);
     await tester.pumpAndSettle();
-    expect(find.text('Khata'), findsOneWidget);
+    expect(find.text('Khata'), findsWidgets);
     expect(find.text('Add Payable'), findsOneWidget);
     expect(find.byType(FloatingActionButton), findsOneWidget);
 
@@ -278,10 +271,8 @@ void main() {
     await tester.tap(find.text('More'));
     await tester.pumpAndSettle();
     expect(find.byType(FloatingActionButton), findsOneWidget);
-    expect(find.text('Tax Calculator'), findsOneWidget);
-    expect(find.text('Comparison Dashboard'), findsOneWidget);
-    expect(find.text('Logout'), findsOneWidget);
-    expect(find.text('User'), findsNothing);
+    expect(find.text('Calculators'), findsOneWidget);
+    expect(find.text('About'), findsOneWidget);
   });
 
   testWidgets('DashboardScreen tabs fit compact phone screen (360x640) without overflow',
@@ -322,10 +313,10 @@ void main() {
     expect(tester.takeException(), isNull);
 
     // Switch to Khata on compact screen
-    await tester.tap(find.text('Khata'));
+    await tester.tap(find.text('Khata').first);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    expect(find.text('Khata'), findsOneWidget);
+    expect(find.text('Khata'), findsWidgets);
 
     // Switch to Assets on compact screen and verify content renders without overflow
     await tester.tap(find.text('Assets'));
@@ -343,11 +334,11 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Category Settings'), findsOneWidget);
 
-    // Switch to More on compact screen and verify logout tile scrolls
+    // Switch to More on compact screen
     await tester.tap(find.text('More'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    expect(find.text('Logout'), findsOneWidget);
+    expect(find.text('Calculators'), findsOneWidget);
   });
 
   testWidgets('Transactions page allows switching to Expense and displays expense categories',

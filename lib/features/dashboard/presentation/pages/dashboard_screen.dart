@@ -25,6 +25,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as path;
@@ -118,10 +119,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     const titles = ['Dashboard', 'Khata', 'Assets', 'Settings', 'More'];
-    return Scaffold(
-      appBar: _selectedIndex == 0
-          ? null
-          : AppBar(title: Text(titles[_selectedIndex])),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) async {
+        if (didPop) return;
+        if (_selectedIndex != 0) {
+          setState(() {
+            _selectedIndex = 0;
+          });
+        } else {
+          final shouldQuit = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Exit App'),
+              content: const Text('Are you sure you want to exit the application?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('No'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Yes'),
+                ),
+              ],
+            ),
+          );
+          if (shouldQuit == true) {
+            SystemNavigator.pop();
+          }
+        }
+      },
+      child: Scaffold(
+        appBar: _selectedIndex == 0
+            ? null
+            : AppBar(title: Text(titles[_selectedIndex])),
       body: ListenableBuilder(
         listenable: _categoryPreferences,
         builder: (context, _) => IndexedStack(
@@ -146,30 +178,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
       ),
-      floatingActionButton: _selectedIndex == 0
-          ? FloatingActionButton(
-              heroTag: 'add-transaction-fab',
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => _TransactionsPage(
-                      categoryPreferences: _categoryPreferences,
-                      filter: _transactionFilter,
-                      onFilterChanged: (filter) {
-                        setState(() => _transactionFilter = filter);
-                      },
-                      showAppBar: true,
-                    ),
-                  ),
-                );
-              },
-              backgroundColor: AppColors.warmGold,
-              foregroundColor: AppColors.forest,
-              elevation: 4,
-              shape: const CircleBorder(),
-              child: const Icon(Icons.add_rounded, size: 30),
-            )
-          : null,
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'add-transaction-fab',
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => _TransactionsPage(
+                categoryPreferences: _categoryPreferences,
+                filter: _transactionFilter,
+                onFilterChanged: (filter) {
+                  setState(() => _transactionFilter = filter);
+                },
+                showAppBar: true,
+              ),
+            ),
+          );
+        },
+        backgroundColor: AppColors.warmGold,
+        foregroundColor: AppColors.forest,
+        elevation: 4,
+        shape: const CircleBorder(),
+        child: const Icon(Icons.add_rounded, size: 30),
+      ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: AppColors.cream,
@@ -233,7 +263,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
       ),
-    );
+    ));
   }
 }
 
@@ -1259,6 +1289,9 @@ class _KhataPageState extends State<_KhataPage> {
                           TextFormField(
                             controller: partyController,
                             decoration: InputDecoration(
+                              labelText: isPayable
+                                  ? 'To (Supplier / Vendor / Person) *'
+                                  : 'From (Customer / Client / Debtor) *',
                               hintText: isPayable ? 'To' : 'From',
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -1327,8 +1360,9 @@ class _KhataPageState extends State<_KhataPage> {
                               Expanded(
                                 child: ElevatedButton(
                                   onPressed: () async {
-                                    if (!formKey.currentState!.validate())
+                                    if (!formKey.currentState!.validate()) {
                                       return;
+                                    }
                                     final user = context
                                         .read<AuthService>()
                                         .currentUser;
@@ -2404,8 +2438,9 @@ class _AssetsPageState extends State<_AssetsPage> {
                               Expanded(
                                 child: ElevatedButton(
                                   onPressed: () async {
-                                    if (!formKey.currentState!.validate())
+                                    if (!formKey.currentState!.validate()) {
                                       return;
+                                    }
                                     final user = context
                                         .read<AuthService>()
                                         .currentUser;
@@ -2676,8 +2711,9 @@ class _AssetsPageState extends State<_AssetsPage> {
                               Expanded(
                                 child: ElevatedButton(
                                   onPressed: () async {
-                                    if (!formKey.currentState!.validate())
+                                    if (!formKey.currentState!.validate()) {
                                       return;
+                                    }
                                     final change = double.parse(
                                       changeController.text.trim(),
                                     );
@@ -2904,7 +2940,7 @@ class _AssetsPageState extends State<_AssetsPage> {
                   children: [
                     const Expanded(
                       child: Text(
-                        'Assets',
+                        'Total Assets Value',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -5191,6 +5227,8 @@ class _HomeDashboardState extends State<_HomeDashboard> {
   double _totalPayable = 0.0;
   double _totalReceivable = 0.0;
   double _totalAssets = 0.0;
+  BannerAd? _bannerAd;
+  bool _isBannerAdLoaded = false;
 
   @override
   void initState() {
@@ -5199,6 +5237,45 @@ class _HomeDashboardState extends State<_HomeDashboard> {
     _selectedMonth = null;
     _loadProfileImage();
     _loadKhataAndAssetMetrics();
+    _loadBannerAd();
+  }
+
+  void _loadBannerAd() {
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) return;
+
+    // Dashboard-Banner
+    const dashboardBannerAdUnitId = 'ca-app-pub-9761861396179823/6624819291';
+    final adUnitId = Platform.isAndroid
+        ? dashboardBannerAdUnitId
+        : dashboardBannerAdUnitId;
+    final bannerAd = BannerAd(
+      adUnitId: adUnitId,
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          if (!mounted) {
+            ad.dispose();
+            return;
+          }
+          setState(() {
+            _bannerAd = ad as BannerAd;
+            _isBannerAdLoaded = true;
+          });
+        },
+        onAdFailedToLoad: (ad, error) {
+          debugPrint('Dashboard banner failed to load: ${error.message}');
+          ad.dispose();
+        },
+      ),
+    );
+    bannerAd.load();
+  }
+
+  @override
+  void dispose() {
+    _bannerAd?.dispose();
+    super.dispose();
   }
 
   Future<void> _loadKhataAndAssetMetrics() async {
@@ -5597,6 +5674,16 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                   ),
                 ),
               ),
+              if (_isBannerAdLoaded && _bannerAd != null)
+                SafeArea(
+                  top: false,
+                  child: Container(
+                    alignment: Alignment.center,
+                    width: _bannerAd!.size.width.toDouble(),
+                    height: _bannerAd!.size.height.toDouble(),
+                    child: AdWidget(ad: _bannerAd!),
+                  ),
+                ),
             ],
           );
         },
