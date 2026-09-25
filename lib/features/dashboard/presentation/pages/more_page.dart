@@ -818,16 +818,35 @@ class _CategorySettingsPage extends StatelessWidget {
         return ListView(
           padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPadding),
           children: [
-            Text(
-              'Category Settings',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Toggle a category to show or hide all its items, customize subcategories, or add new ones.',
-              style: Theme.of(context).textTheme.bodyMedium,
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                gradient: LinearGradient(
+                  colors: [Colors.teal.shade700, Colors.teal.shade500],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Category Settings',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Toggle a category to show or hide all its items, customize subcategories, or add new ones.',
+                    style: TextStyle(color: Colors.white.withAlpha(220), fontSize: 14),
+                  ),
+                ],
+              ),
             ),
             if (categoryPreferences.loadError != null) ...[
               const SizedBox(height: 12),
