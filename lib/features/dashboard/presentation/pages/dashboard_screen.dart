@@ -1198,6 +1198,7 @@ class _KhataPageState extends State<_KhataPage> {
     final partyController = TextEditingController(
       text: existingEntry?.party ?? '',
     );
+    bool fromIncome = existingEntry?.fromIncome ?? false;
     final formKey = GlobalKey<FormState>();
 
     await Navigator.of(context).push(
@@ -1338,6 +1339,20 @@ class _KhataPageState extends State<_KhataPage> {
                               return null;
                             },
                           ),
+                          if (!isPayable)
+                            CheckboxListTile(
+                              title: const Text('From Income'),
+                              subtitle: const Text('Minimize this amount from total income'),
+                              value: fromIncome,
+                              onChanged: (val) {
+                                setModalState(() {
+                                  fromIncome = val ?? false;
+                                });
+                              },
+                              contentPadding: EdgeInsets.zero,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              activeColor: AppColors.primary,
+                            ),
                           const SizedBox(height: 22),
                           Row(
                             children: [
@@ -1391,6 +1406,7 @@ class _KhataPageState extends State<_KhataPage> {
                                           existingEntry?.settledAmount ?? 0.0,
                                       isWrittenOff:
                                           existingEntry?.isWrittenOff ?? false,
+                                      fromIncome: fromIncome,
                                     );
 
                                     if (isEditing) {
@@ -1399,10 +1415,26 @@ class _KhataPageState extends State<_KhataPage> {
                                             entryToSave.toMap(),
                                           );
                                     } else {
-                                      await TaxDatabase.instance
+                                      final newKhataId = await TaxDatabase.instance
                                           .insertKhataEntry(
                                             entryToSave.toMap(),
                                           );
+                                      if (!isPayable && fromIncome) {
+                                         await TaxDatabase.instance.insertTransaction({
+                                            'userId': userId,
+                                            'title': 'Receivable: ${entryToSave.title}',
+                                            'beneficiary': entryToSave.party,
+                                            'purpose': 'Khata Loan (From Income)',
+                                            'amount': amount,
+                                            'isExpense': 1,
+                                            'date': entryToSave.date.toIso8601String(),
+                                            'category': 'Khata',
+                                            'khataEntryId': newKhataId,
+                                         });
+                                         if (bottomSheetContext.mounted) {
+                                           bottomSheetContext.read<TransactionBloc>().add(LoadTransactions(userId));
+                                         }
+                                      }
                                     }
 
                                     if (bottomSheetContext.mounted) {
@@ -2295,6 +2327,7 @@ class _AssetsPageState extends State<_AssetsPage> {
     final messenger = ScaffoldMessenger.of(context);
     final nameController = TextEditingController();
     final valueController = TextEditingController();
+    final descriptionController = TextEditingController();
     AssetCategory selectedCategory = AssetCategory.cash;
     final formKey = GlobalKey<FormState>();
 
@@ -2366,6 +2399,16 @@ class _AssetsPageState extends State<_AssetsPage> {
                             validator: (v) => (v == null || v.trim().isEmpty)
                                 ? 'Please enter a name'
                                 : null,
+                          ),
+                          const SizedBox(height: 14),
+                          TextFormField(
+                            controller: descriptionController,
+                            decoration: InputDecoration(
+                              hintText: 'Description (Optional)',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
                           ),
                           const SizedBox(height: 14),
                           DropdownButtonFormField<AssetCategory>(

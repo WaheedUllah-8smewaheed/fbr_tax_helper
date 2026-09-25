@@ -14,6 +14,7 @@ class KhataEntry extends Equatable {
     this.isPaid = false,
     this.settledAmount = 0.0,
     this.isWrittenOff = false,
+    this.fromIncome = false,
   });
 
   final int? id;
@@ -28,6 +29,7 @@ class KhataEntry extends Equatable {
   final bool isPaid;
   final double settledAmount;
   final bool isWrittenOff;
+  final bool fromIncome;
 
   double get remainingAmount => (amount - settledAmount).clamp(0.0, amount);
 
@@ -44,6 +46,7 @@ class KhataEntry extends Equatable {
     bool? isPaid,
     double? settledAmount,
     bool? isWrittenOff,
+    bool? fromIncome,
   }) {
     return KhataEntry(
       id: id ?? this.id,
@@ -58,6 +61,7 @@ class KhataEntry extends Equatable {
       isPaid: isPaid ?? this.isPaid,
       settledAmount: settledAmount ?? this.settledAmount,
       isWrittenOff: isWrittenOff ?? this.isWrittenOff,
+      fromIncome: fromIncome ?? this.fromIncome,
     );
   }
 
@@ -75,6 +79,7 @@ class KhataEntry extends Equatable {
       'isPaid': isPaid ? 1 : 0,
       'settledAmount': settledAmount,
       'isWrittenOff': isWrittenOff ? 1 : 0,
+      'fromIncome': fromIncome ? 1 : 0,
     };
   }
 
@@ -94,6 +99,7 @@ class KhataEntry extends Equatable {
       isPaid: (map['isPaid'] as int? ?? 0) == 1,
       settledAmount: (map['settledAmount'] as num?)?.toDouble() ?? 0.0,
       isWrittenOff: (map['isWrittenOff'] as int? ?? 0) == 1,
+      fromIncome: (map['fromIncome'] as int? ?? 0) == 1,
     );
   }
 
@@ -111,6 +117,7 @@ class KhataEntry extends Equatable {
         isPaid,
         settledAmount,
         isWrittenOff,
+        fromIncome,
       ];
 }
 

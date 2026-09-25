@@ -39,7 +39,8 @@ class TransactionReportService {
   }) async {
     final first = _ReportPeriodTotals.from(firstTransactions);
     final second = _ReportPeriodTotals.from(secondTransactions);
-    final activityDifference = second.activity - first.activity;
+    final incomeDifference = second.income - first.income;
+    final expenseDifference = second.expenses - first.expenses;
     final balanceDifference = second.balance - first.balance;
     final generatedAt = DateFormat(
       'dd MMM yyyy, h:mm a',
@@ -144,13 +145,18 @@ class TransactionReportService {
                 ),
                 pw.SizedBox(height: 10),
                 _totalRow(
-                  'Activity difference',
-                  _formatSignedMoney(activityDifference),
-                  emphasize: true,
+                  'Income difference',
+                  _formatSignedMoney(incomeDifference),
                 ),
                 _totalRow(
-                  'Balance difference',
+                  'Expense difference',
+                  _formatSignedMoney(expenseDifference),
+                ),
+                pw.Divider(color: PdfColors.grey400),
+                _totalRow(
+                  'Net Balance difference',
                   _formatSignedMoney(balanceDifference),
+                  emphasize: true,
                 ),
               ],
             ),

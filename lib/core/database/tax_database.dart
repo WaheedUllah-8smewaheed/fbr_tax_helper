@@ -20,7 +20,7 @@ class TaxDatabase {
 
     return await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -56,7 +56,8 @@ class TaxDatabase {
           description TEXT NOT NULL DEFAULT '',
           isPaid INTEGER NOT NULL DEFAULT 0,
           settledAmount REAL NOT NULL DEFAULT 0.0,
-          isWrittenOff INTEGER NOT NULL DEFAULT 0)
+          isWrittenOff INTEGER NOT NULL DEFAULT 0,
+          fromIncome INTEGER NOT NULL DEFAULT 0)
     ''');
     await db.execute('''
       CREATE TABLE assets (
@@ -66,7 +67,8 @@ class TaxDatabase {
           category TEXT NOT NULL,
           value REAL NOT NULL,
           createdAt TEXT NOT NULL,
-          updatedAt TEXT NOT NULL)
+          updatedAt TEXT NOT NULL,
+          description TEXT NOT NULL DEFAULT '')
     ''');
   }
 
@@ -166,7 +168,8 @@ class TaxDatabase {
             category TEXT NOT NULL,
             value REAL NOT NULL,
             createdAt TEXT NOT NULL,
-            updatedAt TEXT NOT NULL)
+            updatedAt TEXT NOT NULL,
+          description TEXT NOT NULL DEFAULT '')
       ''');
     }
   }

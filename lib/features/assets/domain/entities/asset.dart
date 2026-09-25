@@ -36,6 +36,7 @@ class Asset extends Equatable {
     required this.value,
     required this.createdAt,
     required this.updatedAt,
+    this.description = '',
   });
 
   final int? id;
@@ -45,6 +46,7 @@ class Asset extends Equatable {
   final double value;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String description;
 
   Asset copyWith({
     int? id,
@@ -54,6 +56,7 @@ class Asset extends Equatable {
     double? value,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? description,
   }) {
     return Asset(
       id: id ?? this.id,
@@ -63,6 +66,7 @@ class Asset extends Equatable {
       value: value ?? this.value,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      description: description ?? this.description,
     );
   }
 
@@ -75,6 +79,7 @@ class Asset extends Equatable {
       'value': value,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
+      'description': description,
     };
   }
 
@@ -89,6 +94,7 @@ class Asset extends Equatable {
           DateTime.now(),
       updatedAt: DateTime.tryParse(map['updatedAt'] as String? ?? '') ??
           DateTime.now(),
+      description: map['description'] as String? ?? '',
     );
   }
 
@@ -101,6 +107,7 @@ class Asset extends Equatable {
         value,
         createdAt,
         updatedAt,
+        description,
       ];
 }
 
