@@ -10,6 +10,40 @@ class _MorePage extends StatefulWidget {
 }
 
 class _MorePageState extends State<_MorePage> {
+
+  Widget _buildIntroCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [Colors.orange.shade700, Colors.orange.shade500],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'More Tools',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Access calculators, support, category preferences, and informative guides to manage your taxes effectively.',
+            style: TextStyle(color: Colors.white.withAlpha(220), fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSection(String title, List<Widget> items) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -50,6 +84,8 @@ class _MorePageState extends State<_MorePage> {
     return ListView(
       padding: EdgeInsets.fromLTRB(16, 8, 16, bottomPadding),
       children: [
+          _buildIntroCard(),
+          const SizedBox(height: 12),
         Text(
           'More Tools',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(

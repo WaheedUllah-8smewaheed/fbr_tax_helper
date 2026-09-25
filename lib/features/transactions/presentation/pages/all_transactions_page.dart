@@ -18,6 +18,41 @@ class _AllTransactionsPage extends StatefulWidget {
 }
 
 class _AllTransactionsPageState extends State<_AllTransactionsPage> {
+
+  Widget _buildIntroCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [Colors.indigo.shade600, Colors.indigo.shade400],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'All Transactions',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'View, filter, and manage all your income and expenses in one place. Export reports for any specific time period.',
+            style: TextStyle(color: Colors.white.withAlpha(220), fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+
   _TransactionDateFilter _dateFilter = _TransactionDateFilter.all;
   DateTime? _selectedMonth;
   DateTime? _rangeStart;
@@ -215,6 +250,8 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
                       if (constraints.maxWidth < 430) {
                         return Column(
                           children: [
+                  _buildIntroCard(),
+                  const SizedBox(height: 12),
                             _rangeDateField(isStart: true),
                             const SizedBox(height: 10),
                             _rangeDateField(isStart: false),
