@@ -1,28 +1,17 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:fbr_tax_helper/core/theme/colors.dart';
-import 'package:fbr_tax_helper/core/database/tax_database.dart';
-import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
-import 'package:fbr_tax_helper/features/khata/domain/entities/khata_entry.dart';
-import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction.dart' as entity;
-import 'package:fbr_tax_helper/features/transactions/presentation/bloc/transaction_bloc.dart';
-import 'package:fbr_tax_helper/features/transactions/services/category_preferences_service.dart';
+part of '../../../dashboard/presentation/pages/dashboard_screen.dart';
 
 enum KhataSegmentFilter { payable, receivable }
 
-class KhataPage extends StatefulWidget {
-  const KhataPage({super.key, required this.categoryPreferences});
+class _KhataPage extends StatefulWidget {
+  const _KhataPage({super.key, required this.categoryPreferences});
 
   final CategoryPreferencesService categoryPreferences;
 
   @override
-  State<KhataPage> createState() => KhataPageState();
+  State<_KhataPage> createState() => _KhataPageState();
 }
 
-class KhataPageState extends State<KhataPage> {
+class _KhataPageState extends State<_KhataPage> {
   KhataSegmentFilter _selectedFilter = KhataSegmentFilter.payable;
   List<KhataEntry> _entries = [];
   bool _isLoading = true;
@@ -1212,4 +1201,3 @@ class KhataPageState extends State<KhataPage> {
   }
 }
 
-class _AssetsPage extends StatefulWidget {
