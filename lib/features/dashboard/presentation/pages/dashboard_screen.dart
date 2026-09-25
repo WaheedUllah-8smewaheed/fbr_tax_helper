@@ -342,6 +342,41 @@ class _TransactionsPage extends StatefulWidget {
 }
 
 class _TransactionsPageState extends State<_TransactionsPage> {
+
+  Widget _buildIntroCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [Colors.green.shade700, Colors.green.shade500],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Record Transaction',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Select a category below to record a new income or expense transaction.',
+            style: TextStyle(color: Colors.white.withAlpha(220), fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+
   late TransactionTypeFilter _filter;
 
   @override
@@ -445,6 +480,7 @@ class _TransactionsPageState extends State<_TransactionsPage> {
           body: ListView(
             padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPadding),
             children: [
+                _buildIntroCard(),
               if (widget.showTypeFilter) ...[
                 SegmentedButton<TransactionTypeFilter>(
                   expandedInsets: EdgeInsets.zero,
@@ -702,39 +738,6 @@ class _HomeDashboard extends StatefulWidget {
 
 class _HomeDashboardState extends State<_HomeDashboard> {
 
-  Widget _buildIntroCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          colors: [Colors.green.shade700, Colors.green.shade500],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Financial Dashboard',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Get a clear overview of your income, expenses, and net balance.',
-            style: TextStyle(color: Colors.white.withAlpha(220), fontSize: 14),
-          ),
-        ],
-      ),
-    );
-  }
 
   static const _profileStorage = FlutterSecureStorage();
   String? _selectedFinancialYear;
@@ -1113,8 +1116,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildIntroCard(),
-                        IncomeExpensePiePanel(transactions: visibleTransactions),
+                      IncomeExpensePiePanel(transactions: visibleTransactions),
                       const SizedBox(height: 14),
                       TopCategoryCharts(
                         transactions: visibleTransactions,
