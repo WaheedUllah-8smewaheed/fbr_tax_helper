@@ -185,7 +185,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: _selectedIndex != 0 ? null : FloatingActionButton(
         heroTag: 'add-transaction-fab',
         onPressed: () {
           Navigator.of(context).push(
@@ -701,6 +701,41 @@ class _HomeDashboard extends StatefulWidget {
 }
 
 class _HomeDashboardState extends State<_HomeDashboard> {
+
+  Widget _buildIntroCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [Colors.green.shade700, Colors.green.shade500],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Financial Dashboard',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Get a clear overview of your income, expenses, and net balance.',
+            style: TextStyle(color: Colors.white.withAlpha(220), fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+
   static const _profileStorage = FlutterSecureStorage();
   String? _selectedFinancialYear;
   int? _selectedMonth;
@@ -1078,7 +1113,8 @@ class _HomeDashboardState extends State<_HomeDashboard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      IncomeExpensePiePanel(transactions: visibleTransactions),
+                      _buildIntroCard(),
+                        IncomeExpensePiePanel(transactions: visibleTransactions),
                       const SizedBox(height: 14),
                       TopCategoryCharts(
                         transactions: visibleTransactions,
@@ -3611,3 +3647,4 @@ class _TransactionTile extends StatelessWidget {
     }
   }
 }
+
