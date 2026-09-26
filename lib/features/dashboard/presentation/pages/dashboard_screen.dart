@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:fbr_tax_helper/core/theme/app_theme.dart';
 import 'package:fbr_tax_helper/features/tax_calculator/presentation/pages/tax_calculator_screen.dart';
+import 'package:fbr_tax_helper/features/dashboard/presentation/pages/percentage_calculator_page.dart';
 import 'package:fbr_tax_helper/features/transactions/presentation/pages/add_transaction_page.dart';
 import 'package:fbr_tax_helper/features/transactions/presentation/bloc/transaction_bloc.dart';
 import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction.dart'

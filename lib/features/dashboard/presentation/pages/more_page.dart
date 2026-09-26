@@ -230,7 +230,11 @@ class _CalculatorsPage extends StatelessWidget {
             title: 'Percentage Calculator',
             subtitle: 'Calculate percentages quickly',
             color: const Color(0xFF3949AB),
-            onTap: () => _showComingSoon(context, 'Percentage Calculator'),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => const PercentageCalculatorPage(),
+              ),
+            ),
           ),
           _MoreMenuTile(
             icon: Icons.volunteer_activism_outlined,
