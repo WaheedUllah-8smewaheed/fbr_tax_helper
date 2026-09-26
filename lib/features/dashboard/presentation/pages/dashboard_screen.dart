@@ -1402,6 +1402,58 @@ class _DriveSyncButtonState extends State<_DriveSyncButton> {
       _isWorking = true;
     });
 
+    final isRestore = action == _DriveAction.restore;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    const SizedBox(
+                      width: 68,
+                      height: 68,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 4.5,
+                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0F9D58)),
+                      ),
+                    ),
+                    Icon(
+                      isRestore ? Icons.restore_rounded : Icons.cloud_upload_rounded,
+                      color: const Color(0xFF0F9D58),
+                      size: 32,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 28),
+                Text(
+                  isRestore ? 'Restoring Data...' : 'Backing Up Data...',
+                  style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  isRestore 
+                      ? 'Please wait while we safely download your backup from Google Drive.' 
+                      : 'Please wait while we securely upload your data to Google Drive.',
+                  style: TextStyle(fontSize: 14.5, color: Colors.grey.shade600, height: 1.4),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
     final messenger = ScaffoldMessenger.of(context);
     final authService = context.read<AuthService>();
 
@@ -1451,6 +1503,7 @@ class _DriveSyncButtonState extends State<_DriveSyncButton> {
         ..showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
         setState(() {
           _isWorking = false;
         });
