@@ -260,24 +260,24 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
 
-    // Switch to Khata tab: Global Transaction FAB persists
+    // Switch to Khata tab: Global Transaction FAB is hidden
     await tester.tap(find.text('Khata').first);
     await tester.pumpAndSettle();
     expect(find.text('Khata'), findsWidgets);
     expect(find.text('Add Payable'), findsOneWidget);
-    expect(find.byType(FloatingActionButton), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsNothing);
 
-    // Switch to Assets tab: Real asset module with global FAB
+    // Switch to Assets tab: Real asset module, FAB hidden
     await tester.tap(find.text('Assets'));
     await tester.pumpAndSettle();
     expect(find.text('Total Assets Value'), findsOneWidget);
     expect(find.text('Add Asset'), findsOneWidget);
-    expect(find.byType(FloatingActionButton), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsNothing);
 
-    // Switch to More tab: Global FAB persists, grouped sections rendered
+    // Switch to More tab: FAB hidden, grouped sections rendered
     await tester.tap(find.text('More'));
     await tester.pumpAndSettle();
-    expect(find.byType(FloatingActionButton), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsNothing);
     expect(find.text('Calculators'), findsOneWidget);
     expect(find.text('About'), findsOneWidget);
   });
