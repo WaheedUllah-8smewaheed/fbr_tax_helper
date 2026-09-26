@@ -29,6 +29,9 @@ class TransactionLocalDataSourceImpl implements TransactionLocalDataSource {
       'date': transaction.date.toIso8601String(),
       'category': transaction.category,
       'receiptImagePath': transaction.receiptImagePath,
+      'khataEntryId': transaction.khataEntryId,
+      'assetId': transaction.assetId,
+      'linkedCounterpartyOrAsset': transaction.linkedCounterpartyOrAsset,
     });
   }
 
@@ -54,6 +57,10 @@ class TransactionLocalDataSourceImpl implements TransactionLocalDataSource {
         date: DateTime.parse(map['date'] as String),
         category: map['category'] as String,
         receiptImagePath: map['receiptImagePath'] as String?,
+        khataEntryId: map['khataEntryId'] as int?,
+        assetId: map['assetId'] as int?,
+        linkedCounterpartyOrAsset:
+            map['linkedCounterpartyOrAsset'] as String?,
       );
     }).toList();
   }
@@ -66,21 +73,39 @@ class TransactionLocalDataSourceImpl implements TransactionLocalDataSource {
     }
 
     final db = await databaseHelper.database;
-    await db.update(
+    final existingRows = await db.query(
       'transactions',
-      {
-        'title': transaction.title,
-        'beneficiary': transaction.beneficiary,
-        'purpose': transaction.purpose,
-        'amount': transaction.amount,
-        'isExpense': transaction.isExpense ? 1 : 0,
-        'date': transaction.date.toIso8601String(),
-        'category': transaction.category,
-        'receiptImagePath': transaction.receiptImagePath,
-      },
       where: 'id = ? AND userId = ?',
       whereArgs: [id, transaction.userId],
     );
+
+    final newRow = {
+      'title': transaction.title,
+      'beneficiary': transaction.beneficiary,
+      'purpose': transaction.purpose,
+      'amount': transaction.amount,
+      'isExpense': transaction.isExpense ? 1 : 0,
+      'date': transaction.date.toIso8601String(),
+      'category': transaction.category,
+      'receiptImagePath': transaction.receiptImagePath,
+      'khataEntryId': transaction.khataEntryId,
+      'assetId': transaction.assetId,
+      'linkedCounterpartyOrAsset': transaction.linkedCounterpartyOrAsset,
+    };
+
+    await db.update(
+      'transactions',
+      newRow,
+      where: 'id = ? AND userId = ?',
+      whereArgs: [id, transaction.userId],
+    );
+
+    if (existingRows.isNotEmpty) {
+      await databaseHelper.handleTransactionUpdateReversal(
+        oldTransactionRow: existingRows.first,
+        newTransactionRow: newRow,
+      );
+    }
   }
 
   @override
@@ -89,10 +114,20 @@ class TransactionLocalDataSourceImpl implements TransactionLocalDataSource {
     required String userId,
   }) async {
     final db = await databaseHelper.database;
+    final existingRows = await db.query(
+      'transactions',
+      where: 'id = ? AND userId = ?',
+      whereArgs: [id, userId],
+    );
+
     await db.delete(
       'transactions',
       where: 'id = ? AND userId = ?',
       whereArgs: [id, userId],
     );
+
+    if (existingRows.isNotEmpty) {
+      await databaseHelper.handleTransactionDeletionReversal(existingRows.first);
+    }
   }
 }

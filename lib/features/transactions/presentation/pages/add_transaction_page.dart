@@ -22,8 +22,15 @@ class AddTransactionPage extends StatefulWidget {
     this.initialPurpose,
     this.initialAmount,
     this.initialDate,
-    this.showCategoryPicker = false,
+    this.parentCategory,
+    this.categoryOptions = const [],
+    this.categoryPreferences,
+    this.onViewCategoryHistory,
     this.appBarActions = const [],
+    this.isSettlement = false,
+    this.khataEntryId,
+    this.assetId,
+    this.linkedCounterpartyOrAsset,
   });
 
   final entity.Transaction? transaction;
@@ -34,8 +41,16 @@ class AddTransactionPage extends StatefulWidget {
   final String? initialPurpose;
   final double? initialAmount;
   final DateTime? initialDate;
-  final bool showCategoryPicker;
+  final String? parentCategory;
+  final List<TransactionCategory> categoryOptions;
+  final CategoryPreferencesService? categoryPreferences;
+  final void Function(String category, {required bool includeSubcategories})?
+  onViewCategoryHistory;
   final List<Widget> appBarActions;
+  final bool isSettlement;
+  final int? khataEntryId;
+  final int? assetId;
+  final String? linkedCounterpartyOrAsset;
 
   bool get isEditing => transaction != null;
 
@@ -49,7 +64,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   final _beneficiaryController = TextEditingController();
   final _purposeController = TextEditingController();
   final _amountController = TextEditingController();
-  final _categoryPreferences = CategoryPreferencesService();
+  late final CategoryPreferencesService _categoryPreferences;
+  late final bool _ownsCategoryPreferences;
   final _receiptScanner = ReceiptScannerService();
 
   bool _isScanningReceipt = false;
@@ -58,11 +74,38 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   bool _isExpense = true;
   DateTime _selectedDate = DateTime.now();
   String? _selectedCategory;
+  String? _expandedCategory;
   String? _receiptImagePath;
+  bool _showCategoryError = false;
+
+  List<TransactionCategory> get _currentCategoryOptions {
+    if (widget.parentCategory != null) {
+      final dynamicChildren = _categoryPreferences.childrenOf(
+        widget.parentCategory!,
+      );
+      if (dynamicChildren.isNotEmpty) {
+        return dynamicChildren
+            .where((c) => _categoryPreferences.isEnabled(c.name))
+            .toList();
+      }
+    }
+    return widget.categoryOptions;
+  }
+
+  bool get _hasCategoryOptions =>
+      _currentCategoryOptions.isNotEmpty || widget.parentCategory != null;
 
   @override
   void initState() {
     super.initState();
+    if (widget.categoryPreferences != null) {
+      _categoryPreferences = widget.categoryPreferences!;
+      _ownsCategoryPreferences = false;
+      _isLoadingCategoryPreferences = false;
+    } else {
+      _categoryPreferences = CategoryPreferencesService();
+      _ownsCategoryPreferences = true;
+    }
     final transaction = widget.transaction;
     if (transaction != null) {
       _titleController.text = transaction.title;
@@ -74,25 +117,34 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       _selectedCategory = transaction.category;
       _receiptImagePath = transaction.receiptImagePath;
     } else {
-      _titleController.text = widget.initialTitle ?? '';
+      _titleController.text =
+          widget.initialTitle ?? widget.initialCategory ?? '';
       _beneficiaryController.text = widget.initialBeneficiary ?? '';
       _purposeController.text = widget.initialPurpose ?? '';
       if (widget.initialAmount != null) {
         _amountController.text = _formatAmountInput(widget.initialAmount!);
       }
       _selectedDate = widget.initialDate ?? DateTime.now();
-      _selectedCategory =
-          widget.initialCategory ?? TransactionCategory.misc.name;
+      _selectedCategory = _hasCategoryOptions
+          ? widget.initialCategory
+          : widget.initialCategory ?? TransactionCategory.misc.name;
       _isExpense =
           widget.initialIsExpense ??
-          TransactionCategory.fromName(_selectedCategory!).isExpense;
+          (_selectedCategory == null
+              ? (widget.parentCategory != null
+                    ? _categoryPreferences.isExpense(widget.parentCategory!)
+                    : true)
+              : _categoryPreferences.isExpense(_selectedCategory!));
+    }
+    if (_hasCategoryOptions) {
+      _expandedCategory = _selectedCategory;
     }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_didLoadCategoryPreferences) return;
+    if (_didLoadCategoryPreferences || !_ownsCategoryPreferences) return;
     _didLoadCategoryPreferences = true;
     _loadCategoryPreferences();
   }
@@ -103,7 +155,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     _beneficiaryController.dispose();
     _purposeController.dispose();
     _amountController.dispose();
-    _categoryPreferences.dispose();
+    if (_ownsCategoryPreferences) {
+      _categoryPreferences.dispose();
+    }
     super.dispose();
   }
 
@@ -121,7 +175,12 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
   void _applySelectedCategoryMode() {
     final selectedCategory = _selectedCategory;
-    if (selectedCategory == null) return;
+    if (selectedCategory == null) {
+      if (widget.initialIsExpense == null && widget.parentCategory != null) {
+        _isExpense = _categoryPreferences.isExpense(widget.parentCategory!);
+      }
+      return;
+    }
     if (_categoryPreferences.isDualMode(selectedCategory)) return;
 
     _isExpense =
@@ -177,8 +236,11 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         _receiptImagePath = result.imagePath;
         final merchant = result.merchant;
         if (merchant != null) {
-          _titleController.text = merchant;
-          _beneficiaryController.text = merchant;
+          if (_hasCategoryOptions) {
+            _purposeController.text = merchant;
+          } else {
+            _titleController.text = merchant;
+          }
         }
         if (result.purpose != null) {
           _purposeController.text = result.purpose!;
@@ -214,7 +276,11 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   }
 
   void _submitData() {
-    if (_selectedCategory == null || !_formKey.currentState!.validate()) {
+    if (_selectedCategory == null) {
+      setState(() => _showCategoryError = true);
+      return;
+    }
+    if (!_formKey.currentState!.validate()) {
       return;
     }
 
@@ -231,17 +297,24 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     final transaction = entity.Transaction(
       id: widget.transaction?.id,
       userId: userId,
-      title: _titleController.text.trim(),
+      title: _hasCategoryOptions
+          ? _selectedCategory!
+          : _titleController.text.trim(),
       beneficiary: _beneficiaryController.text.trim(),
       purpose: _purposeController.text.trim(),
       amount: double.parse(_amountController.text.trim().replaceAll(',', '')),
-      isExpense: _categoryPreferences.resolveTransactionTypeForCategory(
-        categoryName: _selectedCategory!,
-        transactionIsExpense: _isExpense,
-      ),
+      isExpense: !_hasCategoryOptions
+          ? _isExpense
+          : _categoryPreferences.resolveTransactionTypeForCategory(
+              categoryName: _selectedCategory!,
+              transactionIsExpense: _isExpense,
+            ),
       date: _selectedDate,
       category: _selectedCategory!,
       receiptImagePath: _receiptImagePath,
+      khataEntryId: widget.khataEntryId,
+      assetId: widget.assetId,
+      linkedCounterpartyOrAsset: widget.linkedCounterpartyOrAsset,
     );
 
     context.read<TransactionBloc>().add(
@@ -252,180 +325,282 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     Navigator.of(context).pop(true);
   }
 
+  void _openCategoryHistory() {
+    final category = _selectedCategory ?? widget.parentCategory;
+    if (category == null) return;
+    widget.onViewCategoryHistory?.call(
+      category,
+      includeSubcategories:
+          _selectedCategory == null && widget.parentCategory != null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final canSelectTransactionType =
-        !_isLoadingCategoryPreferences &&
-        _selectedCategory != null &&
-        _categoryPreferences.isDualMode(_selectedCategory!);
+    return ListenableBuilder(
+      listenable: _categoryPreferences,
+      builder: (context, _) {
+        final canSelectTransactionType =
+            !_isLoadingCategoryPreferences &&
+            (!_hasCategoryOptions ||
+                (_selectedCategory != null &&
+                    _categoryPreferences.isDualMode(_selectedCategory!)));
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          widget.isEditing
-              ? 'Edit Transaction'
-              : widget.showCategoryPicker
-              ? 'Review Transaction'
-              : 'Add ${_selectedCategory ?? ''} Transaction',
-        ),
-        actions: widget.appBarActions,
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _ReceiptPanel(
-                imagePath: _receiptImagePath,
-                isScanning: _isScanningReceipt,
-                onScan: _chooseReceiptSource,
-                onRemove: () => setState(() => _receiptImagePath = null),
+        return Scaffold(
+          appBar: AppBar(
+            title: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                widget.parentCategory ??
+                    _selectedCategory ??
+                    widget.transaction?.category ??
+                    'Transaction',
               ),
-              const SizedBox(height: 20),
-              Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    TextFormField(
-                      controller: _titleController,
-                      decoration: const InputDecoration(
-                        labelText: 'Title',
-                        border: OutlineInputBorder(),
-                      ),
-                      textCapitalization: TextCapitalization.words,
-                      textInputAction: TextInputAction.next,
-                      validator: _requiredValidator('Enter a title.'),
-                    ),
-                    const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _beneficiaryController,
-                      decoration: const InputDecoration(
-                        labelText: 'Beneficiary (optional)',
-                        border: OutlineInputBorder(),
-                      ),
-                      textCapitalization: TextCapitalization.words,
-                      textInputAction: TextInputAction.next,
-                    ),
-                    const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _purposeController,
-                      decoration: const InputDecoration(
-                        labelText: 'Purpose (optional)',
-                        border: OutlineInputBorder(),
-                      ),
-                      textCapitalization: TextCapitalization.sentences,
-                      textInputAction: TextInputAction.next,
-                    ),
-                    const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _amountController,
-                      decoration: const InputDecoration(
-                        labelText: 'Amount',
-                        prefixText: 'PKR ',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      validator: (value) {
-                        final amount = double.tryParse(
-                          (value ?? '').trim().replaceAll(',', ''),
-                        );
-                        if (amount == null || amount <= 0) {
-                          return 'Enter a valid amount.';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    OutlinedButton.icon(
-                      onPressed: _selectDate,
-                      icon: const Icon(Icons.calendar_today_outlined),
-                      label: Text(
-                        _selectedDate.toLocal().toString().split(' ')[0],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    if (widget.showCategoryPicker) ...[
-                      DropdownButtonFormField<String>(
-                        initialValue: _selectedCategory,
-                        decoration: const InputDecoration(
-                          labelText: 'Category',
-                          prefixIcon: Icon(Icons.category_outlined),
-                        ),
-                        items: TransactionCategory.all
-                            .where(
-                              (category) =>
-                                  _categoryPreferences.isEnabled(
-                                    category.name,
-                                  ) ||
-                                  category.name == _selectedCategory,
-                            )
-                            .map(
-                              (category) => DropdownMenuItem<String>(
-                                value: category.name,
-                                child: Text(category.name),
+            ),
+            actions: widget.appBarActions,
+          ),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _ReceiptPanel(
+                    imagePath: _receiptImagePath,
+                    isScanning: _isScanningReceipt,
+                    onScan: _chooseReceiptSource,
+                    onRemove: () => setState(() => _receiptImagePath = null),
+                  ),
+                  const SizedBox(height: 15),
+                  // Form for transaction details
+                  Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (_hasCategoryOptions) ...[
+                          Text(
+                            'Choose a subcategory',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 8),
+                          RadioGroup<String>(
+                            groupValue: _selectedCategory,
+                            onChanged: (value) {
+                              if (value != null) _toggleCategory(value);
+                            },
+                            child: Column(
+                              children: [
+                                for (
+                                  var index = 0;
+                                  index < _currentCategoryOptions.length;
+                                  index++
+                                )
+                                  _ColorfulCategoryRadio(
+                                    category: _currentCategoryOptions[index],
+                                    index: index,
+                                    selected:
+                                        _selectedCategory ==
+                                        _currentCategoryOptions[index].name,
+                                    onTap: () => _toggleCategory(
+                                      _currentCategoryOptions[index].name,
+                                    ),
+                                    details:
+                                        _selectedCategory ==
+                                                _currentCategoryOptions[index]
+                                                    .name &&
+                                            _expandedCategory ==
+                                                _currentCategoryOptions[index]
+                                                    .name
+                                        ? _buildTransactionDetailsFields(
+                                            embedded: true,
+                                          )
+                                        : null,
+                                  ),
+                              ],
+                            ),
+                          ),
+                          if (_showCategoryError)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 12, top: 2),
+                              child: Text(
+                                'Select a subcategory.',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                  fontSize: 12,
+                                ),
                               ),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          if (value == null) return;
-                          setState(() {
-                            _selectedCategory = value;
-                            if (!_categoryPreferences.isDualMode(value)) {
-                              _isExpense = _categoryPreferences.isExpense(
-                                value,
-                              );
-                            }
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-                    SegmentedButton<bool>(
-                      expandedInsets: EdgeInsets.zero,
-                      showSelectedIcon: false,
-                      segments: const [
-                        ButtonSegment<bool>(
-                          value: false,
-                          label: Text('Income'),
-                          icon: Icon(Icons.arrow_upward),
-                        ),
-                        ButtonSegment<bool>(
-                          value: true,
-                          label: Text('Expense'),
-                          icon: Icon(Icons.arrow_downward),
-                        ),
-                      ],
-                      selected: {_isExpense},
-                      onSelectionChanged: canSelectTransactionType
-                          ? (selection) {
+                            ),
+                          const SizedBox(height: 10),
+                        ] else ...[
+                          TextFormField(
+                            controller: _titleController,
+                            decoration: const InputDecoration(
+                              labelText: 'Title',
+                              border: OutlineInputBorder(),
+                            ),
+                            textCapitalization: TextCapitalization.words,
+                            textInputAction: TextInputAction.next,
+                            validator: _requiredValidator('Enter a title.'),
+                          ),
+                          const SizedBox(height: 14),
+                          _buildTransactionDetailsFields(),
+                          const SizedBox(height: 16),
+                        ],
+                        if (!widget.isSettlement)
+                          OutlinedButton.icon(
+                            onPressed: _selectDate,
+                            icon: const Icon(Icons.calendar_today_outlined),
+                            label: Text(
+                              _selectedDate.toLocal().toString().split(' ')[0],
+                            ),
+                          ),
+                        if (canSelectTransactionType &&
+                            !widget.isSettlement) ...[
+                          const SizedBox(height: 16),
+                          SegmentedButton<bool>(
+                            expandedInsets: EdgeInsets.zero,
+                            showSelectedIcon: false,
+                            segments: const [
+                              ButtonSegment<bool>(
+                                value: false,
+                                label: Text('Income'),
+                                icon: Icon(Icons.arrow_upward),
+                              ),
+                              ButtonSegment<bool>(
+                                value: true,
+                                label: Text('Expense'),
+                                icon: Icon(Icons.arrow_downward),
+                              ),
+                            ],
+                            selected: {_isExpense},
+                            onSelectionChanged: (selection) {
                               setState(() {
                                 _isExpense = selection.first;
                               });
-                            }
-                          : null,
+                            },
+                          ),
+                        ],
+                        if (widget.isSettlement) ...[
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: _selectDate,
+                            icon: const Icon(Icons.calendar_today_outlined),
+                            label: Text(
+                              _selectedDate.toLocal().toString().split(' ')[0],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        FilledButton.icon(
+                          onPressed: _submitData,
+                          icon: Icon(widget.isEditing ? Icons.save : Icons.add),
+                          label: Text(
+                            widget.isEditing
+                                ? 'Save Transaction'
+                                : 'Add Transaction',
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        OutlinedButton.icon(
+                          onPressed:
+                              (_selectedCategory != null ||
+                                      widget.parentCategory != null) &&
+                                  widget.onViewCategoryHistory != null
+                              ? _openCategoryHistory
+                              : null,
+                          icon: const Icon(Icons.history_rounded),
+                          label: Text(
+                            _selectedCategory == null
+                                ? 'View category report'
+                                : 'View category history',
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: _submitData,
-                      icon: Icon(widget.isEditing ? Icons.save : Icons.add),
-                      label: Text(
-                        widget.isEditing
-                            ? 'Save Transaction'
-                            : 'Add Transaction',
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
+        );
+      },
+    );
+  }
+
+  void _selectCategory(String category) {
+    final categoryChanged = _selectedCategory != category;
+    setState(() {
+      if (categoryChanged && !widget.isSettlement) {
+        _purposeController.clear();
+        _amountController.clear();
+      }
+      _selectedCategory = category;
+      _expandedCategory = category;
+      _titleController.text = category;
+      _showCategoryError = false;
+      if (!_categoryPreferences.isDualMode(category)) {
+        _isExpense = _categoryPreferences.isExpense(category);
+      }
+    });
+  }
+
+  void _toggleCategory(String category) {
+    if (_selectedCategory != category) {
+      _selectCategory(category);
+      return;
+    }
+
+    setState(() {
+      _expandedCategory = _expandedCategory == category ? null : category;
+    });
+  }
+
+  Widget _buildTransactionDetailsFields({bool embedded = false}) {
+    final fields = Column(
+      key: embedded ? ValueKey('transaction-details-$_selectedCategory') : null,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextFormField(
+          controller: _purposeController,
+          decoration: const InputDecoration(
+            labelText: 'Description',
+            border: OutlineInputBorder(),
+          ),
+          textCapitalization: TextCapitalization.sentences,
+          textInputAction: TextInputAction.next,
+          maxLines: 2,
         ),
-      ),
+        const SizedBox(height: 14),
+        TextFormField(
+          controller: _amountController,
+          readOnly: widget.isSettlement,
+          decoration: const InputDecoration(
+            labelText: 'Amount',
+            prefixText: 'PKR ',
+            border: OutlineInputBorder(),
+          ),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          validator: (value) {
+            final amount = double.tryParse(
+              (value ?? '').trim().replaceAll(',', ''),
+            );
+            if (amount == null || amount <= 0) {
+              return 'Enter a valid amount.';
+            }
+            return null;
+          },
+        ),
+      ],
+    );
+
+    if (!embedded) return fields;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      child: fields,
     );
   }
 
@@ -446,6 +621,84 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   }
 }
 
+class _ColorfulCategoryRadio extends StatelessWidget {
+  const _ColorfulCategoryRadio({
+    required this.category,
+    required this.index,
+    required this.selected,
+    required this.onTap,
+    this.details,
+  });
+
+  final TransactionCategory category;
+  final int index;
+  final bool selected;
+  final VoidCallback onTap;
+  final Widget? details;
+
+  static const _colors = <Color>[
+    Color(0xFF00897B),
+    Color(0xFF3949AB),
+    Color(0xFFEF6C00),
+    Color(0xFF8E24AA),
+    Color(0xFFD81B60),
+    Color(0xFF43A047),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _colors[index % _colors.length];
+    return Card(
+      margin: const EdgeInsets.only(bottom: 5),
+      elevation: selected ? 2 : 0,
+      color: color.withValues(alpha: selected ? 0.18 : 0.08),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: color.withValues(alpha: selected ? 0.9 : 0.3),
+          width: selected ? 2 : 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          ListTile(
+            onTap: onTap,
+            dense: true,
+            visualDensity: const VisualDensity(vertical: -3),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+            minTileHeight: 42,
+            leading: IgnorePointer(
+              child: Radio<String>(
+                value: category.name,
+                activeColor: color,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: const VisualDensity(
+                  horizontal: -4,
+                  vertical: -4,
+                ),
+              ),
+            ),
+            title: Text(
+              category.name,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+              ),
+            ),
+            trailing: Icon(
+              category.isExpense ? Icons.arrow_downward : Icons.arrow_upward,
+              color: color,
+              size: 20,
+            ),
+          ),
+          ?details,
+        ],
+      ),
+    );
+  }
+}
+
 class _ReceiptPanel extends StatelessWidget {
   const _ReceiptPanel({
     required this.imagePath,
@@ -459,14 +712,20 @@ class _ReceiptPanel extends StatelessWidget {
   final VoidCallback onScan;
   final VoidCallback onRemove;
 
+  /// Returns a widget that displays the receipt image (if available) and provides buttons to scan or remove the
+  @override
+  // scan the receipt. If an image is available, it will be displayed above the buttons.
   @override
   Widget build(BuildContext context) {
     final file = imagePath == null ? null : File(imagePath!);
     final hasImage = file?.existsSync() ?? false;
+    final theme = Theme.of(context);
+
     return Card(
       elevation: 0,
+      color: Colors.white,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: Colors.teal.shade100),
       ),
       child: Padding(
@@ -476,13 +735,19 @@ class _ReceiptPanel extends StatelessWidget {
           children: [
             Text(
               'Receipt image',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: Colors.teal.shade900,
+              ),
             ),
-            const SizedBox(height: 6),
-            const Text(
+            const SizedBox(height: 4),
+            Text(
               'Take a photo or upload an image. Text will be read on-device and placed into the editable fields below.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: Colors.grey.shade700,
+                fontSize: 13,
+                height: 1.35,
+              ),
             ),
             if (hasImage) ...[
               const SizedBox(height: 12),
@@ -490,7 +755,7 @@ class _ReceiptPanel extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
                 child: Image.file(
                   file!,
-                  height: 180,
+                  height: 160,
                   fit: BoxFit.cover,
                   errorBuilder: (_, _, _) => const SizedBox.shrink(),
                 ),
@@ -500,23 +765,57 @@ class _ReceiptPanel extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton.icon(
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.teal.shade50,
+                      foregroundColor: Colors.teal.shade800,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
                     onPressed: isScanning ? null : onScan,
                     icon: isScanning
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                        ? SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.teal.shade800,
+                            ),
                           )
-                        : const Icon(Icons.document_scanner_outlined),
-                    label: Text(hasImage ? 'Replace & scan' : 'Add & scan'),
+                        : const Icon(Icons.document_scanner_outlined, size: 18),
+                    label: Text(
+                      hasImage ? 'Replace & scan' : 'Add & scan',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
                   ),
                 ),
                 if (hasImage) ...[
                   const SizedBox(width: 8),
-                  IconButton(
-                    tooltip: 'Remove receipt',
-                    onPressed: isScanning ? null : onRemove,
-                    icon: const Icon(Icons.delete_outline),
+                  Material(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: isScanning ? null : onRemove,
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Icon(
+                          Icons.delete_outline_rounded,
+                          size: 20,
+                          color: Colors.red.shade700,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ],

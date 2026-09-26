@@ -15,8 +15,8 @@ lib/
 |   |-- deductions/               Deduction domain and UI
 |   |-- splash/                   Application startup screen
 |   |-- tax_calculator/           Tax calculation data, domain, BLoC, and UI
-|   |-- transactions/             Transactions, categories, notifications,
-|   |                             receipt scanning, and reports
+|   |-- transactions/             Transactions, categories, receipt scanning,
+|   |                             and reports
 |   `-- verification/             ATL, NTN, and CPR verification
 |-- firebase_options.dart         Generated Firebase configuration
 `-- main.dart                     Dependency wiring and application entry point

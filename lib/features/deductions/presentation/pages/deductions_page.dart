@@ -87,62 +87,68 @@ class _DeductionsPageState extends State<DeductionsPage> {
               label: const Text('Apply Deductions'),
               icon: const Icon(Icons.save_outlined),
             ),
-            body: Form(
-              key: _formKey,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Mobile Balance Tax', style: headerStyle),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Required annual adjustable tax. Enter 0 if none.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    const SizedBox(height: 8),
-                    _MoneyField(
-                      controller: _mobileTaxController,
-                      labelText: 'Mobile tax paid',
-                      validator: _validateRequiredAmount,
-                    ),
-                    const Divider(height: 32),
-                    const Text('Electricity Bill Tax', style: headerStyle),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Use the total annual withholding shown on bills.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    const SizedBox(height: 8),
-                    _MoneyField(
-                      controller: _electricityTaxController,
-                      labelText: 'Electricity tax paid',
-                    ),
-                    const Divider(height: 32),
-                    const Text('Internet / PTCL Bill Tax', style: headerStyle),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Enter annual adjustable tax from internet bills.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    const SizedBox(height: 8),
-                    _MoneyField(
-                      controller: _internetTaxController,
-                      labelText: 'Internet tax paid',
-                    ),
-                    const Divider(height: 32),
-                    const Text('Vehicle Token Tax', style: headerStyle),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Enter token or registration withholding tax paid.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    const SizedBox(height: 8),
-                    _MoneyField(
-                      controller: _vehicleTaxController,
-                      labelText: 'Vehicle tax paid',
-                    ),
-                  ],
+            body: SafeArea(
+              top: false,
+              child: Form(
+                key: _formKey,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Mobile Balance Tax', style: headerStyle),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Required annual adjustable tax. Enter 0 if none.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 8),
+                      _MoneyField(
+                        controller: _mobileTaxController,
+                        labelText: 'Mobile tax paid',
+                        validator: _validateRequiredAmount,
+                      ),
+                      const Divider(height: 32),
+                      const Text('Electricity Bill Tax', style: headerStyle),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Use the total annual withholding shown on bills.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 8),
+                      _MoneyField(
+                        controller: _electricityTaxController,
+                        labelText: 'Electricity tax paid',
+                      ),
+                      const Divider(height: 32),
+                      const Text(
+                        'Internet / PTCL Bill Tax',
+                        style: headerStyle,
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Enter annual adjustable tax from internet bills.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 8),
+                      _MoneyField(
+                        controller: _internetTaxController,
+                        labelText: 'Internet tax paid',
+                      ),
+                      const Divider(height: 32),
+                      const Text('Vehicle Token Tax', style: headerStyle),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Enter token or registration withholding tax paid.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 8),
+                      _MoneyField(
+                        controller: _vehicleTaxController,
+                        labelText: 'Vehicle tax paid',
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

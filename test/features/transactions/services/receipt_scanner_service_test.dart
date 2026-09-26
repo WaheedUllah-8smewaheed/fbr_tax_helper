@@ -19,7 +19,7 @@ Grand Total PKR 1,245.50
     expect(result.merchant, 'Fresh Mart Lahore');
     expect(result.amount, 1245.50);
     expect(result.date, DateTime(2026, 7, 12));
-    expect(result.suggestedCategory, 'Shopping');
+    expect(result.suggestedCategory, 'Home Items');
     expect(result.purpose, 'Purchase from Fresh Mart Lahore');
   });
 
@@ -37,6 +37,6 @@ Grand Total 920.00
     );
 
     expect(result.amount, 920);
-    expect(result.suggestedCategory, 'Food & Drinks');
+    expect(result.suggestedCategory, 'Restaurant');
   });
 }

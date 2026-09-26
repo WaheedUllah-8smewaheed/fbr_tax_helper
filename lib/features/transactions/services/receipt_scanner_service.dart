@@ -168,13 +168,25 @@ class ReceiptScannerService {
       'burger',
       'pizza',
     ])) {
-      return 'Food & Drinks';
+      return 'Restaurant';
     }
     if (_containsAny(lower, ['hospital', 'clinic', 'pharmacy', 'medical'])) {
-      return 'Health';
+      return 'Medicine';
+    }
+    if (_containsAny(lower, [
+      'school',
+      'college',
+      'university',
+      'tuition',
+      'academy',
+      'course fee',
+      'training fee',
+      'exam fee',
+    ])) {
+      return 'School Fee';
     }
     if (_containsAny(lower, ['rent', 'landlord', 'tenant'])) {
-      return 'Rent';
+      return 'House Rent';
     }
     if (_containsAny(lower, [
       'transport',
@@ -184,21 +196,21 @@ class ReceiptScannerService {
       'taxi',
       'bus fare',
     ])) {
-      return 'Transport';
+      return 'Fuel';
     }
     if (_containsAny(lower, ['electric', 'gas bill', 'water bill'])) {
-      return 'Housing & Utils';
+      return 'Electricity';
     }
     if (_containsAny(lower, ['salon', 'spa', 'cosmetic'])) {
-      return 'Personal Care';
+      return 'Salon';
     }
     if (_containsAny(lower, ['subscription', 'monthly plan', 'membership'])) {
-      return 'Subscriptions';
+      return 'Membership';
     }
     if (_containsAny(lower, ['mart', 'store', 'shop', 'mall'])) {
-      return 'Shopping';
+      return 'Home Items';
     }
-    return 'Misc';
+    return 'Other';
   }
 
   static bool _containsAny(String text, List<String> values) {

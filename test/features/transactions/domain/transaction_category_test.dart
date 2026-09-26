@@ -12,22 +12,72 @@ void main() {
   test('unknown categories safely fall back to miscellaneous expense', () {
     expect(TransactionCategory.fromName('Unknown'), TransactionCategory.misc);
     expect(TransactionCategory.fromName('Unknown').isExpense, isTrue);
+    expect(TransactionCategory.misc.name, 'Other');
+    expect(TransactionCategory.fromName('Uncategorized').name, 'Uncategorized');
+  });
+
+  test('home bills include mobile', () {
+    expect(
+      TransactionCategory.childrenOf('Bills').map((category) => category.name),
+      contains('Mobile'),
+    );
+  });
+
+  test('education categories are available as expenses', () {
+    final educationCategories = TransactionCategory.childrenOf('Education');
+
+    expect(
+      educationCategories.map((category) => category.name),
+      containsAll(['School Fee', 'Books', 'Courses', 'Exam Fee', 'Transport']),
+    );
+    expect(educationCategories.every((category) => category.isExpense), isTrue);
+    expect(TransactionCategory.hierarchyPathFor('School Fee'), [
+      'Education',
+      'Education',
+      'School Fee',
+    ]);
   });
 
   test('builds printable paths for new and legacy categories', () {
     expect(TransactionCategory.hierarchyPathFor('Fuel'), [
-      'Housing & Transport',
-      'Transport',
+      'Travel',
+      'Travel',
       'Fuel',
     ]);
+    expect(TransactionCategory.hierarchyPathFor('Picnic/Tour'), [
+      'Travel',
+      'Travel',
+      'Picnic/Tour',
+    ]);
     expect(
-      TransactionCategory.displayPathFor('Basic Pay'),
-      'Income > Salary > Basic Pay',
+      TransactionCategory.displayPathFor('Salary'),
+      'Money In > Salary > Salary',
     );
     expect(TransactionCategory.hierarchyPathFor('Salary'), [
-      'Income',
+      'Money In',
+      'Salary',
       'Salary',
     ]);
     expect(TransactionCategory.hierarchyPathFor('Old Custom'), ['Old Custom']);
+  });
+
+  test('commitments super category contains monthly home payment and committee', () {
+    final commitmentCategories = TransactionCategory.childrenOf('Commitments');
+
+    expect(
+      commitmentCategories.map((category) => category.name),
+      containsAll(['Monthly Home Payment', 'Committee']),
+    );
+    expect(commitmentCategories.every((category) => category.isExpense), isTrue);
+    expect(TransactionCategory.hierarchyPathFor('Monthly Home Payment'), [
+      'Commitments',
+      'Commitments',
+      'Monthly Home Payment',
+    ]);
+    expect(TransactionCategory.hierarchyPathFor('Committee'), [
+      'Commitments',
+      'Commitments',
+      'Committee',
+    ]);
   });
 }

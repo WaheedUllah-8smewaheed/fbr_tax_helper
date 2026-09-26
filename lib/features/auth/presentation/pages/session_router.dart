@@ -1,7 +1,9 @@
 import 'package:fbr_tax_helper/features/dashboard/presentation/pages/dashboard_screen.dart';
 import 'package:fbr_tax_helper/features/auth/presentation/pages/login_page.dart';
+import 'package:fbr_tax_helper/features/auth/presentation/pages/terms_agreement_page.dart';
 import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:fbr_tax_helper/features/auth/services/biometric_lock_service.dart';
+import 'package:fbr_tax_helper/core/widgets/filer_flow_logo.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -13,10 +15,9 @@ class SessionRouter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
-      // Listens to native Firebase authentication session changes
       stream: context.read<AuthService>().authStateChanges(),
       builder: (context, snapshot) {
-        // While Firebase is reading the local device token key on startup
+        // While auth is initializing on startup
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
@@ -25,10 +26,17 @@ class SessionRouter extends StatelessWidget {
 
         // If a valid user session token is found on the device hardware
         if (snapshot.hasData && snapshot.data != null) {
+          final user = snapshot.data!;
           if (kIsWeb) {
-            return const DashboardScreen();
+            return TermsAgreementGate(
+              user: user,
+              child: const DashboardScreen(),
+            );
           }
-          return _BiometricSessionGate(user: snapshot.data!);
+          return TermsAgreementGate(
+            user: user,
+            child: _BiometricSessionGate(user: user),
+          );
         }
 
         // Signed-out users authenticate before opening account features.
@@ -166,7 +174,7 @@ class _BiometricSessionGateState extends State<_BiometricSessionGate>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Filer Flow locked'),
+        title: const Text('Filer Flow Locked'),
         actions: [
           IconButton(
             tooltip: 'Sign out',
@@ -183,8 +191,10 @@ class _BiometricSessionGateState extends State<_BiometricSessionGate>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.fingerprint, size: 88, color: Colors.teal),
+                const FilerFlowLogo(size: 80),
                 const SizedBox(height: 16),
+                const Icon(Icons.fingerprint, size: 48, color: Colors.teal),
+                const SizedBox(height: 12),
                 Text(
                   'Unlock your account',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(

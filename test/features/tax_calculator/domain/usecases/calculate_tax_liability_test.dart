@@ -46,13 +46,80 @@ void main() {
     const profile = TaxProfile(
       type: TaxProfileType.salaried,
       monthlyGrossIncome: 150000,
-      taxYear: '2025',
+      taxYear: '2024-25',
     );
 
     final result = usecase.execute(profile);
 
     expect(result.annualTaxLiability, 120000.0);
     expect(result.monthlyTaxLiability, 10000.0);
+  });
+
+  test('should match the historical calculator for every supported year', () {
+    const expectedAnnualTaxAt150kMonthly = <String, double>{
+      '2026-27': 72000,
+      '2025-26': 72000,
+      '2024-25': 120000,
+      '2023-24': 90000,
+      '2022-23': 90000,
+      '2021-22': 90000,
+      '2020-21': 90000,
+      '2019-20': 90000,
+      '2018-19': 30000,
+      '2017-18': 137000,
+      '2016-17': 137000,
+      '2015-16': 137000,
+    };
+
+    for (final entry in expectedAnnualTaxAt150kMonthly.entries) {
+      final result = usecase.execute(
+        TaxProfile(
+          type: TaxProfileType.salaried,
+          monthlyGrossIncome: 150000,
+          taxYear: entry.key,
+        ),
+      );
+
+      expect(
+        result.annualTaxLiability,
+        entry.value,
+        reason: 'Incorrect calculation for ${entry.key}',
+      );
+    }
+  });
+
+  test('should apply the high-income surcharge only from 2025-26', () {
+    const monthlyIncome = 1000000.0;
+
+    final tax2024 = usecase.execute(
+      const TaxProfile(
+        type: TaxProfileType.salaried,
+        monthlyGrossIncome: monthlyIncome,
+        taxYear: '2024-25',
+      ),
+    );
+    final tax2025 = usecase.execute(
+      const TaxProfile(
+        type: TaxProfileType.salaried,
+        monthlyGrossIncome: monthlyIncome,
+        taxYear: '2025-26',
+      ),
+    );
+
+    expect(tax2024.annualTaxLiability, 3465000);
+    expect(tax2025.annualTaxLiability, 3685290);
+  });
+
+  test('should calculate the 2018-19 minimum-tax band correctly', () {
+    final result = usecase.execute(
+      const TaxProfile(
+        type: TaxProfileType.salaried,
+        monthlyGrossIncome: 101000,
+        taxYear: '2018-19',
+      ),
+    );
+
+    expect(result.annualTaxLiability, 2000);
   });
 
   test('should subtract deductions from the final tax liability', () {

@@ -84,6 +84,7 @@ class _SplashScreenState extends State<SplashScreen>
     final size = MediaQuery.sizeOf(context);
     final isCompact = size.width < 420;
     final logoSize = isCompact ? 96.0 : 116.0;
+    final bottomSpacing = (size.height * 0.14).clamp(48.0, 112.0).toDouble();
 
     return Scaffold(
       body: Stack(
@@ -94,7 +95,7 @@ class _SplashScreenState extends State<SplashScreen>
           SafeArea(
             child: Center(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28),
+                padding: EdgeInsets.fromLTRB(28, 12, 28, bottomSpacing),
                 child: FadeTransition(
                   opacity: _fadeAnimation,
                   child: SlideTransition(
@@ -104,27 +105,13 @@ class _SplashScreenState extends State<SplashScreen>
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(18),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Color(0x33000000),
-                                  blurRadius: 28,
-                                  offset: Offset(0, 18),
-                                ),
-                              ],
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(14),
-                              child: Image.asset(
-                                'assets/tax.png',
-                                width: logoSize,
-                                height: logoSize,
-                                fit: BoxFit.contain,
-                              ),
-                            ),
+                          Image.asset(
+                            'assets/app_logo_splash_gold.png',
+                            width: logoSize,
+                            height: logoSize,
+                            fit: BoxFit.cover,
+                            alignment: Alignment.center,
+                            filterQuality: FilterQuality.high,
                           ),
                           const SizedBox(height: 28),
                           Text(
@@ -134,6 +121,13 @@ class _SplashScreenState extends State<SplashScreen>
                                 ?.copyWith(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w800,
+                                  shadows: const [
+                                    Shadow(
+                                      color: Color(0x55000000),
+                                      blurRadius: 10,
+                                      offset: Offset(0, 3),
+                                    ),
+                                  ],
                                 ),
                           ),
                           const SizedBox(height: 8),
@@ -144,6 +138,13 @@ class _SplashScreenState extends State<SplashScreen>
                                 ?.copyWith(
                                   color: const Color(0xFFE7F0EA),
                                   fontWeight: FontWeight.w500,
+                                  shadows: const [
+                                    Shadow(
+                                      color: Color(0x44000000),
+                                      blurRadius: 8,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
                                 ),
                           ),
                           const SizedBox(height: 28),

@@ -12,6 +12,9 @@ class Transaction extends Equatable {
     required this.date,
     required this.category,
     this.receiptImagePath,
+    this.khataEntryId,
+    this.assetId,
+    this.linkedCounterpartyOrAsset,
   });
 
   final int? id;
@@ -24,6 +27,9 @@ class Transaction extends Equatable {
   final DateTime date;
   final String category;
   final String? receiptImagePath;
+  final int? khataEntryId;
+  final int? assetId;
+  final String? linkedCounterpartyOrAsset;
 
   Transaction copyWith({
     int? id,
@@ -36,6 +42,9 @@ class Transaction extends Equatable {
     DateTime? date,
     String? category,
     String? receiptImagePath,
+    int? khataEntryId,
+    int? assetId,
+    String? linkedCounterpartyOrAsset,
   }) {
     return Transaction(
       id: id ?? this.id,
@@ -48,6 +57,10 @@ class Transaction extends Equatable {
       date: date ?? this.date,
       category: category ?? this.category,
       receiptImagePath: receiptImagePath ?? this.receiptImagePath,
+      khataEntryId: khataEntryId ?? this.khataEntryId,
+      assetId: assetId ?? this.assetId,
+      linkedCounterpartyOrAsset:
+          linkedCounterpartyOrAsset ?? this.linkedCounterpartyOrAsset,
     );
   }
 
@@ -63,5 +76,8 @@ class Transaction extends Equatable {
     date,
     category,
     receiptImagePath,
+    khataEntryId,
+    assetId,
+    linkedCounterpartyOrAsset,
   ];
 }

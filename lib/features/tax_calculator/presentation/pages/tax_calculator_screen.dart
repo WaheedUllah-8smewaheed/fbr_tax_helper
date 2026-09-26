@@ -24,6 +24,7 @@ class TaxCalculatorScreen extends StatefulWidget {
   final VoidCallback? onLogin;
   final String appBarTitle;
   final List<Widget> appBarActions;
+  final bool fitToViewport;
 
   const TaxCalculatorScreen({
     super.key,
@@ -32,6 +33,7 @@ class TaxCalculatorScreen extends StatefulWidget {
     this.onLogin,
     this.appBarTitle = 'Filer Flow',
     this.appBarActions = const [],
+    this.fitToViewport = false,
   });
 
   @override
@@ -75,17 +77,22 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
 
   void _handleStateChange(TaxCalculatorState state) {
     if (!mounted) return;
+    TaxCalculatorCalculated? calculatedState;
+    DeductionValues? calculatedDeductions;
+
     setState(() {
       _state = state;
       if (state is TaxCalculatorCalculated) {
-        _selectedType = state.selectedType;
-        _selectedTaxYear = state.taxYear;
-        _deductionValues = DeductionValues(
+        calculatedState = state;
+        calculatedDeductions = DeductionValues(
           mobileTax: state.advanceTaxOnMobile,
           electricityTax: state.taxOnElectricityBill,
           internetTax: state.taxOnInternetBill,
           vehicleTax: state.vehicleTokenTax,
         );
+        _selectedType = state.selectedType;
+        _selectedTaxYear = state.taxYear;
+        _deductionValues = calculatedDeductions!;
         final incomeText = _formatInputAmount(state.inputSalary);
         if (_monthlyIncomeController.text != incomeText) {
           _monthlyIncomeController.text = incomeText;
@@ -97,6 +104,25 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
         _incomeErrorText = null;
         _monthlyIncomeController.clear();
       }
+    });
+
+    if (calculatedState != null && calculatedDeductions != null) {
+      _openResultsPage(calculatedState!, calculatedDeductions!);
+    }
+  }
+
+  void _openResultsPage(
+    TaxCalculatorCalculated state,
+    DeductionValues deductionValues,
+  ) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) =>
+              _TaxResultsScreen(state: state, deductionValues: deductionValues),
+        ),
+      );
     });
   }
 
@@ -171,7 +197,54 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
   @override
   Widget build(BuildContext context) {
     final metrics = _AdaptiveMetrics.of(context);
-    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final stateContent = _buildStateContent(_state);
+    final calculatorContent = ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: metrics.maxContentWidth),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _HeaderBand(
+            state: _state,
+            metrics: metrics,
+            taxYear: _selectedTaxYear,
+            // The public calculator already exposes this label in its app bar.
+            // Keep the header title on larger layouts, but avoid repeating it
+            // in the constrained phone layout.
+            showTitle: !(widget.fitToViewport && metrics.isNarrow),
+          ),
+          SizedBox(height: metrics.sectionSpacing),
+          _CalculatorForm(
+            metrics: metrics,
+            controller: _monthlyIncomeController,
+            focusNode: _monthlyIncomeFocusNode,
+            selectedType: _selectedType,
+            selectedTaxYear: _selectedTaxYear,
+            deductionValues: _deductionValues,
+            incomeErrorText: _incomeErrorText,
+            isLoading: _state is TaxCalculatorLoading,
+            onTypeChanged: (type) {
+              setState(() {
+                _selectedType = type;
+              });
+            },
+            onCalculate: _calculateTax,
+            onTaxYearChanged: (taxYear) {
+              setState(() {
+                _selectedTaxYear = taxYear;
+              });
+            },
+          ),
+          if (stateContent != null) ...[
+            SizedBox(height: metrics.sectionSpacing),
+            stateContent,
+          ],
+          if (widget.footer != null) ...[
+            SizedBox(height: metrics.sectionSpacing),
+            widget.footer!,
+          ],
+        ],
+      ),
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -218,63 +291,25 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
         child: const Icon(Icons.receipt_long_outlined),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: EdgeInsets.fromLTRB(
-            metrics.horizontalPadding,
-            metrics.verticalPadding,
-            metrics.horizontalPadding,
-            metrics.verticalPadding + keyboardInset,
-          ),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: metrics.maxContentWidth),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _HeaderBand(
-                    state: _state,
-                    metrics: metrics,
-                    taxYear: _selectedTaxYear,
-                  ),
-                  SizedBox(height: metrics.sectionSpacing),
-                  _CalculatorForm(
-                    metrics: metrics,
-                    controller: _monthlyIncomeController,
-                    focusNode: _monthlyIncomeFocusNode,
-                    selectedType: _selectedType,
-                    selectedTaxYear: _selectedTaxYear,
-                    deductionValues: _deductionValues,
-                    incomeErrorText: _incomeErrorText,
-                    isLoading: _state is TaxCalculatorLoading,
-                    onTypeChanged: (type) {
-                      setState(() {
-                        _selectedType = type;
-                      });
-                    },
-                    onCalculate: _calculateTax,
-                    onTaxYearChanged: (taxYear) {
-                      setState(() {
-                        _selectedTaxYear = taxYear;
-                      });
-                    },
-                  ),
-                  SizedBox(height: metrics.sectionSpacing),
-                  _buildStateContent(_state),
-                  if (widget.footer != null) ...[
-                    const SizedBox(height: 20),
-                    widget.footer!,
-                  ],
-                ],
+        child: widget.fitToViewport
+            ? _ViewportFittedCalculator(
+                metrics: metrics,
+                child: calculatorContent,
+              )
+            : SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  metrics.horizontalPadding,
+                  metrics.verticalPadding,
+                  metrics.horizontalPadding,
+                  metrics.verticalPadding + 72,
+                ),
+                child: Center(child: calculatorContent),
               ),
-            ),
-          ),
-        ),
       ),
     );
   }
 
-  Widget _buildStateContent(TaxCalculatorState state) {
+  Widget? _buildStateContent(TaxCalculatorState state) {
     if (state is TaxCalculatorLoading) {
       return const _LoadingPanel();
     }
@@ -287,32 +322,97 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
       );
     }
 
-    if (state is TaxCalculatorCalculated) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _ResultsGrid(assessment: state.assessment),
-          const SizedBox(height: 20),
-          _FilingReceipt(
-            profileType: state.selectedType,
-            monthlyIncome: state.inputSalary,
-            taxYear: state.taxYear,
-            deductionValues: DeductionValues(
-              mobileTax: state.advanceTaxOnMobile,
-              electricityTax: state.taxOnElectricityBill,
-              internetTax: state.taxOnInternetBill,
-              vehicleTax: state.vehicleTokenTax,
-            ),
-            assessment: state.assessment,
-          ),
-        ],
-      );
-    }
+    return null;
+  }
+}
 
-    return const _MessagePanel(
-      icon: Icons.calculate_outlined,
-      title: 'Start with monthly gross income',
-      message: 'Choose your profile type and calculate your estimated tax.',
+class _ViewportFittedCalculator extends StatelessWidget {
+  const _ViewportFittedCalculator({required this.metrics, required this.child});
+
+  final _AdaptiveMetrics metrics;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final horizontalPadding = metrics.horizontalPadding;
+        final verticalPadding = metrics.verticalPadding;
+        final availableWidth = (constraints.maxWidth - horizontalPadding * 2)
+            .clamp(1.0, double.infinity);
+        final contentWidth = availableWidth
+            .clamp(280.0, metrics.maxContentWidth)
+            .toDouble();
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            horizontalPadding,
+            verticalPadding,
+            horizontalPadding,
+            verticalPadding + 72,
+          ),
+          child: SizedBox.expand(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.topCenter,
+              child: SizedBox(width: contentWidth, child: child),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TaxResultsScreen extends StatelessWidget {
+  const _TaxResultsScreen({required this.state, required this.deductionValues});
+
+  final TaxCalculatorCalculated state;
+  final DeductionValues deductionValues;
+
+  @override
+  Widget build(BuildContext context) {
+    final metrics = _AdaptiveMetrics.of(context);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Tax Details')),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+            metrics.horizontalPadding,
+            metrics.verticalPadding,
+            metrics.horizontalPadding,
+            metrics.verticalPadding,
+          ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: metrics.maxContentWidth),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Estimate ready',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: const Color(0xFF0F6B57),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _ResultsGrid(assessment: state.assessment),
+                  const SizedBox(height: 20),
+                  _FilingReceipt(
+                    profileType: state.selectedType,
+                    monthlyIncome: state.inputSalary,
+                    taxYear: state.taxYear,
+                    deductionValues: deductionValues,
+                    assessment: state.assessment,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -339,10 +439,10 @@ class _AdaptiveMetrics {
 
   bool get isCompact => width < 600;
   bool get isNarrow => width < 420;
+  bool get isShort => height < 700;
   bool get isTablet => width >= 600 && width < 1024;
   bool get isLandscapePhone =>
       isCompact && orientation == Orientation.landscape;
-  bool get stackHeader => width < 680;
   bool get useWideForm => width >= 700 || isLandscapePhone;
   bool get compactSnapshotRows => width < 460;
 
@@ -353,10 +453,24 @@ class _AdaptiveMetrics {
     return 40;
   }
 
-  double get verticalPadding => isCompact ? 14 : 24;
-  double get sectionSpacing => isCompact ? 14 : 20;
-  double get panelPadding => isCompact ? 16 : 20;
-  double get maxContentWidth => width >= 1180 ? 1080 : 980;
+  double get verticalPadding => isShort
+      ? 8
+      : isCompact
+      ? 10
+      : 20;
+  double get sectionSpacing => isShort
+      ? 8
+      : isCompact
+      ? 10
+      : 16;
+  double get panelPadding => isNarrow
+      ? 10
+      : isShort
+      ? 10
+      : isCompact
+      ? 12
+      : 18;
+  double get maxContentWidth => width >= 1180 ? 980 : 900;
 
   int get resultColumns {
     if (width >= 900) return 4;
@@ -375,11 +489,13 @@ class _HeaderBand extends StatelessWidget {
   final TaxCalculatorState state;
   final _AdaptiveMetrics metrics;
   final String taxYear;
+  final bool showTitle;
 
   const _HeaderBand({
     required this.state,
     required this.metrics,
     required this.taxYear,
+    required this.showTitle,
   });
 
   @override
@@ -392,37 +508,82 @@ class _HeaderBand extends StatelessWidget {
         : 'Tax Year $taxYear';
 
     final icon = Container(
-      width: 44,
-      height: 44,
+      width: metrics.isShort ? 38 : 44,
+      height: metrics.isShort ? 38 : 44,
       decoration: BoxDecoration(
         color: const Color(0xFF0F6B57),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(metrics.isShort ? 14 : 18),
       ),
       child: const Icon(Icons.account_balance_outlined, color: Colors.white),
     );
     final headerText = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Pakistan income tax estimator',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
+        if (showTitle) ...[
+          Text(
+            'Tax Calculator',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0,
+            ),
           ),
-        ),
-        const SizedBox(height: 6),
+          const SizedBox(height: 4),
+        ],
         Text(
-          'Salary, freelance export income, monthly deductions, and filing-ready totals.',
-          style: theme.textTheme.bodyMedium?.copyWith(
+          state is TaxCalculatorCalculated
+              ? 'Your latest tax estimate is ready.'
+              : state is TaxCalculatorLoading
+              ? 'Calculating your estimate...'
+              : 'Start with monthly gross income',
+          style: theme.textTheme.bodySmall?.copyWith(
             color: const Color(0xFF4D5A55),
           ),
         ),
+        const SizedBox(height: 5),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Salaried: salary tax slabs',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: const Color(0xFF65716C),
+                height: 1.25,
+              ),
+            ),
+            Text(
+              'Registered: reduced PSEB export rate 0.25%',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: const Color(0xFF65716C),
+                height: 1.25,
+              ),
+            ),
+            Text(
+              'Other:  standard withholding tax 1%',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: const Color(0xFF65716C),
+                height: 1.25,
+              ),
+            ),
+          ],
+        ),
       ],
     );
-    final statusChip = Chip(
-      avatar: const Icon(Icons.verified_outlined, size: 18),
-      label: Text(statusText),
-      backgroundColor: Colors.white,
-      side: const BorderSide(color: Color(0xFFC8D8CD)),
+    final statusChip = DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFC8D8CD)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        child: Text(
+          statusText,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: const Color(0xFF0F6B57),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
     );
 
     return Container(
@@ -432,32 +593,15 @@ class _HeaderBand extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFC8D8CD)),
       ),
-      child: metrics.stackHeader
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    icon,
-                    const SizedBox(width: 14),
-                    Expanded(child: headerText),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Align(alignment: Alignment.centerLeft, child: statusChip),
-              ],
-            )
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                icon,
-                const SizedBox(width: 14),
-                Expanded(child: headerText),
-                const SizedBox(width: 12),
-                statusChip,
-              ],
-            ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          icon,
+          const SizedBox(width: 10),
+          Expanded(child: headerText),
+          if (!metrics.isNarrow) ...[const SizedBox(width: 10), statusChip],
+        ],
+      ),
     );
   }
 }
@@ -491,8 +635,6 @@ class _CalculatorForm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -504,22 +646,15 @@ class _CalculatorForm extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Calculator',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 16),
             _ProfileTypeSelector(
               metrics: metrics,
               selectedType: selectedType,
               isLoading: isLoading,
               onTypeChanged: onTypeChanged,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             _DeductionSummary(values: deductionValues),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             _IncomeInputRow(
               metrics: metrics,
               controller: controller,
@@ -608,7 +743,7 @@ class _ProfileTypeSelector extends StatelessWidget {
                 padding: WidgetStatePropertyAll(
                   EdgeInsets.symmetric(
                     horizontal: isTight ? 4 : 8,
-                    vertical: metrics.isNarrow ? 10 : 12,
+                    vertical: metrics.isNarrow ? 8 : 10,
                   ),
                 ),
                 textStyle: WidgetStatePropertyAll(labelStyle),
@@ -640,75 +775,9 @@ class _ProfileTypeSelector extends StatelessWidget {
                   ? null
                   : (selection) => onTypeChanged(selection.first),
             ),
-            const SizedBox(height: 8),
-            _ProfileNotes(selectedType: selectedType),
           ],
         );
       },
-    );
-  }
-}
-
-class _ProfileNotes extends StatelessWidget {
-  const _ProfileNotes({required this.selectedType});
-
-  final TaxProfileType selectedType;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 6,
-      children: [
-        _ProfileNote(
-          label: 'Salaried',
-          note: 'progressive slabs',
-          isSelected: selectedType == TaxProfileType.salaried,
-        ),
-        _ProfileNote(
-          label: 'Registered',
-          note: 'PSEB export 0.25%',
-          isSelected: selectedType == TaxProfileType.registeredFreelancer,
-        ),
-        _ProfileNote(
-          label: 'Other',
-          note: 'export WHT 1%',
-          isSelected: selectedType == TaxProfileType.unregisteredExporter,
-        ),
-      ],
-    );
-  }
-}
-
-class _ProfileNote extends StatelessWidget {
-  const _ProfileNote({
-    required this.label,
-    required this.note,
-    required this.isSelected,
-  });
-
-  final String label;
-  final String note;
-  final bool isSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final color = isSelected
-        ? Theme.of(context).colorScheme.primary
-        : const Color(0xFF65716C);
-
-    return Text.rich(
-      TextSpan(
-        children: [
-          TextSpan(
-            text: '$label: ',
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-          TextSpan(text: note),
-        ],
-      ),
-      style: theme.textTheme.bodySmall?.copyWith(color: color),
     );
   }
 }
@@ -762,7 +831,7 @@ class _IncomeInputRow extends StatelessWidget {
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
       decoration: InputDecoration(
-        labelText: 'Monthly gross income',
+        labelText: metrics.isNarrow ? 'Gross income' : 'Monthly gross income',
         prefixText: 'PKR ',
         errorText: incomeErrorText,
         border: const OutlineInputBorder(),
@@ -798,35 +867,42 @@ class _IncomeInputRow extends StatelessWidget {
       label: const Text('Calculate'),
     );
 
-    if (!metrics.useWideForm) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          taxYearDropdown,
-          const SizedBox(height: 12),
-          input,
-          const SizedBox(height: 12),
-          SizedBox(height: 48, child: button),
-        ],
-      );
-    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Use the form's actual width instead of the full screen width. Some
+        // devices report a wide logical screen even though padding and text
+        // scaling leave too little room for three controls in one row.
+        if (constraints.maxWidth < 700) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              taxYearDropdown,
+              const SizedBox(height: 12),
+              input,
+              const SizedBox(height: 12),
+              SizedBox(height: 48, child: button),
+            ],
+          );
+        }
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: metrics.isLandscapePhone ? 180 : 210,
-          child: taxYearDropdown,
-        ),
-        const SizedBox(width: 12),
-        Expanded(child: input),
-        const SizedBox(width: 12),
-        SizedBox(
-          width: metrics.isLandscapePhone ? 140 : 160,
-          height: 56,
-          child: button,
-        ),
-      ],
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: metrics.isLandscapePhone ? 180 : 210,
+              child: taxYearDropdown,
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: input),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: metrics.isLandscapePhone ? 140 : 160,
+              height: 56,
+              child: button,
+            ),
+          ],
+        );
+      },
     );
   }
 }

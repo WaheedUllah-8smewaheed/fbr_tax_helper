@@ -241,7 +241,7 @@ class _TwoFactorAuthPageState extends State<TwoFactorAuthPage> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: !widget.requiredEnrollment,
-        title: const Text('Two-factor authentication'),
+        title: const Text('Two-Factor Authentication'),
         actions: widget.requiredEnrollment
             ? [
                 IconButton(
@@ -252,194 +252,198 @@ class _TwoFactorAuthPageState extends State<TwoFactorAuthPage> {
               ]
             : null,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                if (widget.requiredEnrollment)
-                  Card(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    child: const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text(
-                        'Two-factor authentication is required before you can access your account.',
+      body: SafeArea(
+        top: false,
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  if (widget.requiredEnrollment)
+                    Card(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      child: const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          'Two-factor authentication is required before you can access your account.',
+                        ),
                       ),
                     ),
-                  ),
-                const SizedBox(height: 8),
-                const Icon(Icons.security, size: 64, color: Colors.teal),
-                const SizedBox(height: 12),
-                Text(
-                  'Protect your account with an authenticator app',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Use Google Authenticator, Microsoft Authenticator, Authy, 1Password, or another TOTP-compatible app.',
-                  textAlign: TextAlign.center,
-                ),
-                if (!_authService.supportsTotpMfa) ...[
-                  const SizedBox(height: 20),
-                  Card(
-                    color: Theme.of(context).colorScheme.errorContainer,
-                    child: const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text(
-                        'Authenticator-app MFA is supported by Firebase on Android, iOS, and web. It is not available in this Windows/macOS build.',
-                      ),
+                  const SizedBox(height: 8),
+                  const Icon(Icons.security, size: 64, color: Colors.teal),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Protect your account with an authenticator app',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                ] else if (!_emailVerified) ...[
-                  const SizedBox(height: 24),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const Text(
-                            'Verify your email first',
-                            style: TextStyle(fontWeight: FontWeight.w800),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Firebase requires a verified email before an authenticator app can be enrolled. Check ${_authService.currentUser?.email ?? 'your inbox'}.',
-                          ),
-                          const SizedBox(height: 12),
-                          OutlinedButton(
-                            onPressed: _isWorking
-                                ? null
-                                : _sendVerificationEmail,
-                            child: const Text('Send verification email'),
-                          ),
-                          FilledButton(
-                            onPressed: _isWorking
-                                ? null
-                                : _checkEmailVerification,
-                            child: const Text("I've verified my email"),
-                          ),
-                        ],
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Use Google Authenticator, Microsoft Authenticator, Authy, 1Password, or another TOTP-compatible app.',
+                    textAlign: TextAlign.center,
+                  ),
+                  if (!_authService.supportsTotpMfa) ...[
+                    const SizedBox(height: 20),
+                    Card(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      child: const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          'Authenticator-app MFA is supported by Firebase on Android, iOS, and web. It is not available in this Windows/macOS build.',
+                        ),
                       ),
                     ),
-                  ),
-                ] else if (_factors.isNotEmpty) ...[
-                  const SizedBox(height: 24),
-                  Card(
-                    child: ListTile(
-                      leading: const Icon(
-                        Icons.verified_user,
-                        color: Colors.green,
-                      ),
-                      title: const Text('Authenticator app enabled'),
-                      subtitle: Text(
-                        _factors.first.displayName ?? 'Authenticator app',
-                      ),
-                      trailing: widget.requiredEnrollment
-                          ? null
-                          : TextButton(
+                  ] else if (!_emailVerified) ...[
+                    const SizedBox(height: 24),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Text(
+                              'Verify your email first',
+                              style: TextStyle(fontWeight: FontWeight.w800),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Firebase requires a verified email before an authenticator app can be enrolled. Check ${_authService.currentUser?.email ?? 'your inbox'}.',
+                            ),
+                            const SizedBox(height: 12),
+                            OutlinedButton(
                               onPressed: _isWorking
                                   ? null
-                                  : () => _disableFactor(_factors.first),
-                              child: const Text('Reset'),
+                                  : _sendVerificationEmail,
+                              child: const Text('Send verification email'),
                             ),
+                            FilledButton(
+                              onPressed: _isWorking
+                                  ? null
+                                  : _checkEmailVerification,
+                              child: const Text("I've verified my email"),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                ] else if (_enrollment == null) ...[
-                  const SizedBox(height: 24),
-                  FilledButton.icon(
-                    onPressed: _isWorking ? null : _startEnrollment,
-                    icon: const Icon(Icons.qr_code_2),
-                    label: const Text('Set up authenticator app'),
-                  ),
-                ] else ...[
-                  const SizedBox(height: 24),
-                  const Text(
-                    '1. Scan this QR code with your authenticator app.',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 12),
-                  Center(child: _TotpQrCode(data: _enrollment!.qrCodeUrl)),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: _isWorking
-                        ? null
-                        : () => _authService.openTotpEnrollmentInAuthenticator(
-                            _enrollment!,
-                          ),
-                    icon: const Icon(Icons.open_in_new),
-                    label: const Text('Open authenticator app'),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('Or enter this setup key manually:'),
-                  const SizedBox(height: 6),
-                  SelectableText(
-                    _enrollment!.secretKey,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontWeight: FontWeight.w700,
+                  ] else if (_factors.isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    Card(
+                      child: ListTile(
+                        leading: const Icon(
+                          Icons.verified_user,
+                          color: Colors.green,
+                        ),
+                        title: const Text('Authenticator app enabled'),
+                        subtitle: Text(
+                          _factors.first.displayName ?? 'Authenticator app',
+                        ),
+                        trailing: widget.requiredEnrollment
+                            ? null
+                            : TextButton(
+                                onPressed: _isWorking
+                                    ? null
+                                    : () => _disableFactor(_factors.first),
+                                child: const Text('Reset'),
+                              ),
+                      ),
                     ),
-                  ),
-                  TextButton.icon(
-                    onPressed: () {
-                      Clipboard.setData(
-                        ClipboardData(text: _enrollment!.secretKey),
-                      );
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Setup key copied.')),
-                      );
-                    },
-                    icon: const Icon(Icons.copy),
-                    label: const Text('Copy setup key'),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    '2. Enter the current 6-digit code.',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _codeController,
-                    enabled: !_isWorking,
-                    keyboardType: TextInputType.number,
-                    textInputAction: TextInputAction.done,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(6),
-                    ],
-                    onSubmitted: (_) => _completeEnrollment(),
-                    decoration: const InputDecoration(
-                      labelText: '6-digit code',
-                      border: OutlineInputBorder(),
+                  ] else if (_enrollment == null) ...[
+                    const SizedBox(height: 24),
+                    FilledButton.icon(
+                      onPressed: _isWorking ? null : _startEnrollment,
+                      icon: const Icon(Icons.qr_code_2),
+                      label: const Text('Set up authenticator app'),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton.icon(
-                    onPressed: _isWorking ? null : _completeEnrollment,
-                    icon: const Icon(Icons.check),
-                    label: const Text('Verify and enable'),
-                  ),
+                  ] else ...[
+                    const SizedBox(height: 24),
+                    const Text(
+                      '1. Scan this QR code with your authenticator app.',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 12),
+                    Center(child: _TotpQrCode(data: _enrollment!.qrCodeUrl)),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _isWorking
+                          ? null
+                          : () =>
+                                _authService.openTotpEnrollmentInAuthenticator(
+                                  _enrollment!,
+                                ),
+                      icon: const Icon(Icons.open_in_new),
+                      label: const Text('Open authenticator app'),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Or enter this setup key manually:'),
+                    const SizedBox(height: 6),
+                    SelectableText(
+                      _enrollment!.secretKey,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () {
+                        Clipboard.setData(
+                          ClipboardData(text: _enrollment!.secretKey),
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Setup key copied.')),
+                        );
+                      },
+                      icon: const Icon(Icons.copy),
+                      label: const Text('Copy setup key'),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      '2. Enter the current 6-digit code.',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _codeController,
+                      enabled: !_isWorking,
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.done,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(6),
+                      ],
+                      onSubmitted: (_) => _completeEnrollment(),
+                      decoration: const InputDecoration(
+                        labelText: '6-digit code',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: _isWorking ? null : _completeEnrollment,
+                      icon: const Icon(Icons.check),
+                      label: const Text('Verify and enable'),
+                    ),
+                  ],
+                  if (_isWorking) ...[
+                    const SizedBox(height: 16),
+                    const Center(child: CircularProgressIndicator()),
+                  ],
+                  if (_error != null) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ],
                 ],
-                if (_isWorking) ...[
-                  const SizedBox(height: 16),
-                  const Center(child: CircularProgressIndicator()),
-                ],
-                if (_error != null) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    _error!,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ],
-              ],
-            ),
+              ),
+      ),
     );
   }
 }

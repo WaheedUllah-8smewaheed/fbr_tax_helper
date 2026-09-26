@@ -1,30 +1,44 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
+import 'package:fbr_tax_helper/core/theme/app_theme.dart';
 import 'package:fbr_tax_helper/features/tax_calculator/presentation/pages/tax_calculator_screen.dart';
 import 'package:fbr_tax_helper/features/transactions/presentation/pages/add_transaction_page.dart';
-import 'package:fbr_tax_helper/features/transactions/presentation/pages/notification_transactions_page.dart';
 import 'package:fbr_tax_helper/features/transactions/presentation/bloc/transaction_bloc.dart';
 import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction.dart'
     as entity;
 import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction_category.dart';
 import 'package:fbr_tax_helper/features/transactions/services/transaction_report_service.dart';
 import 'package:fbr_tax_helper/features/transactions/services/category_preferences_service.dart';
-import 'package:fbr_tax_helper/features/transactions/services/push_notification_import_service.dart';
+import 'package:fbr_tax_helper/features/khata/domain/entities/khata_entry.dart';
+import 'package:fbr_tax_helper/features/assets/domain/entities/asset.dart';
 
 import 'package:fbr_tax_helper/core/platform/app_storage.dart';
+import 'package:fbr_tax_helper/core/database/tax_database.dart';
 import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:fbr_tax_helper/features/auth/services/biometric_lock_service.dart';
 import 'package:fbr_tax_helper/features/backup/services/drive_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as path;
+import 'package:fbr_tax_helper/core/widgets/filer_flow_logo.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+
+part '../../../transactions/presentation/pages/all_transactions_page.dart';
+part '../../../khata/presentation/pages/khata_page.dart';
+part '../../../assets/presentation/pages/assets_page.dart';
+part 'more_page.dart';
+part 'profile_page.dart';
+part '../../../transactions/presentation/pages/comparison_dashboard_page.dart';
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -32,17 +46,17 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen>
-    with WidgetsBindingObserver {
+class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
-  int _notificationCount = 0;
-  Timer? _notificationTimer;
+  TransactionTypeFilter _transactionFilter = TransactionTypeFilter.income;
   late final CategoryPreferencesService _categoryPreferences;
+  final _homeDashboardKey = GlobalKey<_HomeDashboardState>();
+  final _khataPageKey = GlobalKey<_KhataPageState>();
+  final _assetsPageKey = GlobalKey<_AssetsPageState>();
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     context.read<TransactionBloc>().add(const LoadTransactions());
     _categoryPreferences = CategoryPreferencesService();
     final userId = context.read<AuthService>().currentUser?.uid;
@@ -51,38 +65,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showBiometricReminderIfNeeded();
-      _refreshNotificationCount();
     });
-    _notificationTimer = Timer.periodic(
-      const Duration(seconds: 4),
-      (_) => _refreshNotificationCount(),
-    );
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _refreshNotificationCount();
-    }
-  }
-
-  Future<void> _refreshNotificationCount() async {
-    if (kIsWeb || !Platform.isAndroid) return;
-    try {
-      const service = PushNotificationImportService();
-      if (!await service.isNotificationAccessEnabled()) {
-        if (mounted && _notificationCount != 0) {
-          setState(() => _notificationCount = 0);
-        }
-        return;
-      }
-      await service.refreshNotificationListener();
-      final count = (await service.getCapturedNotifications()).length;
-      if (!mounted || count == _notificationCount) return;
-      setState(() => _notificationCount = count);
-    } catch (_) {
-      // Badge refresh must never interrupt dashboard use.
-    }
   }
 
   Future<void> _showBiometricReminderIfNeeded() async {
@@ -100,8 +83,16 @@ class _DashboardScreenState extends State<DashboardScreen>
         ..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
-            content: const Text(
-              'Please enable fingerprint for two-factor authentication in the Profile menu.',
+            content: Row(
+              children: const [
+                FilerFlowLogo(size: 28),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Please enable fingerprint for two-factor authentication in the Profile menu.',
+                  ),
+                ),
+              ],
             ),
             duration: const Duration(seconds: 5),
           ),
@@ -113,390 +104,980 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _notificationTimer?.cancel();
     _categoryPreferences.dispose();
     super.dispose();
   }
 
   void _onItemTapped(int index) {
+    final isReturningToDashboard = index == 0 && _selectedIndex != 0;
     setState(() {
       _selectedIndex = index;
     });
+    if (isReturningToDashboard) {
+      _homeDashboardKey.currentState?._loadKhataAndAssetMetrics();
+    }
+    if (index == 1) {
+      _khataPageKey.currentState?._loadEntries();
+    } else if (index == 2) {
+      _assetsPageKey.currentState?._loadAssets();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    const titles = ['Dashboard', 'Transactions', 'Settings', 'More'];
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(titles[_selectedIndex]),
-        actions: [
-          IconButton(
-            tooltip: 'Notifications',
-            icon: _NotificationBadge(count: _notificationCount),
-            onPressed: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const NotificationTransactionsPage(),
+    const titles = ['Dashboard', 'Khata', 'Assets', 'Settings', 'More'];
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) async {
+        if (didPop) return;
+        if (_selectedIndex != 0) {
+          setState(() {
+            _selectedIndex = 0;
+          });
+        } else {
+          final shouldQuit = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Exit App'),
+              content: const Text('Are you sure you want to exit the application?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('No'),
                 ),
-              );
-              await _refreshNotificationCount();
-            },
-          ),
-        ],
-      ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Yes'),
+                ),
+              ],
+            ),
+          );
+          if (shouldQuit == true) {
+            SystemNavigator.pop();
+          }
+        }
+      },
+      child: Scaffold(
+        appBar: _selectedIndex == 0
+            ? null
+            : AppBar(title: Text(titles[_selectedIndex])),
       body: ListenableBuilder(
         listenable: _categoryPreferences,
         builder: (context, _) => IndexedStack(
           index: _selectedIndex,
           children: [
-            _HomeDashboard(categoryPreferences: _categoryPreferences),
-            _TransactionsPage(
+            _HomeDashboard(
+              key: _homeDashboardKey,
               categoryPreferences: _categoryPreferences,
-              notificationCount: _notificationCount,
-              onNotificationsChanged: _refreshNotificationCount,
+              onOpenKhata: () => _onItemTapped(1),
+              onOpenAssets: () => _onItemTapped(2),
+            ),
+            _KhataPage(
+              key: _khataPageKey,
+              categoryPreferences: _categoryPreferences,
+            ),
+            _AssetsPage(
+              key: _assetsPageKey,
+              categoryPreferences: _categoryPreferences,
             ),
             _CategorySettingsPage(categoryPreferences: _categoryPreferences),
-            _MorePage(
-              notificationCount: _notificationCount,
-              onNotificationsChanged: _refreshNotificationCount,
-            ),
+            _MorePage(categoryPreferences: _categoryPreferences),
           ],
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
-            label: 'Dashboard',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.credit_card_outlined),
-            label: 'Transactions',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
-          BottomNavigationBarItem(icon: Icon(Icons.menu), label: 'More'),
-        ],
+      floatingActionButton: _selectedIndex != 0 ? null : FloatingActionButton(
+        heroTag: 'add-transaction-fab',
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => _TransactionsPage(
+                categoryPreferences: _categoryPreferences,
+                filter: _transactionFilter,
+                onFilterChanged: (filter) {
+                  setState(() => _transactionFilter = filter);
+                },
+                showAppBar: true,
+              ),
+            ),
+          );
+        },
+        backgroundColor: AppColors.warmGold,
+        foregroundColor: AppColors.forest,
+        elevation: 4,
+        shape: const CircleBorder(),
+        child: const Icon(Icons.add_rounded, size: 30),
       ),
-    );
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: AppColors.cream,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            child: BottomNavigationBar(
+              type: BottomNavigationBarType.fixed,
+              backgroundColor: AppColors.cream,
+              elevation: 0,
+              currentIndex: _selectedIndex,
+              onTap: _onItemTapped,
+              selectedItemColor: AppColors.forest,
+              unselectedItemColor: const Color(0xFF6B7280),
+              selectedLabelStyle: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontWeight: FontWeight.w500,
+                fontSize: 12,
+              ),
+              items: const [
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.grid_view_rounded),
+                  activeIcon: Icon(Icons.grid_view_rounded),
+                  label: 'Dashboard',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.currency_exchange_rounded),
+                  activeIcon: Icon(Icons.currency_exchange_rounded),
+                  label: 'Khata',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.account_balance_rounded),
+                  activeIcon: Icon(Icons.account_balance_rounded),
+                  label: 'Assets',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.settings_outlined),
+                  activeIcon: Icon(Icons.settings_rounded),
+                  label: 'Settings',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.menu_rounded),
+                  activeIcon: Icon(Icons.menu_rounded),
+                  label: 'More',
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ));
   }
 }
 
-enum _TransactionFilter { income, expense, both }
+enum TransactionTypeFilter { income, expense, both }
+
+class TransactionFilterTotals {
+  const TransactionFilterTotals({required this.income, required this.expenses});
+
+  final double income;
+  final double expenses;
+}
+
+TransactionFilterTotals calculateTransactionFilterTotals(
+  Iterable<entity.Transaction> transactions,
+) {
+  var income = 0.0;
+  var expenses = 0.0;
+  for (final transaction in transactions) {
+    if (transaction.isExpense) {
+      expenses += transaction.amount;
+    } else {
+      income += transaction.amount;
+    }
+  }
+  return TransactionFilterTotals(income: income, expenses: expenses);
+}
+
+CategoryMode resolveCategoryMode({
+  required String? categoryName,
+  required CategoryPreferencesService categoryPreferences,
+}) {
+  if (categoryName == null) {
+    return CategoryMode.both;
+  }
+  if (categoryPreferences.childrenOf(categoryName).isNotEmpty) {
+    return categoryPreferences.modeForParent(categoryName);
+  }
+  if (categoryPreferences.isDualMode(categoryName)) {
+    return CategoryMode.both;
+  }
+  return categoryPreferences.isExpense(categoryName)
+      ? CategoryMode.expense
+      : CategoryMode.income;
+}
 
 class _TransactionsPage extends StatefulWidget {
   const _TransactionsPage({
     required this.categoryPreferences,
-    required this.notificationCount,
-    required this.onNotificationsChanged,
+    required this.filter,
+    required this.onFilterChanged,
+    this.showAppBar = false,
+    this.onParentCategorySelected,
+    this.showTypeFilter = true,
   });
 
   final CategoryPreferencesService categoryPreferences;
-  final int notificationCount;
-  final Future<void> Function() onNotificationsChanged;
+  final TransactionTypeFilter filter;
+  final ValueChanged<TransactionTypeFilter> onFilterChanged;
+  final bool showAppBar;
+  final bool showTypeFilter;
+  final Future<void> Function(
+    String parentCategory,
+    List<TransactionCategory> categoryOptions,
+  )?
+  onParentCategorySelected;
 
   @override
   State<_TransactionsPage> createState() => _TransactionsPageState();
 }
 
 class _TransactionsPageState extends State<_TransactionsPage> {
-  _TransactionFilter _filter = _TransactionFilter.income;
+
+  Widget _buildIntroCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [Colors.green.shade700, Colors.green.shade500],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Record Transaction',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Select a category below to record a new income or expense transaction.',
+            style: TextStyle(color: Colors.white.withAlpha(220), fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+
+  late TransactionTypeFilter _filter;
+
+  @override
+  void initState() {
+    super.initState();
+    _filter = widget.filter;
+  }
+
+  @override
+  void didUpdateWidget(covariant _TransactionsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.filter != widget.filter) {
+      _filter = widget.filter;
+    }
+  }
+
+  Future<void> _openParentTransaction(
+    String parentCategory,
+    List<TransactionCategory> categoryOptions,
+  ) async {
+    final onParentCategorySelected = widget.onParentCategorySelected;
+    if (onParentCategorySelected != null) {
+      return onParentCategorySelected(parentCategory, categoryOptions);
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => AddTransactionPage(
+          parentCategory: parentCategory,
+          categoryOptions: categoryOptions,
+          categoryPreferences: widget.categoryPreferences,
+          initialIsExpense: _filter == TransactionTypeFilter.expense
+              ? true
+              : (_filter == TransactionTypeFilter.income
+                    ? false
+                    : widget.categoryPreferences.isExpense(parentCategory)),
+          onViewCategoryHistory: (category, {required includeSubcategories}) {
+            Navigator.of(this.context).push(
+              MaterialPageRoute(
+                builder: (context) => _AllTransactionsPage(
+                  categoryPreferences: widget.categoryPreferences,
+                  initialCategory: category,
+                  initialCategoryIncludesChildren: includeSubcategories,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
 
   bool _isVisible(TransactionCategory category) {
     if (!widget.categoryPreferences.isEnabled(category.name)) return false;
     return switch (_filter) {
-      _TransactionFilter.income =>
+      TransactionTypeFilter.income =>
         widget.categoryPreferences.shouldShowCategoryInSection(
           categoryName: category.name,
           isExpenseSection: false,
         ),
-      _TransactionFilter.expense =>
+      TransactionTypeFilter.expense =>
         widget.categoryPreferences.shouldShowCategoryInSection(
           categoryName: category.name,
           isExpenseSection: true,
         ),
-      _TransactionFilter.both => widget.categoryPreferences.isDualMode(
+      TransactionTypeFilter.both => widget.categoryPreferences.isDualMode(
         category.name,
       ),
     };
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          SegmentedButton<_TransactionFilter>(
-            expandedInsets: EdgeInsets.zero,
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(
-                value: _TransactionFilter.income,
-                label: Text('Income'),
-              ),
-              ButtonSegment(
-                value: _TransactionFilter.expense,
-                label: Text('Expense'),
-              ),
-              ButtonSegment(
-                value: _TransactionFilter.both,
-                label: Text('Both'),
-              ),
-            ],
-            selected: {_filter},
-            onSelectionChanged: (selection) {
-              setState(() => _filter = selection.first);
-            },
-          ),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => _AllTransactionsPage(
-                    categoryPreferences: widget.categoryPreferences,
-                    notificationCount: widget.notificationCount,
-                    onNotificationsChanged: widget.onNotificationsChanged,
-                  ),
-                ),
-              );
-            },
-            icon: const Icon(Icons.receipt_long_outlined),
-            label: const Text('View All Transactions'),
-          ),
-          const SizedBox(height: 20),
-          ...TransactionCategory.hierarchy.entries.expand((superCategory) {
-            final visibleParents = superCategory.value.entries
-                .map(
-                  (parent) => MapEntry(
-                    parent.key,
-                    parent.value.where(_isVisible).toList(),
-                  ),
-                )
-                .where((parent) => parent.value.isNotEmpty)
-                .toList();
-            if (visibleParents.isEmpty) return const <Widget>[];
-            return <Widget>[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
-                child: Text(
-                  superCategory.key,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              Card(
-                margin: const EdgeInsets.only(bottom: 18),
-                child: Column(
-                  children: [
-                    for (
-                      var parentIndex = 0;
-                      parentIndex < visibleParents.length;
-                      parentIndex++
-                    ) ...[
-                      ExpansionTile(
-                        leading: CircleAvatar(
-                          backgroundColor: _getColorForCategory(
-                            visibleParents[parentIndex].key,
-                          ).withValues(alpha: 0.12),
-                          foregroundColor: _getColorForCategory(
-                            visibleParents[parentIndex].key,
-                          ),
-                          child: Icon(
-                            _getIconForCategory(
-                              visibleParents[parentIndex].key,
-                            ),
-                            size: 20,
-                          ),
-                        ),
-                        title: Text(
-                          visibleParents[parentIndex].key,
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                        children: [
-                          for (
-                            var categoryIndex = 0;
-                            categoryIndex <
-                                visibleParents[parentIndex].value.length;
-                            categoryIndex++
-                          ) ...[
-                            ListTile(
-                              contentPadding: const EdgeInsets.only(
-                                left: 72,
-                                right: 16,
-                              ),
-                              title: Text(
-                                visibleParents[parentIndex]
-                                    .value[categoryIndex]
-                                    .name,
-                              ),
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: () {
-                                final category = visibleParents[parentIndex]
-                                    .value[categoryIndex];
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        _CategoryTransactionsPage(
-                                          category: category.name,
-                                          categoryPreferences:
-                                              widget.categoryPreferences,
-                                          notificationCount:
-                                              widget.notificationCount,
-                                          onNotificationsChanged:
-                                              widget.onNotificationsChanged,
-                                        ),
-                                  ),
-                                );
-                              },
-                            ),
-                            if (categoryIndex <
-                                visibleParents[parentIndex].value.length - 1)
-                              const Divider(height: 1, indent: 72),
-                          ],
-                        ],
-                      ),
-                      if (parentIndex < visibleParents.length - 1)
-                        const Divider(height: 1, indent: 72),
-                    ],
-                  ],
-                ),
-              ),
-            ];
-          }),
-        ],
-      ),
-    );
-  }
-}
-
-enum _TransactionDateFilter { all, month, range }
-
-class _AllTransactionsPage extends StatefulWidget {
-  const _AllTransactionsPage({
-    required this.categoryPreferences,
-    required this.notificationCount,
-    required this.onNotificationsChanged,
-  });
-
-  final CategoryPreferencesService categoryPreferences;
-  final int notificationCount;
-  final Future<void> Function() onNotificationsChanged;
-
-  @override
-  State<_AllTransactionsPage> createState() => _AllTransactionsPageState();
-}
-
-class _AllTransactionsPageState extends State<_AllTransactionsPage> {
-  _TransactionDateFilter _dateFilter = _TransactionDateFilter.all;
-  DateTime? _selectedMonth;
-  DateTime? _rangeStart;
-  DateTime? _rangeEnd;
-
-  Future<void> _pickRangeDate({required bool isStart}) async {
-    final now = DateTime.now();
-    final firstDate = isStart
-        ? DateTime(2000)
-        : (_rangeStart ?? DateTime(2000));
-    final lastDate = isStart ? (_rangeEnd ?? now) : now;
-    final initialDate = isStart
-        ? (_rangeStart ?? _rangeEnd ?? now)
-        : (_rangeEnd ?? _rangeStart ?? now);
-    final selectedDate = await showDatePicker(
-      context: context,
-      firstDate: firstDate,
-      lastDate: lastDate,
-      initialDate: initialDate,
-    );
-    if (selectedDate == null || !mounted) return;
-    setState(() {
-      if (isStart) {
-        _rangeStart = selectedDate;
-      } else {
-        _rangeEnd = selectedDate;
-      }
-    });
-  }
-
-  List<entity.Transaction> _applyFilters(
-    List<entity.Transaction> transactions,
-  ) {
-    return transactions.where((transaction) {
-      return switch (_dateFilter) {
-        _TransactionDateFilter.all => true,
-        _TransactionDateFilter.month =>
-          _selectedMonth == null ||
-              (transaction.date.year == _selectedMonth!.year &&
-                  transaction.date.month == _selectedMonth!.month),
-        _TransactionDateFilter.range => _isInsideSelectedRange(
-          transaction.date,
-        ),
-      };
+  List<_TransactionCategoryCardData> _visibleCategoryCards() {
+    return widget.categoryPreferences.hierarchy.entries.expand((superCategory) {
+      return superCategory.value.entries
+          .map(
+            (parent) => _TransactionCategoryCardData(
+              groupName: superCategory.key,
+              categoryName: parent.key,
+              options: parent.value.where(_isVisible).toList(),
+            ),
+          )
+          .where((card) => card.options.isNotEmpty);
     }).toList();
   }
 
-  bool _isInsideSelectedRange(DateTime date) {
-    final rangeStart = _rangeStart;
-    final rangeEnd = _rangeEnd;
-    if (rangeStart == null || rangeEnd == null) return true;
-    final value = DateTime(date.year, date.month, date.day);
-    final start = DateTime(rangeStart.year, rangeStart.month, rangeStart.day);
-    final end = DateTime(rangeEnd.year, rangeEnd.month, rangeEnd.day);
-    return !value.isBefore(start) && !value.isAfter(end);
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: widget.categoryPreferences,
+      builder: (context, _) {
+        final categoryCards = _visibleCategoryCards();
+
+        final bottomPadding = MediaQuery.paddingOf(context).bottom + 90.0;
+        return Scaffold(
+          appBar: widget.showAppBar
+              ? AppBar(
+                  title: const Text('Transactions'),
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                )
+              : null,
+          body: ListView(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPadding),
+            children: [
+                _buildIntroCard(),
+              if (widget.showTypeFilter) ...[
+                SegmentedButton<TransactionTypeFilter>(
+                  expandedInsets: EdgeInsets.zero,
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(
+                      value: TransactionTypeFilter.income,
+                      label: Text('Income'),
+                    ),
+                    ButtonSegment(
+                      value: TransactionTypeFilter.expense,
+                      label: Text('Expense'),
+                    ),
+                    ButtonSegment(
+                      value: TransactionTypeFilter.both,
+                      label: Text('Both'),
+                    ),
+                  ],
+                  selected: {_filter},
+                  onSelectionChanged: (selection) {
+                    setState(() {
+                      _filter = selection.first;
+                    });
+                    widget.onFilterChanged(selection.first);
+                  },
+                ),
+                const SizedBox(height: 20),
+              ],
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 280),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                child: LayoutBuilder(
+                  key: ValueKey(_filter),
+                  builder: (context, constraints) => GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: categoryCards.length,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: constraints.maxWidth < 360 ? 1.12 : 1.3,
+                    ),
+                    itemBuilder: (context, index) {
+                      final card = categoryCards[index];
+                      return _AnimatedTransactionCategoryCard(
+                        key: ValueKey('${_filter.name}-${card.categoryName}'),
+                        data: card,
+                        index: index,
+                        onTap: () => _openParentTransaction(
+                          card.categoryName,
+                          card.options,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TransactionCategoryCardData {
+  const _TransactionCategoryCardData({
+    required this.groupName,
+    required this.categoryName,
+    required this.options,
+  });
+
+  final String groupName;
+  final String categoryName;
+  final List<TransactionCategory> options;
+}
+
+class _AnimatedTransactionCategoryCard extends StatefulWidget {
+  const _AnimatedTransactionCategoryCard({
+    super.key,
+    required this.data,
+    required this.index,
+    required this.onTap,
+  });
+
+  final _TransactionCategoryCardData data;
+  final int index;
+  final VoidCallback onTap;
+
+  @override
+  State<_AnimatedTransactionCategoryCard> createState() =>
+      _AnimatedTransactionCategoryCardState();
+}
+
+class _AnimatedTransactionCategoryCardState
+    extends State<_AnimatedTransactionCategoryCard> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _getColorForCategory(widget.data.categoryName);
+    final accent = HSLColor.fromColor(
+      color,
+    ).withHue((HSLColor.fromColor(color).hue + 28) % 360).toColor();
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: 260 + (widget.index % 6) * 45),
+      curve: Curves.easeOutBack,
+      builder: (context, value, child) => Opacity(
+        opacity: value.clamp(0, 1),
+        child: Transform.translate(
+          offset: Offset(0, 14 * (1 - value)),
+          child: child,
+        ),
+      ),
+      child: AnimatedScale(
+        scale: _pressed ? 0.96 : 1,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                color.withValues(alpha: _pressed ? 0.24 : 0.17),
+                accent.withValues(alpha: _pressed ? 0.18 : 0.09),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: color.withValues(alpha: 0.42)),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: _pressed ? 0.12 : 0.2),
+                blurRadius: _pressed ? 7 : 14,
+                offset: Offset(0, _pressed ? 3 : 7),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: widget.onTap,
+              onTapDown: (_) => setState(() => _pressed = true),
+              onTapUp: (_) => setState(() => _pressed = false),
+              onTapCancel: () => setState(() => _pressed = false),
+              child: Stack(
+                children: [
+                  Positioned(
+                    right: -18,
+                    top: -20,
+                    child: Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: accent.withValues(alpha: 0.1),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 43,
+                              height: 43,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [color, accent],
+                                ),
+                                borderRadius: BorderRadius.circular(14),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: color.withValues(alpha: 0.3),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                _getIconForCategory(widget.data.categoryName),
+                                color: Colors.white,
+                                size: 23,
+                              ),
+                            ),
+                            const Spacer(),
+                            Icon(
+                              Icons.arrow_outward_rounded,
+                              size: 20,
+                              color: color,
+                            ),
+                          ],
+                        ),
+                        const Spacer(),
+                        Text(
+                          widget.data.groupName.toUpperCase(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: color.withValues(alpha: 0.8),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.1,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          widget.data.categoryName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: color,
+                                fontWeight: FontWeight.w900,
+                                height: 1.15,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeDashboard extends StatefulWidget {
+  const _HomeDashboard({
+    super.key,
+    required this.categoryPreferences,
+    required this.onOpenKhata,
+    required this.onOpenAssets,
+  });
+
+  final CategoryPreferencesService categoryPreferences;
+  final VoidCallback onOpenKhata;
+  final VoidCallback onOpenAssets;
+
+  @override
+  State<_HomeDashboard> createState() => _HomeDashboardState();
+}
+
+class _HomeDashboardState extends State<_HomeDashboard> {
+
+
+  static const _profileStorage = FlutterSecureStorage();
+  String? _selectedFinancialYear;
+  int? _selectedMonth;
+  String? _profileImagePath;
+  double _totalPayable = 0.0;
+  double _totalReceivable = 0.0;
+  double _totalAssets = 0.0;
+  BannerAd? _bannerAd;
+  bool _isBannerAdLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedFinancialYear = null;
+    _selectedMonth = null;
+    _loadProfileImage();
+    _loadKhataAndAssetMetrics();
+    _loadBannerAd();
   }
 
-  String _filterLabel() {
-    final period = switch (_dateFilter) {
-      _TransactionDateFilter.all => 'All dates',
-      _TransactionDateFilter.month =>
-        _selectedMonth == null
-            ? 'All months'
-            : DateFormat('MMMM yyyy').format(_selectedMonth!),
-      _TransactionDateFilter.range =>
-        _rangeStart == null || _rangeEnd == null
-            ? 'Select from and to dates'
-            : '${DateFormat('MMM d, yyyy').format(_rangeStart!)} – ${DateFormat('MMM d, yyyy').format(_rangeEnd!)}',
-    };
-    return 'All transactions • $period';
+  void _loadBannerAd() {
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) return;
+
+    // Dashboard-Banner
+    const dashboardBannerAdUnitId = 'ca-app-pub-9761861396179823/6624819291';
+    final adUnitId = Platform.isAndroid
+        ? dashboardBannerAdUnitId
+        : dashboardBannerAdUnitId;
+    final bannerAd = BannerAd(
+      adUnitId: adUnitId,
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          if (!mounted) {
+            ad.dispose();
+            return;
+          }
+          setState(() {
+            _bannerAd = ad as BannerAd;
+            _isBannerAdLoaded = true;
+          });
+        },
+        onAdFailedToLoad: (ad, error) {
+          debugPrint('Dashboard banner failed to load: ${error.message}');
+          ad.dispose();
+        },
+      ),
+    );
+    bannerAd.load();
+  }
+
+  @override
+  void dispose() {
+    _bannerAd?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadKhataAndAssetMetrics() async {
+    try {
+      final userId = context.read<AuthService>().currentUser?.uid;
+      final khataRows = await TaxDatabase.instance.fetchKhataEntries(
+        userId: userId,
+      );
+      final khataList = khataRows.map((r) => KhataEntry.fromMap(r)).toList();
+      final openPayable = khataList
+          .where((e) => e.isPayable && !e.isPaid && !e.isWrittenOff)
+          .fold(0.0, (sum, e) => sum + e.remainingAmount);
+      final openReceivable = khataList
+          .where((e) => !e.isPayable && !e.isPaid && !e.isWrittenOff)
+          .fold(0.0, (sum, e) => sum + e.remainingAmount);
+
+      final assetRows = await TaxDatabase.instance.fetchAssets(userId: userId);
+      final assetList = assetRows.map((r) => Asset.fromMap(r)).toList();
+      final assetsVal = assetList.fold(0.0, (sum, a) => sum + a.value);
+
+      if (mounted) {
+        setState(() {
+          _totalPayable = openPayable;
+          _totalReceivable = openReceivable;
+          _totalAssets = assetsVal;
+        });
+      }
+    } catch (_) {}
+  }
+
+  String _profileImageKey(String? userId) =>
+      'profile_image_${userId ?? 'signed_out'}';
+
+  Future<void> _loadProfileImage() async {
+    final userId = context.read<AuthService>().currentUser?.uid;
+    final storedPath = await _profileStorage.read(
+      key: _profileImageKey(userId),
+    );
+    if (!mounted) return;
+    setState(() {
+      _profileImagePath = storedPath != null && File(storedPath).existsSync()
+          ? storedPath
+          : null;
+    });
+  }
+
+  String _getUserInitial(dynamic user) {
+    final name = (user?.displayName as String?)?.trim();
+    if (name != null && name.isNotEmpty) {
+      return name[0].toUpperCase();
+    }
+    final email = (user?.email as String?)?.trim();
+    if (email != null && email.isNotEmpty) {
+      return email[0].toUpperCase();
+    }
+    return 'W';
+  }
+
+  Widget _buildDashboardHeader({
+    required BuildContext context,
+    required List<String> financialYearOptions,
+  }) {
+    final isSelectedYearPresent =
+        _selectedFinancialYear == null ||
+        financialYearOptions.contains(_selectedFinancialYear);
+    final effectiveYearValue = isSelectedYearPresent
+        ? _selectedFinancialYear
+        : null;
+
+    final user = context.read<AuthService>().currentUser;
+    final photoUrl = user?.photoURL;
+    final hasLocalProfileImage =
+        _profileImagePath != null && File(_profileImagePath!).existsSync();
+    final ImageProvider<Object>? profileImage = hasLocalProfileImage
+        ? FileImage(File(_profileImagePath!))
+        : photoUrl != null && photoUrl.isNotEmpty
+        ? NetworkImage(photoUrl)
+        : null;
+
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: MediaQuery.of(context).padding.top + 10,
+        bottom: 18,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Dashboard',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.4,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    // Financial Year Dropdown
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF133E35),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String?>(
+                          value: effectiveYearValue,
+                          dropdownColor: const Color(0xFF0F3A30),
+                          icon: const Icon(
+                            Icons.arrow_drop_down,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          isDense: true,
+                          items: [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text(
+                                'All FY',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            for (final fy in financialYearOptions)
+                              DropdownMenuItem<String?>(
+                                value: fy,
+                                child: Text(
+                                  'FY $fy',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                          ],
+                          onChanged: (newYear) {
+                            setState(() {
+                              _selectedFinancialYear = newYear;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    // Month Dropdown
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF133E35),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int?>(
+                          value: _selectedMonth,
+                          dropdownColor: const Color(0xFF0F3A30),
+                          icon: const Icon(
+                            Icons.arrow_drop_down,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          isDense: true,
+                          items: [
+                            const DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text(
+                                'All Months',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            for (var m = 1; m <= 12; m++)
+                              DropdownMenuItem<int?>(
+                                value: m,
+                                child: Text(
+                                  dashboardMonthNames[m - 1],
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                          ],
+                          onChanged: (newMonth) {
+                            setState(() {
+                              _selectedMonth = newMonth;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // User profile avatar button on the top right
+          Semantics(
+            button: true,
+            label: 'Open user profile',
+            child: Tooltip(
+              message: 'Profile',
+              child: InkWell(
+                borderRadius: BorderRadius.circular(22),
+                onTap: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const _ProfilePage(),
+                    ),
+                  );
+                  if (mounted) await _loadProfileImage();
+                },
+                child: CircleAvatar(
+                  radius: 20,
+                  backgroundColor: const Color(0xFFE8B961),
+                  backgroundImage: profileImage,
+                  child: profileImage == null
+                      ? Text(
+                          _getUserInitial(user),
+                          style: const TextStyle(
+                            color: Color(0xFF1E3A2F),
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        )
+                      : null,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentUserId = context.read<AuthService>().currentUser?.uid ?? '';
+    final user = context.read<AuthService>().currentUser;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('All Transactions'),
-        actions: [
-          IconButton(
-            tooltip: 'Notifications',
-            icon: _NotificationBadge(count: widget.notificationCount),
-            onPressed: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const NotificationTransactionsPage(),
-                ),
-              );
-              await widget.onNotificationsChanged();
-            },
-          ),
-        ],
-      ),
       body: BlocBuilder<TransactionBloc, TransactionState>(
         builder: (context, state) {
+          final currentUserId = user?.uid ?? '';
           final storedTransactions =
               state is TransactionLoaded && state.userId == currentUserId
               ? state.transactions
               : const <entity.Transaction>[];
-          final resolvedTransactions = storedTransactions
+          final transactions = storedTransactions
               .map(
                 (transaction) => transaction.copyWith(
                   isExpense: widget.categoryPreferences
@@ -507,1604 +1088,303 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
                 ),
               )
               .toList();
-          final monthOptions = _buildMonthOptions(resolvedTransactions);
-          final visibleTransactions = _applyFilters(resolvedTransactions);
+          final visibleTransactions = filterDashboardTransactions(
+            transactions,
+            financialYear: _selectedFinancialYear,
+            month: _selectedMonth,
+          );
+          final financialYearOptions = buildFinancialYearOptions(transactions);
+          final periodLabel = dashboardPeriodLabel(
+            selectedFinancialYear: _selectedFinancialYear,
+            selectedMonth: _selectedMonth,
+          );
 
-          return ListView(
-            padding: const EdgeInsets.all(16),
+          return Column(
             children: [
-              SegmentedButton<_TransactionDateFilter>(
-                expandedInsets: EdgeInsets.zero,
-                showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(
-                    value: _TransactionDateFilter.all,
-                    label: Text('All'),
-                  ),
-                  ButtonSegment(
-                    value: _TransactionDateFilter.month,
-                    label: Text('Month'),
-                  ),
-                  ButtonSegment(
-                    value: _TransactionDateFilter.range,
-                    label: Text('Range'),
-                  ),
-                ],
-                selected: {_dateFilter},
-                onSelectionChanged: (selection) {
-                  setState(() {
-                    _dateFilter = selection.first;
-                    if (_dateFilter == _TransactionDateFilter.month &&
-                        _selectedMonth == null &&
-                        monthOptions.isNotEmpty) {
-                      _selectedMonth = monthOptions.first;
-                    }
-                  });
-                },
+              _buildDashboardHeader(
+                context: context,
+                financialYearOptions: financialYearOptions,
               ),
-              if (_dateFilter == _TransactionDateFilter.month) ...[
-                const SizedBox(height: 12),
-                DropdownButtonFormField<DateTime>(
-                  initialValue: _selectedMonth,
-                  decoration: const InputDecoration(
-                    labelText: 'Month',
-                    prefixIcon: Icon(Icons.calendar_month_outlined),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.only(
+                    left: 14.0,
+                    right: 14.0,
+                    top: 14.0,
+                    bottom: 84.0,
                   ),
-                  items: monthOptions
-                      .map(
-                        (month) => DropdownMenuItem(
-                          value: month,
-                          child: Text(_monthLabel(month)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      IncomeExpensePiePanel(transactions: visibleTransactions),
+                      const SizedBox(height: 14),
+                      TopCategoryCharts(
+                        transactions: visibleTransactions,
+                        periodLabel: periodLabel,
+                        onCategoryTap: (category) {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => _AllTransactionsPage(
+                                categoryPreferences: widget.categoryPreferences,
+                                initialCategory: category,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      _buildKhataAndAssetsMetricsCards(),
+                      const SizedBox(height: 14),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: _PrintTransactionsButton(
+                                transactions: visibleTransactions,
+                                filterLabel: _transactionFilterLabel(
+                                  selectedFinancialYear: _selectedFinancialYear,
+                                  selectedMonth: _selectedMonth,
+                                ),
+                                accentColor: AppColors.forest,
+                                allTransactions: transactions,
+                                comprehensive: true,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          _AllTransactionsPage(
+                                            categoryPreferences:
+                                                widget.categoryPreferences,
+                                          ),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.receipt_long_outlined),
+                                label: const FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text('View All Transactions'),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.forest,
+                                  side: const BorderSide(
+                                    color: AppColors.forest,
+                                  ),
+                                  minimumSize: Size.zero,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 12,
+                                  ),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      )
-                      .toList(),
-                  onChanged: (month) => setState(() => _selectedMonth = month),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-              if (_dateFilter == _TransactionDateFilter.range) ...[
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        key: ValueKey(_rangeStart),
-                        readOnly: true,
-                        initialValue: _rangeStart == null
-                            ? ''
-                            : DateFormat('dd MMM yyyy').format(_rangeStart!),
-                        decoration: const InputDecoration(
-                          labelText: 'From',
-                          hintText: 'Select date',
-                          suffixIcon: Icon(Icons.calendar_today_outlined),
-                        ),
-                        onTap: () => _pickRangeDate(isStart: true),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextFormField(
-                        key: ValueKey(_rangeEnd),
-                        readOnly: true,
-                        initialValue: _rangeEnd == null
-                            ? ''
-                            : DateFormat('dd MMM yyyy').format(_rangeEnd!),
-                        decoration: const InputDecoration(
-                          labelText: 'To',
-                          hintText: 'Select date',
-                          suffixIcon: Icon(Icons.calendar_today_outlined),
-                        ),
-                        onTap: () => _pickRangeDate(isStart: false),
-                      ),
-                    ),
-                  ],
+              ),
+              if (_isBannerAdLoaded && _bannerAd != null)
+                SafeArea(
+                  top: false,
+                  child: Container(
+                    alignment: Alignment.center,
+                    width: _bannerAd!.size.width.toDouble(),
+                    height: _bannerAd!.size.height.toDouble(),
+                    child: AdWidget(ad: _bannerAd!),
+                  ),
                 ),
-                if (_rangeStart == null || _rangeEnd == null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'Select both dates to filter transactions in between.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ],
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '${visibleTransactions.length} transactions',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  _PrintTransactionsButton(
-                    transactions: visibleTransactions,
-                    filterLabel: _filterLabel(),
-                    buttonLabel: 'Print',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              _TransactionList(
-                state: state,
-                currentUserId: currentUserId,
-                transactions: visibleTransactions,
-              ),
             ],
           );
         },
       ),
     );
   }
-}
 
-class _MorePage extends StatelessWidget {
-  const _MorePage({
-    required this.notificationCount,
-    required this.onNotificationsChanged,
-  });
+  Widget _buildKhataAndAssetsMetricsCards() {
+    final formatter = NumberFormat('#,##0.00', 'en_US');
 
-  final int notificationCount;
-  final Future<void> Function() onNotificationsChanged;
-
-  Future<void> _confirmLogout(BuildContext context) async {
-    final confirmed =
-        await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Log out?'),
-            content: const Text('You will need to sign in again to continue.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Logout'),
+    Widget balanceCard({
+      required String title,
+      required double amount,
+      required Color color,
+      required Color borderColor,
+    }) {
+      return InkWell(
+        onTap: widget.onOpenKhata,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: borderColor),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
-        ) ??
-        false;
-    if (confirmed && context.mounted) {
-      await context.read<AuthService>().signOut();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final user = context.read<AuthService>().currentUser;
-    final photoUrl = user?.photoURL;
-
-    return Scaffold(
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: ListTile(
-              contentPadding: const EdgeInsets.all(14),
-              leading: CircleAvatar(
-                radius: 28,
-                backgroundImage: photoUrl == null
-                    ? null
-                    : NetworkImage(photoUrl),
-                child: photoUrl == null
-                    ? const Icon(Icons.person_outline, size: 30)
-                    : null,
-              ),
-              title: Text(
-                user?.displayName ?? 'User',
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-              subtitle: Text(user?.email ?? ''),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => _ProfilePage(
-                      notificationCount: notificationCount,
-                      onNotificationsChanged: onNotificationsChanged,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 14),
-          Card(
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.calculate_outlined),
-                  title: const Text('Tax Calculator'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => TaxCalculatorScreen(
-                          appBarTitle: 'Tax Calculator',
-                          appBarActions: [
-                            IconButton(
-                              tooltip: 'Notifications',
-                              icon: _NotificationBadge(
-                                count: notificationCount,
-                              ),
-                              onPressed: () async {
-                                await Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        const NotificationTransactionsPage(),
-                                  ),
-                                );
-                                await onNotificationsChanged();
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                const Divider(height: 1, indent: 56),
-                const _DriveSyncButton(asListTile: true),
-                const Divider(height: 1, indent: 56),
-                ListTile(
-                  leading: const Icon(Icons.help_outline),
-                  title: const Text('Help & Support'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => _InformationPage(
-                        title: 'Help & Support',
-                        icon: Icons.help_outline,
-                        message:
-                            'For help with transactions, backup, tax calculations, or account access, contact the Filer Flow support team.',
-                        notificationCount: notificationCount,
-                        onNotificationsChanged: onNotificationsChanged,
-                      ),
-                    ),
-                  ),
-                ),
-                const Divider(height: 1, indent: 56),
-                ListTile(
-                  leading: const Icon(Icons.info_outline),
-                  title: const Text('About'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => _InformationPage(
-                        title: 'About',
-                        icon: Icons.info_outline,
-                        message:
-                            '''Filer Flow is your all-in-one personal finance companion — track income and expenses, calculate taxes, and stay on top of your money effortlessly.
-
-Key Features:
-
-📊 Visual dashboard with income, expense & balance overview
-💳 Quick transaction entry — manually, via receipt scan, or auto-captured from notifications
-⚙️ Customizable income/expense categories
-🧮 Built-in tax calculator (Salary, PSEB Export, WHT)
-☁️ Secure backup & restore via Google Drive
-🔒 Fingerprint-secured profile with 2FA
-
-Your data stays on your device — you control when and where it's backed up.
-
-Version: 1.0.0
-Developed by: Graphie-Code Solutions''',
-                        messageTextAlign: TextAlign.left,
-                        useSmallMessageText: true,
-                        notificationCount: notificationCount,
-                        onNotificationsChanged: onNotificationsChanged,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          Card(
-            child: ListTile(
-              leading: Icon(Icons.logout, color: Colors.red.shade700),
-              title: Text(
-                'Logout',
-                style: TextStyle(
-                  color: Colors.red.shade700,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              onTap: () => _confirmLogout(context),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InformationPage extends StatelessWidget {
-  const _InformationPage({
-    required this.title,
-    required this.icon,
-    required this.message,
-    required this.notificationCount,
-    required this.onNotificationsChanged,
-    this.messageTextAlign = TextAlign.center,
-    this.useSmallMessageText = false,
-  });
-
-  final String title;
-  final IconData icon;
-  final String message;
-  final int notificationCount;
-  final Future<void> Function() onNotificationsChanged;
-  final TextAlign messageTextAlign;
-  final bool useSmallMessageText;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        actions: [
-          IconButton(
-            tooltip: 'Notifications',
-            icon: _NotificationBadge(count: notificationCount),
-            onPressed: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const NotificationTransactionsPage(),
-                ),
-              );
-              await onNotificationsChanged();
-            },
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(icon, size: 52),
-                      const SizedBox(height: 16),
-                      Text(
-                        title,
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: messageTextAlign == TextAlign.left
-                            ? Alignment.centerLeft
-                            : Alignment.center,
-                        child: Text(
-                          message,
-                          textAlign: messageTextAlign,
-                          style: useSmallMessageText
-                              ? Theme.of(context).textTheme.bodySmall
-                              : null,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CategorySettingsPage extends StatelessWidget {
-  const _CategorySettingsPage({required this.categoryPreferences});
-
-  final CategoryPreferencesService categoryPreferences;
-
-  Future<void> _updateEnabled(
-    BuildContext context,
-    String categoryName,
-    bool enabled,
-  ) async {
-    try {
-      await categoryPreferences.setEnabled(categoryName, enabled: enabled);
-    } catch (error) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(content: Text('Could not save category setting: $error')),
-        );
-    }
-  }
-
-  Future<void> _updateParentMode(
-    BuildContext context,
-    String parentName,
-    CategoryMode mode,
-  ) async {
-    try {
-      await categoryPreferences.setParentMode(parentName, mode: mode);
-    } catch (error) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(content: Text('Could not save category setting: $error')),
-        );
-    }
-  }
-
-  IconData _iconForSuperCategory(String name) {
-    return switch (name) {
-      'Income' => Icons.account_balance_wallet_outlined,
-      'Housing & Transport' => Icons.home_work_outlined,
-      'Food & Lifestyle' => Icons.restaurant_outlined,
-      'Wellness & Giving' => Icons.favorite_outline,
-      _ => Icons.receipt_long_outlined,
-    };
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: categoryPreferences.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Text(
-                  'Super Categories',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Set Income, Expense, or Both on each level-2 category, then enable the level-3 categories you want to use. The parent mode applies to every child.',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                if (categoryPreferences.loadError != null) ...[
-                  const SizedBox(height: 12),
-                  Card(
-                    color: Theme.of(context).colorScheme.errorContainer,
-                    child: const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: Text(
-                        'Saved category settings could not be loaded. Default classifications are currently shown.',
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 20),
-                ...TransactionCategory.hierarchy.entries.map((superCategory) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Card(
-                      margin: EdgeInsets.zero,
-                      clipBehavior: Clip.antiAlias,
-                      child: ExpansionTile(
-                        leading: Icon(_iconForSuperCategory(superCategory.key)),
-                        title: Text(
-                          superCategory.key,
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                        children: [
-                          for (final parent in superCategory.value.entries)
-                            ExpansionTile(
-                              tilePadding: const EdgeInsets.only(
-                                left: 28,
-                                right: 16,
-                              ),
-                              childrenPadding: EdgeInsets.zero,
-                              leading: Icon(
-                                _getIconForCategory(parent.key),
-                                size: 21,
-                              ),
-                              title: Text(
-                                parent.key,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    16,
-                                    4,
-                                    16,
-                                    10,
-                                  ),
-                                  child: SegmentedButton<CategoryMode>(
-                                    expandedInsets: EdgeInsets.zero,
-                                    showSelectedIcon: false,
-                                    style: const ButtonStyle(
-                                      visualDensity: VisualDensity.compact,
-                                    ),
-                                    segments: const [
-                                      ButtonSegment(
-                                        value: CategoryMode.income,
-                                        label: Text('Income'),
-                                      ),
-                                      ButtonSegment(
-                                        value: CategoryMode.expense,
-                                        label: Text('Expense'),
-                                      ),
-                                      ButtonSegment(
-                                        value: CategoryMode.both,
-                                        label: Text('Both'),
-                                      ),
-                                    ],
-                                    selected: {
-                                      categoryPreferences.modeForParent(
-                                        parent.key,
-                                      ),
-                                    },
-                                    onSelectionChanged: (selection) =>
-                                        _updateParentMode(
-                                          context,
-                                          parent.key,
-                                          selection.first,
-                                        ),
-                                  ),
-                                ),
-                                for (final category in parent.value)
-                                  SwitchListTile(
-                                    contentPadding: const EdgeInsets.only(
-                                      left: 48,
-                                      right: 16,
-                                    ),
-                                    title: Text(category.name),
-                                    subtitle: Text(
-                                      categoryPreferences.isDualMode(
-                                            category.name,
-                                          )
-                                          ? 'Income or Expense'
-                                          : categoryPreferences.isExpense(
-                                              category.name,
-                                            )
-                                          ? 'Expense'
-                                          : 'Income',
-                                    ),
-                                    value: categoryPreferences.isEnabled(
-                                      category.name,
-                                    ),
-                                    onChanged: (enabled) => _updateEnabled(
-                                      context,
-                                      category.name,
-                                      enabled,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                }),
-              ],
-            ),
-    );
-  }
-}
-
-class _ProfilePage extends StatefulWidget {
-  const _ProfilePage({this.notificationCount = 0, this.onNotificationsChanged});
-
-  final int notificationCount;
-  final Future<void> Function()? onNotificationsChanged;
-
-  @override
-  State<_ProfilePage> createState() => _ProfilePageState();
-}
-
-class _ProfilePageState extends State<_ProfilePage>
-    with WidgetsBindingObserver {
-  static const _profileStorage = FlutterSecureStorage();
-  final _biometricLock = BiometricLockService();
-
-  bool _isLoadingBiometric = true;
-  bool _isBiometricEnabled = false;
-  bool _isBiometricSupported = false;
-  bool _isUpdatingProfile = false;
-  bool _isPickingImage = false;
-  String? _profileImagePath;
-  String? _pendingEmailChange;
-
-  AuthService get _authService => context.read<AuthService>();
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _loadBiometricStatus();
-    _loadProfileImage();
-    _loadPendingEmailChange();
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _refreshAccount(showFeedback: false);
-    }
-  }
-
-  String get _profileImageKey =>
-      'profile_image_${_authService.currentUser?.uid ?? 'signed_out'}';
-
-  String get _pendingEmailKey =>
-      'pending_email_${_authService.currentUser?.uid ?? 'signed_out'}';
-
-  bool _emailsMatch(String? first, String? second) {
-    if (first == null || second == null) return false;
-    return first.trim().toLowerCase() == second.trim().toLowerCase();
-  }
-
-  Future<void> _loadPendingEmailChange() async {
-    final pendingEmail = await _profileStorage.read(key: _pendingEmailKey);
-    if (pendingEmail == null) return;
-
-    // Secure-storage loading and the app-resume refresh can finish in either
-    // order. Reload before restoring the notice so an already-applied email
-    // change is not shown as pending again.
-    try {
-      await _authService.reloadCurrentUser();
-    } on AuthServiceException {
-      // Keep the pending notice when Firebase cannot currently be reached.
-    }
-    final wasApplied = _emailsMatch(
-      pendingEmail,
-      _authService.currentUser?.email,
-    );
-    if (wasApplied) {
-      await _profileStorage.delete(key: _pendingEmailKey);
-    }
-    if (!mounted) return;
-    setState(() => _pendingEmailChange = wasApplied ? null : pendingEmail);
-  }
-
-  Future<void> _loadProfileImage() async {
-    final storedPath = await _profileStorage.read(key: _profileImageKey);
-    if (!mounted) return;
-    setState(() {
-      _profileImagePath = storedPath != null && File(storedPath).existsSync()
-          ? storedPath
-          : null;
-    });
-  }
-
-  Future<void> _pickProfileImage() async {
-    final userId = _authService.currentUser?.uid;
-    if (userId == null || _isPickingImage) return;
-
-    setState(() => _isPickingImage = true);
-    try {
-      final picked = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1024,
-        imageQuality: 85,
-      );
-      if (picked == null || !mounted) {
-        if (mounted) setState(() => _isPickingImage = false);
-        return;
-      }
-
-      final supportDirectory = await AppStorage.getSupportDirectory();
-      if (supportDirectory == null) {
-        throw UnsupportedError('Profile image storage is unavailable on web.');
-      }
-      final imageDirectory = Directory(
-        path.join(supportDirectory.path, 'profile_images'),
-      );
-      await imageDirectory.create(recursive: true);
-      final extension = path.extension(picked.path).toLowerCase();
-      final targetPath = path.join(
-        imageDirectory.path,
-        '$userId${extension.isEmpty ? '.jpg' : extension}',
-      );
-      await File(picked.path).copy(targetPath);
-      await FileImage(File(targetPath)).evict();
-      await _profileStorage.write(key: _profileImageKey, value: targetPath);
-
-      if (!mounted) return;
-      setState(() {
-        _profileImagePath = targetPath;
-        _isPickingImage = false;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _isPickingImage = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update profile image: $error')),
-      );
-    }
-  }
-
-  Future<void> _loadBiometricStatus() async {
-    final userId = _authService.currentUser?.uid;
-    if (userId == null) return;
-    try {
-      final supported = await _biometricLock.isSupported();
-      final enabled = await _biometricLock.isEnabled(userId);
-      if (!mounted) return;
-      setState(() {
-        _isBiometricSupported = supported;
-        _isBiometricEnabled = enabled;
-        _isLoadingBiometric = false;
-      });
-    } on BiometricLockException {
-      if (mounted) setState(() => _isLoadingBiometric = false);
-    }
-  }
-
-  Future<void> _toggleBiometricLock() async {
-    final userId = _authService.currentUser?.uid;
-    if (userId == null || _isLoadingBiometric) return;
-    setState(() => _isLoadingBiometric = true);
-    try {
-      if (_isBiometricEnabled) {
-        await _biometricLock.disable(userId);
-      } else {
-        await _biometricLock.enable(userId);
-      }
-      if (!mounted) return;
-      final enabled = !_isBiometricEnabled;
-      setState(() {
-        _isBiometricEnabled = enabled;
-        _isLoadingBiometric = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            enabled
-                ? 'Fingerprint app lock enabled.'
-                : 'Fingerprint app lock disabled.',
-          ),
-        ),
-      );
-    } on BiometricLockException catch (error) {
-      if (!mounted) return;
-      setState(() => _isLoadingBiometric = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.message)));
-    }
-  }
-
-  Future<void> _editProfile() async {
-    final user = _authService.currentUser;
-    if (user == null || _isUpdatingProfile) return;
-
-    final update = await showDialog<_ProfileUpdate>(
-      context: context,
-      builder: (context) => _EditProfileDialog(
-        initialName: user.displayName ?? '',
-        initialEmail: user.email ?? '',
-      ),
-    );
-    if (update == null || !mounted) return;
-
-    setState(() => _isUpdatingProfile = true);
-    try {
-      final nameChanged = update.displayName != (user.displayName ?? '');
-      final emailChanged = update.email != (user.email ?? '');
-      if (nameChanged) {
-        await _authService.updateCurrentUserDisplayName(update.displayName);
-      }
-      if (emailChanged) {
-        await _requestEmailChangeWithReauthentication(update.email);
-        _pendingEmailChange = update.email;
-        await _profileStorage.write(key: _pendingEmailKey, value: update.email);
-      }
-      if (!mounted) return;
-      setState(() => _isUpdatingProfile = false);
-      if (emailChanged) {
-        await _showEmailChangeLinkSent(update.email);
-      } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Profile updated.')));
-      }
-    } on AuthServiceException catch (error) {
-      if (!mounted) return;
-      setState(() => _isUpdatingProfile = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update profile: ${error.message}')),
-      );
-    }
-  }
-
-  Future<void> _refreshAccount({bool showFeedback = true}) async {
-    if (_isUpdatingProfile) return;
-    setState(() => _isUpdatingProfile = true);
-    try {
-      final previousEmail = _authService.currentUser?.email;
-      await _authService.reloadCurrentUser();
-      final refreshedEmail = _authService.currentUser?.email;
-      final emailChanged = previousEmail != refreshedEmail;
-      final pendingWasApplied = _emailsMatch(
-        _pendingEmailChange,
-        refreshedEmail,
-      );
-      if (!mounted) return;
-      setState(() {
-        _isUpdatingProfile = false;
-        if (pendingWasApplied) {
-          _pendingEmailChange = null;
-        }
-      });
-      if (pendingWasApplied) {
-        await _profileStorage.delete(key: _pendingEmailKey);
-      }
-      if (!mounted) return;
-      if (showFeedback || emailChanged || pendingWasApplied) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              emailChanged || pendingWasApplied
-                  ? 'Account email updated to $refreshedEmail.'
-                  : _pendingEmailChange != null
-                  ? 'Firebase still reports $refreshedEmail. The email-change link has not been applied yet.'
-                  : 'Account information refreshed.',
-            ),
-          ),
-        );
-      }
-    } on AuthServiceException catch (error) {
-      if (!mounted) return;
-      setState(() => _isUpdatingProfile = false);
-      if (showFeedback) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(error.message)));
-      }
-    }
-  }
-
-  Future<void> _dismissPendingEmailChange() async {
-    await _profileStorage.delete(key: _pendingEmailKey);
-    if (!mounted) return;
-    setState(() => _pendingEmailChange = null);
-  }
-
-  Future<void> _resendPendingEmailChange() async {
-    final pendingEmail = _pendingEmailChange;
-    if (pendingEmail == null || _isUpdatingProfile) return;
-    setState(() => _isUpdatingProfile = true);
-    try {
-      await _requestEmailChangeWithReauthentication(pendingEmail);
-      if (!mounted) return;
-      setState(() => _isUpdatingProfile = false);
-      await _showEmailChangeLinkSent(pendingEmail);
-    } on AuthServiceException catch (error) {
-      if (!mounted) return;
-      setState(() => _isUpdatingProfile = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not resend link: ${error.message}')),
-      );
-    }
-  }
-
-  Future<void> _showEmailChangeLinkSent(String newEmail) {
-    return showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        icon: const Icon(Icons.mark_email_read_outlined),
-        title: const Text('Check your new email'),
-        content: Text(
-          'Firebase accepted the request for:\n\n$newEmail\n\nOpen the newest verification link to finish changing the account email. Check Spam, Junk, and Promotions if it is not in the inbox. Delivery can be delayed or limited after repeated requests.',
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _requestEmailChangeWithReauthentication(String email) async {
-    try {
-      await _authService.requestCurrentUserEmailChange(email);
-    } on RecentLoginRequiredException {
-      if (!mounted) rethrow;
-      final password = await showDialog<String>(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const _ConfirmPasswordDialog(),
-      );
-      if (password == null) {
-        throw const AuthServiceException('Email change was canceled.');
-      }
-      await _authService.reauthenticateCurrentUserWithPassword(password);
-      await _authService.requestCurrentUserEmailChange(email);
-    }
-  }
-
-  Future<void> _sendPasswordReset() async {
-    try {
-      await _authService.sendCurrentUserPasswordReset();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password reset email sent.')),
-      );
-    } on AuthServiceException catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.message)));
-    }
-  }
-
-  Future<void> _sendEmailVerification() async {
-    try {
-      await _authService.sendCurrentUserEmailVerification();
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Verification email sent.')));
-    } on AuthServiceException catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.message)));
-    }
-  }
-
-  Future<void> _signOut() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        icon: const Icon(Icons.logout),
-        title: const Text('Log out?'),
-        content: const Text(
-          'You will need to sign in again to access your account.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Log out'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-
-    setState(() => _isUpdatingProfile = true);
-    try {
-      await _authService.signOut();
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _isUpdatingProfile = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not log out: $error')));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final user = _authService.currentUser;
-    final hasProfileImage =
-        _profileImagePath != null && File(_profileImagePath!).existsSync();
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile'),
-        actions: [
-          IconButton(
-            tooltip: 'Notifications',
-            icon: _NotificationBadge(count: widget.notificationCount),
-            onPressed: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const NotificationTransactionsPage(),
-                ),
-              );
-              await widget.onNotificationsChanged?.call();
-            },
-          ),
-          IconButton(
-            tooltip: 'Refresh account',
-            onPressed: _isUpdatingProfile ? null : _refreshAccount,
-            icon: const Icon(Icons.refresh),
-          ),
-          IconButton(
-            tooltip: 'Log out',
-            onPressed: _isUpdatingProfile ? null : _signOut,
-            icon: const Icon(Icons.logout),
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                children: [
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      CircleAvatar(
-                        radius: 44,
-                        backgroundImage: hasProfileImage
-                            ? FileImage(File(_profileImagePath!))
-                            : null,
-                        child: hasProfileImage
-                            ? null
-                            : const Icon(Icons.person_outline, size: 42),
-                      ),
-                      Positioned(
-                        right: -4,
-                        bottom: -4,
-                        child: IconButton.filled(
-                          tooltip: 'Change profile image',
-                          onPressed: _isPickingImage ? null : _pickProfileImage,
-                          icon: _isPickingImage
-                              ? const SizedBox.square(
-                                  dimension: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.camera_alt_outlined),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    user?.displayName ?? 'User',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(user?.email ?? ''),
-                  const SizedBox(height: 8),
-                  Chip(
-                    avatar: Icon(
-                      user?.emailVerified == true
-                          ? Icons.verified
-                          : Icons.warning_amber,
-                      size: 18,
-                    ),
-                    label: Text(
-                      user?.emailVerified == true
-                          ? 'Email verified'
-                          : 'Email not verified',
-                    ),
-                  ),
-                  if (_isUpdatingProfile) ...[
-                    const SizedBox(height: 12),
-                    const LinearProgressIndicator(),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          if (_pendingEmailChange != null) ...[
-            const SizedBox(height: 12),
-            Card(
-              color: Theme.of(context).colorScheme.secondaryContainer,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.pending_actions_outlined),
-                      title: const Text('Email change pending'),
-                      subtitle: Text(
-                        'Verify the change link sent to ${_pendingEmailChange!}.',
-                      ),
-                    ),
-                    Wrap(
-                      alignment: WrapAlignment.end,
-                      spacing: 8,
-                      children: [
-                        TextButton(
-                          onPressed: _isUpdatingProfile
-                              ? null
-                              : _dismissPendingEmailChange,
-                          child: const Text('Dismiss'),
-                        ),
-                        TextButton.icon(
-                          onPressed: _isUpdatingProfile
-                              ? null
-                              : _resendPendingEmailChange,
-                          icon: const Icon(Icons.send_outlined),
-                          label: const Text('Resend link'),
-                        ),
-                        FilledButton.icon(
-                          onPressed: _isUpdatingProfile
-                              ? null
-                              : _refreshAccount,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('I verified, refresh'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: 20),
-          Text(
-            'Account',
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 10),
-          Card(
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.edit_outlined),
-                  title: const Text('Name and email'),
-                  subtitle: const Text('Update your account information'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: _isUpdatingProfile ? null : _editProfile,
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.password_outlined),
-                  title: const Text('Change password'),
-                  subtitle: const Text('Receive a secure password reset email'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: _sendPasswordReset,
-                ),
-                if (user?.emailVerified != true &&
-                    _pendingEmailChange == null) ...[
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.mark_email_unread_outlined),
-                    title: const Text('Verify email'),
-                    subtitle: const Text('Send another verification link'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: _sendEmailVerification,
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Security',
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 10),
-          Card(
-            child: ListTile(
-              leading: Icon(
-                _isBiometricEnabled ? Icons.fingerprint : Icons.lock_outline,
-                color: _isBiometricEnabled ? Colors.green : Colors.teal,
-              ),
-              title: Text(
-                _isBiometricEnabled
-                    ? 'Fingerprint app lock enabled'
-                    : 'Enable fingerprint app lock',
-              ),
-              subtitle: Text(
-                !_isBiometricSupported
-                    ? 'Set up biometrics or a device screen lock first'
-                    : _isBiometricEnabled
-                    ? 'This app requires device authentication to open.'
-                    : 'Protect this app with your device security.',
-              ),
-              trailing: _isLoadingBiometric
-                  ? const SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.chevron_right),
-              onTap: _isBiometricSupported && !_isLoadingBiometric
-                  ? _toggleBiometricLock
-                  : null,
-            ),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'When enabled, Filer Flow asks for your fingerprint, Face ID, or device screen lock on launch and after returning from the background.',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EditProfileDialog extends StatefulWidget {
-  const _EditProfileDialog({
-    required this.initialName,
-    required this.initialEmail,
-  });
-
-  final String initialName;
-  final String initialEmail;
-
-  @override
-  State<_EditProfileDialog> createState() => _EditProfileDialogState();
-}
-
-class _EditProfileDialogState extends State<_EditProfileDialog> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _nameController;
-  late final TextEditingController _emailController;
-
-  @override
-  void initState() {
-    super.initState();
-    _nameController = TextEditingController(text: widget.initialName);
-    _emailController = TextEditingController(text: widget.initialEmail);
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    super.dispose();
-  }
-
-  void _save() {
-    if (!_formKey.currentState!.validate()) return;
-    Navigator.of(context).pop(
-      _ProfileUpdate(
-        displayName: _nameController.text.trim(),
-        email: _emailController.text.trim(),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Edit profile'),
-      content: SizedBox(
-        width: 420,
-        child: Form(
-          key: _formKey,
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextFormField(
-                controller: _nameController,
-                autofocus: true,
-                textCapitalization: TextCapitalization.words,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'Display name',
-                  prefixIcon: Icon(Icons.person_outline),
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) => (value ?? '').trim().length < 2
-                    ? 'Enter at least 2 characters'
-                    : null,
+              Row(
+                children: [
+                  Icon(
+                    title == 'Total Payable'
+                        ? Icons.arrow_upward_rounded
+                        : Icons.arrow_downward_rounded,
+                    size: 14,
+                    color: color,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: color,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                textInputAction: TextInputAction.done,
-                onFieldSubmitted: (_) => _save(),
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  prefixIcon: Icon(Icons.alternate_email),
-                  border: OutlineInputBorder(),
+              const SizedBox(height: 6),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'Rs ${formatter.format(amount)}',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                    color: color,
+                  ),
                 ),
-                validator: (value) {
-                  final email = (value ?? '').trim();
-                  if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-                    return 'Enter a valid email address';
-                  }
-                  return null;
-                },
+              ),
+              const SizedBox(height: 2),
+              const Text(
+                'Open balance',
+                style: TextStyle(fontSize: 9.5, color: Colors.black54),
               ),
             ],
           ),
         ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(onPressed: _save, child: const Text('Save')),
-      ],
-    );
-  }
-}
+      );
+    }
 
-class _ProfileUpdate {
-  const _ProfileUpdate({required this.displayName, required this.email});
-
-  final String displayName;
-  final String email;
-}
-
-class _ConfirmPasswordDialog extends StatefulWidget {
-  const _ConfirmPasswordDialog();
-
-  @override
-  State<_ConfirmPasswordDialog> createState() => _ConfirmPasswordDialogState();
-}
-
-class _ConfirmPasswordDialogState extends State<_ConfirmPasswordDialog> {
-  final _passwordController = TextEditingController();
-  bool _obscurePassword = true;
-
-  @override
-  void dispose() {
-    _passwordController.dispose();
-    super.dispose();
-  }
-
-  void _confirm() {
-    if (_passwordController.text.isEmpty) return;
-    Navigator.of(context).pop(_passwordController.text);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      icon: const Icon(Icons.lock_outline),
-      title: const Text('Confirm your password'),
-      content: SizedBox(
-        width: 380,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            const Text(
-              'Firebase requires a recent login before changing your email.',
+            Expanded(
+              child: balanceCard(
+                title: 'Total Payable',
+                amount: _totalPayable,
+                color: const Color(0xFFC62828),
+                borderColor: const Color(0xFFFFCDD2),
+              ),
             ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _passwordController,
-              autofocus: true,
-              obscureText: _obscurePassword,
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) => _confirm(),
-              decoration: InputDecoration(
-                labelText: 'Current password',
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  tooltip: _obscurePassword ? 'Show password' : 'Hide password',
-                  onPressed: () =>
-                      setState(() => _obscurePassword = !_obscurePassword),
-                  icon: Icon(
-                    _obscurePassword
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
+            const SizedBox(width: 10),
+            Expanded(
+              child: balanceCard(
+                title: 'Total Receivable',
+                amount: _totalReceivable,
+                color: const Color(0xFF2E7D32),
+                borderColor: const Color(0xFFC8E6C9),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        InkWell(
+          onTap: widget.onOpenAssets,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE8DCC0)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F6B57).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.account_balance_rounded,
+                    size: 20,
+                    color: Color(0xFF0F6B57),
                   ),
                 ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(onPressed: _confirm, child: const Text('Confirm')),
-      ],
-    );
-  }
-}
-
-class _HomeDashboard extends StatefulWidget {
-  const _HomeDashboard({required this.categoryPreferences});
-
-  final CategoryPreferencesService categoryPreferences;
-
-  @override
-  State<_HomeDashboard> createState() => _HomeDashboardState();
-}
-
-class _HomeDashboardState extends State<_HomeDashboard> {
-  DateTime? _selectedMonth;
-
-  @override
-  Widget build(BuildContext context) {
-    final user = context.read<AuthService>().currentUser;
-
-    return Scaffold(
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            BlocBuilder<TransactionBloc, TransactionState>(
-              builder: (context, state) {
-                final currentUserId = user?.uid ?? '';
-                final storedTransactions =
-                    state is TransactionLoaded && state.userId == currentUserId
-                    ? state.transactions
-                    : const <entity.Transaction>[];
-                final transactions = storedTransactions
-                    .map(
-                      (transaction) => transaction.copyWith(
-                        isExpense: widget.categoryPreferences
-                            .resolveTransactionTypeForCategory(
-                              categoryName: transaction.category,
-                              transactionIsExpense: transaction.isExpense,
-                            ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Total Assets Value',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1E3A2F),
+                        ),
                       ),
-                    )
-                    .toList();
-                final visibleTransactions = filterTransactionsByMonth(
-                  transactions,
-                  _selectedMonth,
-                );
-                final monthOptions = _buildMonthOptions(transactions);
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final useTwoColumnHeader = constraints.maxWidth >= 640;
-
-                        if (useTwoColumnHeader) {
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Welcome, ${user?.displayName ?? user?.email ?? 'User'}!',
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.headlineSmall,
-                                ),
-                              ),
-                              if (monthOptions.isNotEmpty) ...[
-                                const SizedBox(width: 12),
-                                SizedBox(
-                                  width: 180,
-                                  child: _MonthFilterDropdown(
-                                    selectedMonth: _selectedMonth,
-                                    monthOptions: monthOptions,
-                                    onChanged: (month) {
-                                      setState(() {
-                                        _selectedMonth = month;
-                                      });
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ],
-                          );
-                        }
-
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                'Welcome, ${user?.displayName ?? user?.email ?? 'User'}!',
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.headlineSmall,
-                              ),
-                            ),
-                            if (monthOptions.isNotEmpty) ...[
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                width: double.infinity,
-                                child: _MonthFilterDropdown(
-                                  selectedMonth: _selectedMonth,
-                                  monthOptions: monthOptions,
-                                  onChanged: (month) {
-                                    setState(() {
-                                      _selectedMonth = month;
-                                    });
-                                  },
-                                ),
-                              ),
-                            ],
-                          ],
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    _SummaryCards(transactions: visibleTransactions),
-                    const SizedBox(height: 16),
-                    _IncomeExpensePiePanel(transactions: visibleTransactions),
-                    const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: _PrintTransactionsButton(
-                        transactions: visibleTransactions,
-                        filterLabel: _transactionFilterLabel(_selectedMonth),
+                      Text(
+                        'Vehicles, property, savings, and investments',
+                        style: TextStyle(fontSize: 10, color: Colors.black54),
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    _TopCategoryCharts(transactions: visibleTransactions),
-                  ],
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _NotificationBadge extends StatelessWidget {
-  const _NotificationBadge({required this.count});
-
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        const Icon(Icons.notifications_active_outlined),
-        if (count > 0)
-          Positioned(
-            top: -7,
-            right: -9,
-            child: Container(
-              constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.red.shade700,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.white, width: 1.5),
-              ),
-              child: Text(
-                count > 99 ? '99+' : '$count',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 9,
-                  height: 1,
-                  fontWeight: FontWeight.w800,
+                    ],
+                  ),
                 ),
-              ),
+                Text(
+                  'Rs ${formatter.format(_totalAssets)}',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF0F6B57),
+                  ),
+                ),
+              ],
             ),
           ),
+        ),
       ],
     );
   }
 }
 
 class _DriveSyncButton extends StatefulWidget {
-  const _DriveSyncButton({this.asListTile = false});
+  const _DriveSyncButton({this.asListTile = false, this.action});
 
   final bool asListTile;
+  final _DriveAction? action;
 
   @override
   State<_DriveSyncButton> createState() => _DriveSyncButtonState();
@@ -2126,13 +1406,13 @@ class _DriveSyncButtonState extends State<_DriveSyncButton> {
     final authService = context.read<AuthService>();
 
     try {
-      await authService.getGoogleDriveHeaders(promptIfNecessary: true);
       final currentUser = authService.currentUser;
       if (currentUser == null) {
         throw const AuthServiceException(
           'Sign in before using Google Drive backup and restore.',
         );
       }
+      await authService.getGoogleDriveHeaders(promptIfNecessary: true);
       final driveService = DriveService(
         ownerId: currentUser.uid,
         ownerEmail: currentUser.email,
@@ -2163,11 +1443,12 @@ class _DriveSyncButtonState extends State<_DriveSyncButton> {
       debugPrint('DRIVE BACKUP/RESTORE ERROR: $e');
       debugPrint('STACK TRACE: $stackTrace');
       if (!mounted) return;
+      final message = _isNetworkError(e)
+          ? 'No internet connection. Check your connection and try again.'
+          : 'Google Drive operation failed. Please try again.';
       messenger
         ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(content: Text('Google Drive operation failed: $e')),
-        );
+        ..showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) {
         setState(() {
@@ -2175,6 +1456,20 @@ class _DriveSyncButtonState extends State<_DriveSyncButton> {
         });
       }
     }
+  }
+
+  bool _isNetworkError(Object error) {
+    if (error is SocketException || error is TimeoutException) return true;
+    final message = error.toString().toLowerCase();
+    return message.contains('socketexception') ||
+        message.contains('failed host lookup') ||
+        message.contains('connection refused') ||
+        message.contains('connection reset') ||
+        message.contains('network is unreachable') ||
+        message.contains('timed out') ||
+        message.contains('timeout') ||
+        message.contains('no internet') ||
+        message.contains('internet connection');
   }
 
   Future<bool> _confirmRestore() async {
@@ -2205,6 +1500,43 @@ class _DriveSyncButtonState extends State<_DriveSyncButton> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.action != null) {
+      final isRestore = widget.action == _DriveAction.restore;
+      return Card(
+        margin: EdgeInsets.zero,
+        child: InkWell(
+          onTap: _isWorking ? null : () => _runDriveOperation(widget.action!),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  isRestore
+                      ? Icons.restore_outlined
+                      : Icons.cloud_upload_outlined,
+                  color: const Color(0xFF1565C0),
+                  size: 28,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  isRestore ? 'Restore' : 'Backup',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isRestore ? 'Restore from Google Drive' : 'Back up your data',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11, color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return PopupMenuButton<_DriveAction>(
       tooltip: 'Google Drive backup and restore',
       enabled: !_isWorking,
@@ -2261,32 +1593,68 @@ enum _DriveAction { backup, restore }
 
 IconData _getIconForCategory(String category) {
   switch (category.toLowerCase()) {
+    case 'khata wasooli':
+      return Icons.call_received_rounded;
+    case "khata ada'igi":
+    case 'khata adaigi':
+      return Icons.call_made_rounded;
+    case 'asset sale':
+      return Icons.sell_outlined;
+    case 'asset purchase':
+      return Icons.shopping_cart_outlined;
     case 'salary':
       return Icons.work;
     case 'investment':
+    case 'business':
       return Icons.trending_up;
     case 'tax':
-      return Icons.receipt_long;
+    case 'taxes':
+    case 'income tax':
+    case 'property tax':
+    case 'salary tax (withholding)':
+    case 'sales tax/gst':
+      return Icons.payments;
     case 'health':
       return Icons.local_hospital;
     case 'food & drinks':
+    case 'food':
       return Icons.restaurant;
     case 'shopping':
       return Icons.shopping_bag;
     case 'housing & utils':
-      return Icons.home_work;
+    case 'bills':
+      return Icons.bolt_rounded;
     case 'rent':
       return Icons.key_outlined;
     case 'transport':
+    case 'travel':
       return Icons.directions_car_outlined;
     case 'personal care':
       return Icons.spa;
     case 'subscriptions':
+    case 'entertainment':
       return Icons.subscriptions;
+    case 'education':
+      return Icons.school_rounded;
+    case 'tuition & fees':
+    case 'exam fees':
+      return Icons.assignment_outlined;
+    case 'courses & training':
+      return Icons.workspace_premium_outlined;
+    case 'books & supplies':
+      return Icons.menu_book_outlined;
+    case 'school transport':
+      return Icons.directions_bus_outlined;
     case 'gifts & rewards':
+    case 'gifts':
       return Icons.card_giftcard;
     case 'zakat':
+    case 'charity':
       return Icons.volunteer_activism;
+    case 'banking':
+      return Icons.account_balance_wallet_rounded;
+    case 'others':
+      return Icons.widgets_rounded;
     case 'misc':
       return Icons.more_horiz;
     default:
@@ -2299,29 +1667,41 @@ Color _getColorForCategory(String category) {
     case 'salary':
       return Colors.green;
     case 'investment':
+    case 'business':
       return Colors.indigo;
     case 'tax':
+    case 'taxes':
       return Colors.deepOrange;
     case 'health':
       return Colors.red;
     case 'food & drinks':
+    case 'food':
       return Colors.amber.shade800;
     case 'shopping':
       return Colors.purple;
     case 'housing & utils':
-      return Colors.blueGrey;
+    case 'bills':
+      return const Color(0xFF2563EB);
     case 'rent':
       return Colors.brown;
     case 'transport':
-      return Colors.cyan.shade800;
+    case 'travel':
+      return const Color(0xFF0891B2);
     case 'personal care':
       return Colors.pink;
     case 'subscriptions':
+    case 'entertainment':
       return Colors.blue;
     case 'gifts & rewards':
+    case 'gifts':
       return const Color(0xFF0F6B57);
     case 'zakat':
+    case 'charity':
       return Colors.lightGreen.shade700;
+    case 'banking':
+      return const Color(0xFF4F46E5);
+    case 'others':
+      return const Color(0xFF64748B);
     default:
       return Colors.grey.shade700;
   }
@@ -2341,6 +1721,74 @@ String _formatDashboardMoney(num value) {
 
   final sign = value < 0 ? '-' : '';
   return 'PKR $sign${buffer.toString()}';
+}
+
+String _formatSignedDashboardMoney(num value) {
+  final rounded = value.round().abs().toString();
+  final buffer = StringBuffer();
+
+  for (var index = 0; index < rounded.length; index++) {
+    final positionFromEnd = rounded.length - index;
+    buffer.write(rounded[index]);
+    if (positionFromEnd > 1 && positionFromEnd % 3 == 1) {
+      buffer.write(',');
+    }
+  }
+
+  final sign = value > 0 ? '+' : (value < 0 ? '-' : '');
+  return '${sign}PKR ${buffer.toString()}';
+}
+
+const dashboardMonthNames = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+String getFinancialYear(DateTime date) {
+  final startYear = date.month >= 7 ? date.year : date.year - 1;
+  final endYearShort = (startYear + 1) % 100;
+  final endYearStr = endYearShort.toString().padLeft(2, '0');
+  return '$startYear-$endYearStr';
+}
+
+List<String> buildFinancialYearOptions(List<entity.Transaction> transactions) {
+  final years = transactions
+      .map((t) => getFinancialYear(t.date))
+      .toSet()
+      .toList();
+  final currentFY = getFinancialYear(DateTime.now());
+  if (!years.contains(currentFY)) {
+    years.add(currentFY);
+  }
+  years.sort((a, b) => b.compareTo(a));
+  return years;
+}
+
+List<entity.Transaction> filterDashboardTransactions(
+  List<entity.Transaction> transactions, {
+  String? financialYear,
+  int? month,
+}) {
+  return transactions.where((transaction) {
+    if (financialYear != null &&
+        getFinancialYear(transaction.date) != financialYear) {
+      return false;
+    }
+    if (month != null && transaction.date.month != month) {
+      return false;
+    }
+    return true;
+  }).toList();
 }
 
 List<entity.Transaction> filterTransactionsByMonth(
@@ -2382,8 +1830,31 @@ double _totalExpenses(List<entity.Transaction> transactions) {
       .fold<double>(0, (total, transaction) => total + transaction.amount);
 }
 
-class _SummaryCards extends StatelessWidget {
-  const _SummaryCards({required this.transactions});
+String _formatNumber(num value) {
+  final rounded = value.round().abs().toString();
+  final buffer = StringBuffer();
+  for (var index = 0; index < rounded.length; index++) {
+    final positionFromEnd = rounded.length - index;
+    buffer.write(rounded[index]);
+    if (positionFromEnd > 1 && positionFromEnd % 3 == 1) {
+      buffer.write(',');
+    }
+  }
+  return buffer.toString();
+}
+
+String _formatNetBalance(double netBalance) {
+  if (netBalance < 0) {
+    return '-PKR ${_formatNumber(netBalance.abs())}';
+  } else if (netBalance > 0) {
+    return '+PKR ${_formatNumber(netBalance)}';
+  } else {
+    return 'PKR 0';
+  }
+}
+
+class SummaryCards extends StatelessWidget {
+  const SummaryCards({super.key, required this.transactions});
 
   final List<entity.Transaction> transactions;
 
@@ -2391,35 +1862,108 @@ class _SummaryCards extends StatelessWidget {
   Widget build(BuildContext context) {
     final totalIncome = _totalIncome(transactions);
     final totalExpenses = _totalExpenses(transactions);
+    final totalActivity = totalIncome + totalExpenses;
+    final netBalance = totalIncome - totalExpenses;
+
+    final incomeShare = totalActivity > 0
+        ? ((totalIncome / totalActivity) * 100).round()
+        : (totalIncome > 0 ? 100 : 0);
+
+    final expenseToIncomePct = totalIncome > 0
+        ? ((totalExpenses / totalIncome) * 100).round()
+        : (totalExpenses > 0 ? 100 : 0);
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final maxWidth = constraints.maxWidth;
-        final useTwoColumns = maxWidth >= 560;
-        final cardWidth = useTwoColumns ? (maxWidth - 16) / 2 : maxWidth;
+        final width = constraints.maxWidth;
+        final useThreeColumns = width >= 660;
+        final useTwoColumns = width >= 440 && width < 660;
 
-        return Wrap(
-          spacing: 16,
-          runSpacing: 12,
+        final card1 = KpiMetricCard(
+          title: 'Income',
+          amount: _formatDashboardMoney(totalIncome),
+          subtitle: '$incomeShare% of income',
+          icon: Icons.arrow_upward_rounded,
+          badgeColor: const Color(0xFF0F9D58),
+          badgeTextColor: const Color(0xFF0F9D58),
+          bgColor: const Color(0xFFEDF9F2),
+          borderColor: const Color(0xFFC8EEDC),
+          amountColor: const Color(0xFF111827),
+          subtitleColor: const Color(0xFF0F9D58),
+        );
+
+        final card2 = KpiMetricCard(
+          title: 'Expenses',
+          amount: _formatDashboardMoney(totalExpenses),
+          subtitle: '$expenseToIncomePct% of income',
+          icon: Icons.arrow_downward_rounded,
+          badgeColor: const Color(0xFFE52E3D),
+          badgeTextColor: const Color(0xFFE52E3D),
+          bgColor: const Color(0xFFFDF2F3),
+          borderColor: const Color(0xFFFBD3D6),
+          amountColor: const Color(0xFF111827),
+          subtitleColor: const Color(0xFFE52E3D),
+        );
+
+        final netSubtitle = netBalance < 0
+            ? 'You spent more than you earned'
+            : (netBalance > 0
+                  ? 'You saved more than you spent'
+                  : 'Income equals expenses');
+
+        final card3 = KpiMetricCard(
+          title: 'Net Balance',
+          amount: _formatNetBalance(netBalance),
+          subtitle: netSubtitle,
+          icon: Icons.account_balance_wallet_rounded,
+          badgeColor: const Color(0xFFF59E0B),
+          badgeTextColor: const Color(0xFFD97706),
+          bgColor: const Color(0xFFFFF8F0),
+          borderColor: const Color(0xFFFDE6D2),
+          amountColor: netBalance < 0
+              ? const Color(0xFFE52E3D)
+              : (netBalance > 0
+                    ? const Color(0xFF0F9D58)
+                    : const Color(0xFF111827)),
+          subtitleColor: const Color(0xFF6B7280),
+        );
+
+        if (useThreeColumns) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: card1),
+              const SizedBox(width: 12),
+              Expanded(child: card2),
+              const SizedBox(width: 12),
+              Expanded(child: card3),
+            ],
+          );
+        }
+
+        if (useTwoColumns) {
+          return Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(child: card1),
+                  const SizedBox(width: 12),
+                  Expanded(child: card2),
+                ],
+              ),
+              const SizedBox(height: 12),
+              card3,
+            ],
+          );
+        }
+
+        return Column(
           children: [
-            SizedBox(
-              width: cardWidth,
-              child: _SummaryCard(
-                title: 'Income',
-                amount: _formatDashboardMoney(totalIncome),
-                icon: Icons.arrow_upward,
-                color: Colors.green,
-              ),
-            ),
-            SizedBox(
-              width: cardWidth,
-              child: _SummaryCard(
-                title: 'Expenses',
-                amount: _formatDashboardMoney(totalExpenses),
-                icon: Icons.arrow_downward,
-                color: Colors.red,
-              ),
-            ),
+            card1,
+            const SizedBox(height: 10),
+            card2,
+            const SizedBox(height: 10),
+            card3,
           ],
         );
       },
@@ -2427,74 +1971,109 @@ class _SummaryCards extends StatelessWidget {
   }
 }
 
-class _SummaryCard extends StatelessWidget {
-  final String title;
-  final String amount;
-  final IconData icon;
-  final Color color;
-
-  const _SummaryCard({
+class KpiMetricCard extends StatelessWidget {
+  const KpiMetricCard({
+    super.key,
     required this.title,
     required this.amount,
+    required this.subtitle,
     required this.icon,
-    required this.color,
+    required this.badgeColor,
+    required this.badgeTextColor,
+    required this.bgColor,
+    required this.borderColor,
+    required this.amountColor,
+    required this.subtitleColor,
   });
+
+  final String title;
+  final String amount;
+  final String subtitle;
+  final IconData icon;
+  final Color badgeColor;
+  final Color badgeTextColor;
+  final Color bgColor;
+  final Color borderColor;
+  final Color amountColor;
+  final Color subtitleColor;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(color: Colors.grey),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor, width: 1.2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: badgeColor,
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(width: 8),
-                Icon(icon, color: color),
-              ],
+                child: Icon(icon, color: Colors.white, size: 16),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  color: badgeTextColor,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              amount,
+              maxLines: 1,
+              style: TextStyle(
+                color: amountColor,
+                fontWeight: FontWeight.w900,
+                fontSize: 19,
+                letterSpacing: -0.2,
+              ),
             ),
-            const SizedBox(height: 8),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isCompact = constraints.maxWidth < 180;
-
-                return FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    amount,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style:
-                        (isCompact
-                                ? Theme.of(context).textTheme.titleMedium
-                                : Theme.of(context).textTheme.titleLarge)
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                );
-              },
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: subtitleColor,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _TopCategoryCharts extends StatelessWidget {
-  const _TopCategoryCharts({required this.transactions});
+class TopCategoryCharts extends StatelessWidget {
+  const TopCategoryCharts({
+    super.key,
+    required this.transactions,
+    required this.periodLabel,
+    required this.onCategoryTap,
+  });
 
   final List<entity.Transaction> transactions;
+  final String periodLabel;
+  final ValueChanged<String> onCategoryTap;
 
   List<_CategoryTotal> _topCategories({required bool isExpense}) {
     final totals = <String, double>{};
@@ -2518,26 +2097,233 @@ class _TopCategoryCharts extends StatelessWidget {
   Widget build(BuildContext context) {
     final income = _topCategories(isExpense: false);
     final expenses = _topCategories(isExpense: true);
+    final totalIncome = _totalIncome(transactions);
+    final totalExpenses = _totalExpenses(transactions);
 
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () => _showTopCategories(
+              context,
+              title: 'Top 5 Income',
+              subtitle: 'Your highest income sources for $periodLabel.',
+              items: income,
+              totalAmount: totalIncome,
+              isExpense: false,
+              color: Colors.green.shade600,
+              icon: Icons.trending_up_rounded,
+            ),
+            icon: const Icon(Icons.trending_up_rounded, size: 18),
+            label: const Text('Top 5 Income'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.forest,
+              side: const BorderSide(color: AppColors.forest),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () => _showTopCategories(
+              context,
+              title: 'Top 5 Expenses',
+              subtitle: 'Your highest spending categories for $periodLabel.',
+              items: expenses,
+              totalAmount: totalExpenses,
+              isExpense: true,
+              color: Colors.red.shade600,
+              icon: Icons.trending_down_rounded,
+            ),
+            icon: Icon(
+              Icons.trending_down_rounded,
+              size: 18,
+              color: Colors.red.shade700,
+            ),
+            label: const Text('Top 5 Expenses'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.red.shade700,
+              side: BorderSide(color: Colors.red.shade700),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showTopCategories(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required List<_CategoryTotal> items,
+    required double totalAmount,
+    required bool isExpense,
+    required Color color,
+    required IconData icon,
+  }) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (pageContext) => Scaffold(
+          appBar: AppBar(title: Text(title)),
+          body: SafeArea(
+            top: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(icon, color: color),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          subtitle,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Divider(height: 1, color: Colors.grey.shade200),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: _TopCategorySectionCard(
+                      title: title,
+                      subtitle: subtitle,
+                      items: items,
+                      totalAmount: totalAmount,
+                      isExpense: isExpense,
+                      color: color,
+                      icon: icon,
+                      showHeader: false,
+                      onCategoryTap: (category) {
+                        Navigator.of(pageContext).pop();
+                        onCategoryTap(category);
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TopCategorySectionCard extends StatelessWidget {
+  const _TopCategorySectionCard({
+    required this.title,
+    required this.subtitle,
+    required this.items,
+    required this.totalAmount,
+    required this.isExpense,
+    required this.color,
+    required this.icon,
+    required this.onCategoryTap,
+    this.showHeader = true,
+  });
+
+  final String title;
+  final String subtitle;
+  final List<_CategoryTotal> items;
+  final double totalAmount;
+  final bool isExpense;
+  final Color color;
+  final IconData icon;
+  final ValueChanged<String> onCategoryTap;
+  final bool showHeader;
+
+  @override
+  Widget build(BuildContext context) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Top Categories',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            if (showHeader) ...[
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, color: color, size: 18),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 14),
+            ],
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerLowest,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
+                child: items.isEmpty
+                    ? SizedBox(
+                        height: 90,
+                        child: Center(
+                          child: Text(
+                            isExpense
+                                ? 'No expense transactions for this period'
+                                : 'No income transactions for this period',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: Colors.grey.shade600),
+                          ),
+                        ),
+                      )
+                    : Column(
+                        children: [
+                          for (var index = 0; index < items.length; index++)
+                            Padding(
+                              padding: EdgeInsets.only(
+                                bottom: index == items.length - 1 ? 0 : 14,
+                              ),
+                              child: _HorizontalCategoryLollipop(
+                                item: _CategoryChartBar(
+                                  category: items[index].category,
+                                  total: items[index].total,
+                                  isExpense: isExpense,
+                                ),
+                                totalActivity: totalAmount,
+                                color: color,
+                                onTap: () =>
+                                    onCategoryTap(items[index].category),
+                              ),
+                            ),
+                        ],
+                      ),
+              ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Top five categories across income and expenses for the selected period.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 18),
-            _TopCategoryBarChart(incomeItems: income, expenseItems: expenses),
           ],
         ),
       ),
@@ -2545,201 +2331,165 @@ class _TopCategoryCharts extends StatelessWidget {
   }
 }
 
-class _TopCategoryBarChart extends StatelessWidget {
-  const _TopCategoryBarChart({
-    required this.incomeItems,
-    required this.expenseItems,
+class _HorizontalCategoryLollipop extends StatelessWidget {
+  const _HorizontalCategoryLollipop({
+    required this.item,
+    required this.totalActivity,
+    required this.color,
+    required this.onTap,
   });
 
-  final List<_CategoryTotal> incomeItems;
-  final List<_CategoryTotal> expenseItems;
+  final _CategoryChartBar item;
+  final double totalActivity;
+  final Color color;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final rankedItems = <_CategoryChartBar>[
-      for (final item in incomeItems)
-        _CategoryChartBar(
-          category: item.category,
-          total: item.total,
-          isExpense: false,
-        ),
-      for (final item in expenseItems)
-        _CategoryChartBar(
-          category: item.category,
-          total: item.total,
-          isExpense: true,
-        ),
-    ]..sort((a, b) => b.total.compareTo(a.total));
-    final items = rankedItems.take(5).toList();
-    var maximum = 0.0;
-    for (final item in items) {
-      if (item.total > maximum) maximum = item.total;
-    }
-    final maxY = maximum <= 0 ? 1.0 : maximum * 1.18;
-    final incomeColor = Colors.green.shade600;
-    final expenseColor = Colors.red.shade600;
+    final fraction = categoryShareOfActivity(item.total, totalActivity);
+    final percentage = fraction * 100;
+    final percentageLabel = _formatChartPercentage(percentage);
+    final type = item.isExpense ? 'Expense' : 'Income';
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 14, 12, 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+    return Semantics(
+      button: true,
+      label:
+          '${item.category}, $type, ${_formatDashboardMoney(item.total)}, $percentageLabel of total ${item.isExpense ? "expenses" : "income"}',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _ChartLegend(label: 'Income', color: incomeColor),
-                const SizedBox(width: 20),
-                _ChartLegend(label: 'Expense', color: expenseColor),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (items.isEmpty)
-              const SizedBox(
-                height: 230,
-                child: Center(child: Text('No transactions for this period')),
-              )
-            else
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final spacePerBar = constraints.maxWidth / items.length;
-                  final rodWidth = (spacePerBar * 0.48)
-                      .clamp(10.0, 44.0)
-                      .toDouble();
-                  final labelWidth = spacePerBar.clamp(28.0, 62.0).toDouble();
-                  return SizedBox(
-                    height: 250,
-                    child: BarChart(
-                      BarChartData(
-                        minY: 0,
-                        maxY: maxY,
-                        alignment: BarChartAlignment.spaceAround,
-                        groupsSpace: 12,
-                        barGroups: [
-                          for (var index = 0; index < items.length; index++)
-                            BarChartGroupData(
-                              x: index,
-                              barRods: [
-                                BarChartRodData(
-                                  toY: items[index].total,
-                                  width: rodWidth,
-                                  color: items[index].isExpense
-                                      ? expenseColor
-                                      : incomeColor,
-                                  borderRadius: const BorderRadius.vertical(
-                                    top: Radius.circular(5),
-                                  ),
-                                ),
-                              ],
-                            ),
-                        ],
-                        barTouchData: BarTouchData(
-                          touchTooltipData: BarTouchTooltipData(
-                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                              final item = items[group.x];
-                              final type = item.isExpense
-                                  ? 'Expense'
-                                  : 'Income';
-                              return BarTooltipItem(
-                                '${item.category}\n$type: ${_formatDashboardMoney(rod.toY)}',
-                                const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        gridData: FlGridData(
-                          drawVerticalLine: false,
-                          horizontalInterval: maxY / 4,
-                        ),
-                        borderData: FlBorderData(show: false),
-                        titlesData: FlTitlesData(
-                          topTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          rightTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          leftTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              reservedSize: 42,
-                              getTitlesWidget: (value, meta) => Text(
-                                _compactChartMoney(value),
-                                style: Theme.of(context).textTheme.labelSmall,
-                              ),
-                            ),
-                          ),
-                          bottomTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              reservedSize: 38,
-                              getTitlesWidget: (value, meta) {
-                                final index = value.toInt();
-                                if (index < 0 || index >= items.length) {
-                                  return const SizedBox.shrink();
-                                }
-                                return SideTitleWidget(
-                                  axisSide: meta.axisSide,
-                                  space: 7,
-                                  child: SizedBox(
-                                    width: labelWidth,
-                                    child: Text(
-                                      _shortCategoryLabel(
-                                        items[index].category,
-                                      ),
-                                      maxLines: 2,
-                                      textAlign: TextAlign.center,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.category,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          _formatDashboardMoney(item.total),
+                          maxLines: 1,
+                          style: TextStyle(
+                            color: color,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
                     ),
-                  );
-                },
-              ),
-          ],
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 7),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    const markerSize = 36.0;
+                    final markerCenter = constraints.maxWidth * fraction;
+                    final markerLeft = (markerCenter - markerSize / 2)
+                        .clamp(0.0, constraints.maxWidth - markerSize)
+                        .toDouble();
+                    final activeLineWidth = markerCenter
+                        .clamp(item.total > 0 ? 1.0 : 0.0, constraints.maxWidth)
+                        .toDouble();
+
+                    return SizedBox(
+                      height: markerSize + 18,
+                      child: Stack(
+                        children: [
+                          Positioned(
+                            left: (markerCenter - 24)
+                                .clamp(0.0, constraints.maxWidth - 48)
+                                .toDouble(),
+                            top: 0,
+                            width: 48,
+                            height: 16,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                percentageLabel,
+                                style: TextStyle(
+                                  color: color,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            top: 34,
+                            height: 4,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.14),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: 0,
+                            top: 34,
+                            width: activeLineWidth,
+                            height: 4,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: color,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: markerLeft,
+                            top: 18,
+                            width: markerSize,
+                            height: markerSize,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: color,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: color.withValues(alpha: 0.24),
+                                    blurRadius: 5,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
         ),
       ),
-    );
-  }
-}
-
-class _ChartLegend extends StatelessWidget {
-  const _ChartLegend({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 7),
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-      ],
     );
   }
 }
@@ -2763,189 +2513,70 @@ class _CategoryTotal {
   final double total;
 }
 
-String _compactChartMoney(double value) {
-  if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1)}M';
-  if (value >= 1000) return '${(value / 1000).toStringAsFixed(0)}K';
-  return value.toStringAsFixed(0);
+double categoryShareOfActivity(double categoryTotal, double totalActivity) {
+  if (categoryTotal <= 0 || totalActivity <= 0) return 0;
+  return (categoryTotal / totalActivity).clamp(0.0, 1.0).toDouble();
 }
 
-String _shortCategoryLabel(String category) {
-  return switch (category) {
-    'Housing & Utils' => 'Housing',
-    'Food & Drinks' => 'Food',
-    'Personal Care' => 'Personal',
-    'Subscriptions' => 'Subs',
-    'Gifts & Rewards' => 'Gifts',
-    _ => category,
-  };
+String _formatChartPercentage(double percentage) {
+  if (percentage <= 0) return '0%';
+  if (percentage > 0 && percentage < 0.1) return '<0.1%';
+  final rounded = double.parse(percentage.toStringAsFixed(2));
+  if (rounded % 1 == 0) return '${rounded.toStringAsFixed(0)}%';
+  final fixed = percentage.toStringAsFixed(2);
+  if (fixed.endsWith('0')) return '${percentage.toStringAsFixed(1)}%';
+  return '$fixed%';
 }
 
-class _CategoryTransactionsPage extends StatelessWidget {
-  const _CategoryTransactionsPage({
-    required this.category,
-    required this.categoryPreferences,
-    this.notificationCount = 0,
-    this.onNotificationsChanged,
-  });
+List<entity.Transaction> filterTransactionsForSelection(
+  List<entity.Transaction> transactions,
+  TransactionTypeFilter filter,
+  CategoryPreferencesService categoryPreferences,
+) {
+  return transactions.where((transaction) {
+    final isDualMode = categoryPreferences.isDualMode(transaction.category);
+    return switch (filter) {
+      TransactionTypeFilter.income => !isDualMode && !transaction.isExpense,
+      TransactionTypeFilter.expense => !isDualMode && transaction.isExpense,
+      TransactionTypeFilter.both => isDualMode,
+    };
+  }).toList();
+}
 
-  final String category;
-  final CategoryPreferencesService categoryPreferences;
-  final int notificationCount;
-  final Future<void> Function()? onNotificationsChanged;
-
-  void _openAddTransaction(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => AddTransactionPage(
-          initialCategory: category,
-          initialIsExpense: categoryPreferences.isDualMode(category)
-              ? null
-              : categoryPreferences.isExpense(category),
-          appBarActions: [
-            IconButton(
-              tooltip: 'Notifications',
-              icon: _NotificationBadge(count: notificationCount),
-              onPressed: () async {
-                await Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const NotificationTransactionsPage(),
-                  ),
-                );
-                await onNotificationsChanged?.call();
-              },
-            ),
-          ],
-        ),
-      ),
-    );
+String _transactionFilterLabel({
+  String? selectedFinancialYear,
+  int? selectedMonth,
+}) {
+  if (selectedFinancialYear == null && selectedMonth == null) {
+    return 'All transactions - All dates';
   }
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _getColorForCategory(category);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(category),
-        actions: [
-          IconButton(
-            tooltip: 'Notifications',
-            icon: _NotificationBadge(count: notificationCount),
-            onPressed: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const NotificationTransactionsPage(),
-                ),
-              );
-              await onNotificationsChanged?.call();
-            },
-          ),
-        ],
-      ),
-      body: BlocBuilder<TransactionBloc, TransactionState>(
-        builder: (context, state) {
-          if (state is TransactionLoading || state is TransactionInitial) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (state is TransactionError) {
-            return Center(child: Text('Error: ${state.message}'));
-          }
-
-          final transactions = (state as TransactionLoaded).transactions
-              .where((transaction) => transaction.category == category)
-              .map(
-                (transaction) => transaction.copyWith(
-                  isExpense: categoryPreferences
-                      .resolveTransactionTypeForCategory(
-                        categoryName: category,
-                        transactionIsExpense: transaction.isExpense,
-                      ),
-                ),
-              )
-              .toList();
-          final total = transactions.fold<double>(
-            0,
-            (sum, transaction) => sum + transaction.amount,
-          );
-
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-            children: [
-              Card(
-                elevation: 0,
-                color: color.withValues(alpha: 0.08),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        backgroundColor: color.withValues(alpha: 0.14),
-                        foregroundColor: color,
-                        child: Icon(_getIconForCategory(category), size: 28),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 10.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Text(
-                                '${transactions.length} transactions',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: 2),
-                              Text('Total: ${_formatDashboardMoney(total)}'),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: () => _openAddTransaction(context),
-                icon: const Icon(Icons.add),
-                label: Text('Add $category transaction'),
-              ),
-              const SizedBox(height: 10),
-              _PrintTransactionsButton(
-                transactions: transactions,
-                filterLabel:
-                    '${TransactionCategory.displayPathFor(category)} transactions',
-                buttonLabel: 'Print $category report',
-              ),
-              const SizedBox(height: 16),
-              Text(
-                '$category history',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 8),
-              if (transactions.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 32),
-                  child: Center(
-                    child: Text('No transactions in this category yet.'),
-                  ),
-                )
-              else
-                ...transactions.map(
-                  (transaction) => _TransactionTile(transaction: transaction),
-                ),
-            ],
-          );
-        },
-      ),
-    );
+  final parts = <String>[];
+  if (selectedFinancialYear != null) {
+    parts.add('FY $selectedFinancialYear');
   }
+  if (selectedMonth != null && selectedMonth >= 1 && selectedMonth <= 12) {
+    parts.add(dashboardMonthNames[selectedMonth - 1]);
+  }
+  return 'All transactions - ${parts.join(', ')}';
 }
 
-String _transactionFilterLabel(DateTime? selectedMonth) {
-  if (selectedMonth == null) return 'All transactions';
-  return DateFormat('MMMM yyyy').format(selectedMonth);
+String dashboardPeriodLabel({
+  String? selectedFinancialYear,
+  int? selectedMonth,
+}) {
+  if (selectedMonth != null && selectedMonth >= 1 && selectedMonth <= 12) {
+    var year = DateTime.now().year;
+    final financialYear = selectedFinancialYear;
+    if (financialYear != null) {
+      final startYear = int.tryParse(financialYear.split('-').first);
+      if (startYear != null) {
+        year = selectedMonth >= 7 ? startYear : startYear + 1;
+      }
+    }
+    return '${dashboardMonthNames[selectedMonth - 1]} $year';
+  }
+  if (selectedFinancialYear != null) return 'FY $selectedFinancialYear';
+  return 'All Time';
 }
 
 class _PrintTransactionsButton extends StatefulWidget {
@@ -2953,11 +2584,17 @@ class _PrintTransactionsButton extends StatefulWidget {
     required this.transactions,
     required this.filterLabel,
     this.buttonLabel = 'Print report',
+    this.accentColor,
+    this.allTransactions,
+    this.comprehensive = false,
   });
 
   final List<entity.Transaction> transactions;
   final String filterLabel;
   final String buttonLabel;
+  final Color? accentColor;
+  final List<entity.Transaction>? allTransactions;
+  final bool comprehensive;
 
   @override
   State<_PrintTransactionsButton> createState() =>
@@ -2968,13 +2605,32 @@ class _PrintTransactionsButtonState extends State<_PrintTransactionsButton> {
   bool _isPrinting = false;
 
   Future<void> _print() async {
-    if (_isPrinting || widget.transactions.isEmpty) return;
+    if (_isPrinting || (!widget.comprehensive && widget.transactions.isEmpty)) {
+      return;
+    }
     setState(() => _isPrinting = true);
     try {
-      await const TransactionReportService().printReport(
-        transactions: widget.transactions,
-        filterLabel: widget.filterLabel,
-      );
+      if (widget.comprehensive) {
+        final userId = context.read<AuthService>().currentUser?.uid;
+        final assetRows = await TaxDatabase.instance.fetchAssets(
+          userId: userId,
+        );
+        final khataRows = await TaxDatabase.instance.fetchKhataEntries(
+          userId: userId,
+        );
+        await const TransactionReportService().printFinancialReport(
+          periodTransactions: widget.transactions,
+          allTransactions: widget.allTransactions ?? widget.transactions,
+          assets: assetRows.map(Asset.fromMap).toList(),
+          khataEntries: khataRows.map(KhataEntry.fromMap).toList(),
+          periodLabel: _financialPeriodLabel(widget.filterLabel),
+        );
+      } else {
+        await const TransactionReportService().printReport(
+          transactions: widget.transactions,
+          filterLabel: widget.filterLabel,
+        );
+      }
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -2987,9 +2643,16 @@ class _PrintTransactionsButtonState extends State<_PrintTransactionsButton> {
     }
   }
 
+  String _financialPeriodLabel(String label) {
+    if (label == 'All transactions - All dates') return 'All Time';
+    return label.replaceFirst('All transactions - ', '');
+  }
+
   @override
   Widget build(BuildContext context) {
-    final enabled = !_isPrinting && widget.transactions.isNotEmpty;
+    final enabled =
+        !_isPrinting &&
+        (widget.comprehensive || widget.transactions.isNotEmpty);
     final icon = _isPrinting
         ? const SizedBox.square(
             dimension: 18,
@@ -2997,50 +2660,25 @@ class _PrintTransactionsButtonState extends State<_PrintTransactionsButton> {
           )
         : const Icon(Icons.print_outlined);
     return OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: widget.accentColor,
+        side: widget.accentColor == null
+            ? null
+            : BorderSide(color: widget.accentColor!),
+        minimumSize: Size.zero,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
       onPressed: enabled ? _print : null,
       icon: icon,
-      label: Text(
-        widget.transactions.isEmpty
-            ? 'No transactions to print'
-            : widget.buttonLabel,
-      ),
-    );
-  }
-}
-
-class _MonthFilterDropdown extends StatelessWidget {
-  const _MonthFilterDropdown({
-    required this.selectedMonth,
-    required this.monthOptions,
-    required this.onChanged,
-  });
-
-  final DateTime? selectedMonth;
-  final List<DateTime> monthOptions;
-  final ValueChanged<DateTime?> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return DropdownButtonFormField<DateTime?>(
-      decoration: const InputDecoration(
-        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        border: OutlineInputBorder(),
-      ),
-      initialValue: selectedMonth,
-      hint: const Text('Select month'),
-      items: [
-        const DropdownMenuItem<DateTime?>(
-          value: null,
-          child: Text('All months'),
+      label: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          widget.transactions.isEmpty && !widget.comprehensive
+              ? 'No transactions to print'
+              : widget.buttonLabel,
         ),
-        ...monthOptions.map(
-          (month) => DropdownMenuItem<DateTime?>(
-            value: month,
-            child: Text(_monthLabel(month)),
-          ),
-        ),
-      ],
-      onChanged: onChanged,
+      ),
     );
   }
 }
@@ -3078,8 +2716,10 @@ String _monthName(int month) {
   }
 }
 
-class _IncomeExpensePiePanel extends StatelessWidget {
-  const _IncomeExpensePiePanel({required this.transactions});
+enum _ComparisonScope { overall, category }
+
+class IncomeExpensePiePanel extends StatelessWidget {
+  const IncomeExpensePiePanel({super.key, required this.transactions});
 
   final List<entity.Transaction> transactions;
 
@@ -3087,281 +2727,677 @@ class _IncomeExpensePiePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final totalIncome = _totalIncome(transactions);
     final totalExpenses = _totalExpenses(transactions);
-    final totalActivity = totalIncome + totalExpenses;
-    final balance = totalIncome - totalExpenses;
-    final comparison = _ComparisonState.fromBalance(balance, totalActivity);
-
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isCompact = constraints.maxWidth < 640;
-            final chart = totalActivity <= 0
-                ? const _EmptyPieChart()
-                : _IncomeExpensePieChart(
-                    totalIncome: totalIncome,
-                    totalExpenses: totalExpenses,
-                  );
-            final comparisonPanel = _IncomeExpenseComparison(
-              comparison: comparison,
-              totalIncome: totalIncome,
-              totalExpenses: totalExpenses,
-              balance: balance,
-            );
-
-            if (isCompact) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _PiePanelHeader(comparison: comparison),
-                  const SizedBox(height: 16),
-                  SizedBox(height: 230, child: chart),
-                  const SizedBox(height: 16),
-                  comparisonPanel,
-                ],
-              );
-            }
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _PiePanelHeader(comparison: comparison),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(child: SizedBox(height: 240, child: chart)),
-                    const SizedBox(width: 20),
-                    Expanded(child: comparisonPanel),
-                  ],
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _IncomeExpensePieChart extends StatelessWidget {
-  const _IncomeExpensePieChart({
-    required this.totalIncome,
-    required this.totalExpenses,
-  });
-
-  final double totalIncome;
-  final double totalExpenses;
-
-  @override
-  Widget build(BuildContext context) {
-    final total = totalIncome + totalExpenses;
     final netBalance = totalIncome - totalExpenses;
-    final incomePercent = total == 0 ? 0 : (totalIncome / total) * 100;
-    final expensePercent = total == 0 ? 0 : (totalExpenses / total) * 100;
+    final positiveBalance = math.max(0.0, netBalance);
 
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        PieChart(
-          PieChartData(
-            centerSpaceRadius: 54,
-            sectionsSpace: 3,
-            borderData: FlBorderData(show: false),
-            sections: [
-              if (totalIncome > 0)
-                PieChartSectionData(
-                  value: totalIncome,
-                  color: Colors.green,
-                  radius: 62,
-                  title: '${incomePercent.toStringAsFixed(0)}%',
-                  titleStyle: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13,
-                  ),
-                ),
-              if (totalExpenses > 0)
-                PieChartSectionData(
-                  value: totalExpenses,
-                  color: Colors.red,
-                  radius: 62,
-                  title: '${expensePercent.toStringAsFixed(0)}%',
-                  titleStyle: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13,
-                  ),
-                ),
-            ],
-          ),
-        ),
-        SizedBox(
-          width: 96,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Net Balance',
-                style: TextStyle(color: Colors.grey, fontSize: 12),
-              ),
-              const SizedBox(height: 2),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  _formatDashboardMoney(netBalance),
-                  maxLines: 1,
-                  style: TextStyle(
-                    color: netBalance < 0 ? Colors.red : Colors.green,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
+    final chartTotal = totalExpenses + positiveBalance;
 
-class _PiePanelHeader extends StatelessWidget {
-  const _PiePanelHeader({required this.comparison});
+    final spentPctValue = totalIncome > 0
+        ? (totalExpenses / totalIncome) * 100
+        : (totalExpenses > 0 ? 100.0 : 0.0);
+    final savedPctValue = totalIncome > 0
+        ? ((netBalance / totalIncome) * 100).clamp(0.0, 100.0)
+        : 0.0;
 
-  final _ComparisonState comparison;
+    final spentPct = formatPiePercentage(spentPctValue);
+    final savedPct = formatPiePercentage(savedPctValue);
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(Icons.pie_chart_outline, color: comparison.color),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            'Income vs Expenses',
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-          ),
-        ),
-      ],
-    );
-  }
-}
+    final isLoss = netBalance < 0;
 
-class _IncomeExpenseComparison extends StatelessWidget {
-  const _IncomeExpenseComparison({
-    required this.comparison,
-    required this.totalIncome,
-    required this.totalExpenses,
-    required this.balance,
-  });
-
-  final _ComparisonState comparison;
-  final double totalIncome;
-  final double totalExpenses;
-  final double balance;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: comparison.color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: comparison.color.withValues(alpha: 0.2)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: comparison.color.withValues(alpha: 0.14),
-                  foregroundColor: comparison.color,
-                  child: Icon(comparison.icon, size: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  'Expenses vs Balance',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14.5,
+                    color: const Color(0xFF111827),
+                  ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    comparison.title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 16,
+              ),
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: Icon(
+                  Icons.info_outline_rounded,
+                  size: 18,
+                  color: Colors.grey.shade500,
+                ),
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Expenses vs Balance'),
+                      content: const Text(
+                        'This chart displays the share of Expenses (red) and remaining Balance (green).',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          child: const Text('Close'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 180,
+            child: chartTotal <= 0
+                ? const _EmptyPieChart()
+                : Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      PieChart(
+                        PieChartData(
+                          centerSpaceRadius: 50,
+                          sectionsSpace: 3,
+                          startDegreeOffset: -90,
+                          borderData: FlBorderData(show: false),
+                          sections: [
+                            if (positiveBalance > 0)
+                              PieChartSectionData(
+                                value: positiveBalance,
+                                color: const Color(0xFF00C853),
+                                radius: 48,
+                                title: '$savedPct%',
+                                showTitle: true,
+                                titleStyle: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                ),
+                                titlePositionPercentageOffset: 0.55,
+                              ),
+                            if (totalExpenses > 0)
+                              PieChartSectionData(
+                                value: totalExpenses,
+                                color: const Color(0xFFFF1744),
+                                radius: 48,
+                                title: '$spentPct%',
+                                showTitle: true,
+                                titleStyle: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                ),
+                                titlePositionPercentageOffset: 0.55,
+                              ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Net Balance',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: Colors.grey.shade600,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'PKR',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.black54,
+                            ),
+                          ),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12.0,
+                              ),
+                              child: Text(
+                                _formatPieBalance(netBalance),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                  color: netBalance < 0
+                                      ? const Color(0xFFE52E3D)
+                                      : const Color(0xFF0F9D58),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              // Left Chip (Net Surplus / Balance)
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isLoss
+                        ? const Color(0xFFFDF2F3)
+                        : const Color(0xFFEDF9F2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isLoss
+                          ? const Color(0xFFFCDADB)
+                          : const Color(0xFFC8EEDC),
+                      width: 1,
                     ),
                   ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            isLoss
+                                ? Icons.trending_down_rounded
+                                : Icons.trending_up_rounded,
+                            size: 14,
+                            color: isLoss
+                                ? const Color(0xFFE52E3D)
+                                : const Color(0xFF0F9D58),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              isLoss ? 'Net Deficit' : 'Net Surplus',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                                color: isLoss
+                                    ? const Color(0xFFB91C1C)
+                                    : const Color(0xFF065F46),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '${_formatSignedDashboardMoney(netBalance)} ($savedPct% remaining)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: isLoss
+                                ? const Color(0xFFE52E3D)
+                                : const Color(0xFF0F9D58),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              // Right Chip (Total Expenses / Spent)
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFDF2F3),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFFFCDADB),
+                      width: 1,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.trending_down_rounded,
+                            size: 14,
+                            color: Color(0xFFE52E3D),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              'Spent',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFFB91C1C),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '${_formatDashboardMoney(totalExpenses)} ($spentPct% spent)',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFFE52E3D),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String formatPiePercentage(double value) {
+    final rounded = double.parse(value.toStringAsFixed(2));
+    if (rounded % 1 == 0) {
+      return rounded.toStringAsFixed(0);
+    }
+    return value.toStringAsFixed(2);
+  }
+}
+
+class NetLossAlertBanner extends StatelessWidget {
+  const NetLossAlertBanner({
+    super.key,
+    required this.totalIncome,
+    required this.totalExpenses,
+  });
+
+  final double totalIncome;
+  final double totalExpenses;
+
+  @override
+  Widget build(BuildContext context) {
+    final netBalance = totalIncome - totalExpenses;
+    final isLoss = netBalance < 0;
+    final isSurplus = netBalance > 0;
+
+    final diffPct = totalIncome > 0
+        ? (((totalExpenses - totalIncome).abs() / totalIncome) * 100).round()
+        : 100;
+
+    final bgColor = isLoss
+        ? const Color(0xFFFDF2F3)
+        : (isSurplus ? const Color(0xFFEDF9F2) : const Color(0xFFF3F4F6));
+    final borderColor = isLoss
+        ? const Color(0xFFFCDADB)
+        : (isSurplus ? const Color(0xFFC8EEDC) : const Color(0xFFE5E7EB));
+    final accentColor = isLoss
+        ? const Color(0xFFE52E3D)
+        : (isSurplus ? const Color(0xFF0F9D58) : const Color(0xFF4B5563));
+
+    final badgeBg = isLoss
+        ? const Color(0xFFFFD6D9)
+        : (isSurplus ? const Color(0xFFD1F2E0) : const Color(0xFFE5E7EB));
+
+    final title = isLoss
+        ? 'Net Loss'
+        : (isSurplus ? 'Net Surplus' : 'Balanced');
+    final subtitlePrefix = isLoss
+        ? 'You are over budget by '
+        : (isSurplus
+              ? 'You are under budget by '
+              : 'Income matches expenses exactly');
+
+    final rightSubtitle = isLoss
+        ? 'Expenses are $diffPct% higher\nthan income'
+        : (isSurplus
+              ? 'Income is $diffPct% higher\nthan expenses'
+              : 'Balanced budget');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor, width: 1.2),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(color: badgeBg, shape: BoxShape.circle),
+            child: Icon(
+              isLoss ? Icons.trending_down_rounded : Icons.trending_up_rounded,
+              color: accentColor,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: accentColor,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                RichText(
+                  text: TextSpan(
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade800),
+                    children: [
+                      TextSpan(text: subtitlePrefix),
+                      if (netBalance != 0)
+                        TextSpan(
+                          text: _formatDashboardMoney(netBalance.abs()),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            color: accentColor,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            Text(
-              comparison.description(balance.abs()),
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 14),
-            _LegendAmountRow(
-              color: Colors.green,
-              label: 'Income',
-              value: _formatDashboardMoney(totalIncome),
-            ),
-            const SizedBox(height: 8),
-            _LegendAmountRow(
-              color: Colors.red,
-              label: 'Expenses',
-              value: _formatDashboardMoney(totalExpenses),
-            ),
-            const Divider(height: 24),
-            _LegendAmountRow(
-              color: comparison.color,
-              label: comparison.balanceLabel,
-              value: _formatDashboardMoney(balance.abs()),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                _formatDashboardMoney(netBalance.abs()),
+                style: TextStyle(
+                  color: accentColor,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 17,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                rightSubtitle,
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 }
 
-class _LegendAmountRow extends StatelessWidget {
-  const _LegendAmountRow({
-    required this.color,
-    required this.label,
-    required this.value,
+class IncomeVsExpensesComparisonPanel extends StatelessWidget {
+  const IncomeVsExpensesComparisonPanel({
+    super.key,
+    required this.totalIncome,
+    required this.totalExpenses,
   });
 
-  final Color color;
-  final String label;
-  final String value;
+  final double totalIncome;
+  final double totalExpenses;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 8),
-        Expanded(child: Text(label)),
-        const SizedBox(width: 8),
-        Flexible(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerRight,
-            child: Text(
-              value,
-              maxLines: 1,
-              style: const TextStyle(fontWeight: FontWeight.w800),
+    final maxAmount = math.max(totalIncome, totalExpenses);
+    final incomeBarFraction = maxAmount > 0
+        ? (totalIncome / maxAmount).clamp(0.02, 1.0)
+        : 0.02;
+    final expenseBarFraction = maxAmount > 0
+        ? (totalExpenses / maxAmount).clamp(0.02, 1.0)
+        : 0.02;
+
+    final incomePctLabel = totalIncome > 0 && totalExpenses > 0
+        ? '${((totalIncome / (totalIncome + totalExpenses)) * 100).round()}%'
+        : (totalIncome > 0 ? '100%' : '0%');
+    final expensePctLabel = totalIncome > 0 && totalExpenses > 0
+        ? '${((totalExpenses / (totalIncome + totalExpenses)) * 100).round()}%'
+        : (totalExpenses > 0 ? '100%' : '0%');
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Income vs Expenses Comparison',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+              color: const Color(0xFF111827),
             ),
           ),
-        ),
-      ],
+          const SizedBox(height: 16),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  SizedBox(
+                    width: 90,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Income',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF374151),
+                          ),
+                        ),
+                        Text(
+                          _formatDashboardMoney(totalIncome),
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey.shade600,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Flexible(
+                          flex: (incomeBarFraction * 100).round().clamp(2, 100),
+                          child: Container(
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00C853),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          incomePctLabel,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF374151),
+                          ),
+                        ),
+                        Flexible(
+                          flex: ((1.0 - incomeBarFraction) * 100).round().clamp(
+                            0,
+                            100,
+                          ),
+                          child: const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  SizedBox(
+                    width: 90,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Expenses',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF374151),
+                          ),
+                        ),
+                        Text(
+                          _formatDashboardMoney(totalExpenses),
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey.shade600,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Flexible(
+                          flex: (expenseBarFraction * 100).round().clamp(
+                            2,
+                            100,
+                          ),
+                          child: Container(
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF1744),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          expensePctLabel,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF374151),
+                          ),
+                        ),
+                        Flexible(
+                          flex: ((1.0 - expenseBarFraction) * 100)
+                              .round()
+                              .clamp(0, 100),
+                          child: const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Padding(
+                padding: const EdgeInsets.only(left: 98),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: const [
+                        Text(
+                          '0%',
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
+                        Text(
+                          '25%',
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
+                        Text(
+                          '50%',
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
+                        Text(
+                          '75%',
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
+                        Text(
+                          '100%',
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    const Center(
+                      child: Text(
+                        'Percentage of Income',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -3381,70 +3417,11 @@ class _EmptyPieChart extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.all(16),
           child: Text(
-            'Add income or expense transactions to update the pie chart.',
+            'Add income or expense transactions to update the chart.',
             textAlign: TextAlign.center,
           ),
         ),
       ),
-    );
-  }
-}
-
-class _ComparisonState {
-  const _ComparisonState({
-    required this.title,
-    required this.balanceLabel,
-    required this.color,
-    required this.icon,
-    required this.description,
-  });
-
-  final String title;
-  final String balanceLabel;
-  final Color color;
-  final IconData icon;
-  final String Function(double amount) description;
-
-  static _ComparisonState fromBalance(double balance, double totalActivity) {
-    if (totalActivity <= 0) {
-      return _ComparisonState(
-        title: 'No activity yet',
-        balanceLabel: 'Balance',
-        color: Colors.blueGrey,
-        icon: Icons.insights_outlined,
-        description: (_) =>
-            'Add transactions to compare income, expenses, and savings.',
-      );
-    }
-
-    if (balance > 0) {
-      return _ComparisonState(
-        title: 'Savings / Profit',
-        balanceLabel: 'Savings',
-        color: Colors.green,
-        icon: Icons.savings_outlined,
-        description: (amount) =>
-            'Income is ${_formatDashboardMoney(amount)} higher than expenses.',
-      );
-    }
-
-    if (balance < 0) {
-      return _ComparisonState(
-        title: 'Loss',
-        balanceLabel: 'Loss',
-        color: Colors.red,
-        icon: Icons.trending_down,
-        description: (amount) =>
-            'Expenses are ${_formatDashboardMoney(amount)} higher than income.',
-      );
-    }
-
-    return _ComparisonState(
-      title: 'Break-even',
-      balanceLabel: 'Balance',
-      color: Colors.blueGrey,
-      icon: Icons.balance_outlined,
-      description: (_) => 'Income and expenses are equal.',
     );
   }
 }
@@ -3556,6 +3533,47 @@ class _TransactionTile extends StatelessWidget {
                         transaction.date.toLocal().toString().split(' ')[0],
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
+                      if (transaction.khataEntryId != null) ...[
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE0F2FE),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'via Khata: ${transaction.linkedCounterpartyOrAsset ?? transaction.beneficiary}',
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              color: Color(0xFF0369A1),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ] else if (transaction.assetId != null) ...[
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'via Asset: ${transaction.linkedCounterpartyOrAsset ?? transaction.title}',
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              color: Color(0xFF92400E),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -3631,3 +3649,4 @@ class _TransactionTile extends StatelessWidget {
     }
   }
 }
+

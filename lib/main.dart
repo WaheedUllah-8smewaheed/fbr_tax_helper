@@ -9,7 +9,10 @@ import 'package:fbr_tax_helper/features/transactions/presentation/bloc/transacti
 import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fbr_tax_helper/firebase_options.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -28,7 +31,36 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await _activateAppCheck();
+  await _initializeAds();
   runApp(MyApp());
+}
+
+Future<void> _initializeAds() async {
+  if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+    await MobileAds.instance.initialize();
+  }
+}
+
+Future<void> _activateAppCheck() async {
+  // A web app needs its own reCAPTCHA v3 site key. Do not ship a placeholder
+  // key: Firebase App Check must be configured before web enforcement is on.
+  const webSiteKey = String.fromEnvironment('FBR_HELPER_RECAPTCHA_V3_SITE_KEY');
+  if (kIsWeb) {
+    if (webSiteKey.isNotEmpty) {
+      await FirebaseAppCheck.instance.activate(
+        webProvider: ReCaptchaV3Provider(webSiteKey),
+      );
+    }
+    return;
+  }
+
+  if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: AndroidProvider.playIntegrity,
+      appleProvider: AppleProvider.deviceCheck,
+    );
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -63,11 +95,65 @@ class MyApp extends StatelessWidget {
           title: 'Filer Flow',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
+          builder: (context, child) {
+            if (!_useSessionRouter) {
+              return _AppThemeFrame(
+                isAuthenticated: false,
+                child: child ?? const SizedBox.shrink(),
+              );
+            }
+            return StreamBuilder<User?>(
+              stream: authService.authStateChanges(),
+              initialData: authService.currentUser,
+              builder: (context, session) => _AppThemeFrame(
+                isAuthenticated: session.data != null,
+                child: child ?? const SizedBox.shrink(),
+              ),
+            );
+          },
           home: SplashScreen(
             authService: authService,
             nextScreen: _useSessionRouter ? const SessionRouter() : null,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _AppThemeFrame extends StatelessWidget {
+  const _AppThemeFrame({required this.isAuthenticated, required this.child});
+
+  final bool isAuthenticated;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Theme(
+      data: isAuthenticated ? AppTheme.authenticated : AppTheme.light,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isAuthenticated
+                ? const [
+                    AppColors.mintSoft,
+                    Color(0xFFE7F0EA),
+                    AppColors.goldSurface,
+                    AppColors.cream,
+                  ]
+                : const [
+                    AppColors.mintSoft,
+                    AppColors.background,
+                    AppColors.goldSurface,
+                  ],
+            stops: isAuthenticated
+                ? const [0, 0.42, 0.76, 1]
+                : const [0, 0.62, 1],
+          ),
+        ),
+        child: child,
       ),
     );
   }
