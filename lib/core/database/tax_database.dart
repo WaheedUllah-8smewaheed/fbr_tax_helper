@@ -20,7 +20,7 @@ class TaxDatabase {
 
     return await openDatabase(
       path,
-      version: 7,
+      version: 8,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -120,7 +120,8 @@ class TaxDatabase {
             isPayable INTEGER NOT NULL,
             date TEXT NOT NULL,
             description TEXT NOT NULL DEFAULT '',
-            isPaid INTEGER NOT NULL DEFAULT 0)
+            isPaid INTEGER NOT NULL DEFAULT 0,
+            fromIncome INTEGER NOT NULL DEFAULT 0)
       ''');
     }
     if (oldVersion < 6) {
@@ -160,6 +161,12 @@ class TaxDatabase {
         column: 'isWrittenOff',
         definition: 'INTEGER NOT NULL DEFAULT 0',
       );
+      await _addColumnIfMissing(
+        db,
+        table: 'khata_entries',
+        column: 'fromIncome',
+        definition: 'INTEGER NOT NULL DEFAULT 0',
+      );
       await db.execute('''
         CREATE TABLE IF NOT EXISTS assets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -171,6 +178,14 @@ class TaxDatabase {
             updatedAt TEXT NOT NULL,
           description TEXT NOT NULL DEFAULT '')
       ''');
+    }
+    if (oldVersion < 8) {
+      await _addColumnIfMissing(
+        db,
+        table: 'khata_entries',
+        column: 'fromIncome',
+        definition: 'INTEGER NOT NULL DEFAULT 0',
+      );
     }
   }
 
