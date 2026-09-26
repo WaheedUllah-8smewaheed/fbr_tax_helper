@@ -383,9 +383,11 @@ class TaxDatabase {
           newValue = currentValue + amount;
         } else {
           final isExpense = (transactionRow['isExpense'] as int? ?? 1) == 1;
+          // Reversal: if it was an expense, money left the asset, so we add it back.
+          // If it was income, money entered the asset, so we subtract it.
           newValue = isExpense
-              ? (currentValue - amount).clamp(0.0, double.infinity)
-              : currentValue + amount;
+              ? currentValue + amount
+              : (currentValue - amount).clamp(0.0, double.infinity);
         }
         await db.update(
           'assets',
@@ -457,9 +459,12 @@ class TaxDatabase {
           newValue = (currentValue - amountDiff).clamp(0.0, double.infinity);
         } else {
           final isExpense = (newTransactionRow['isExpense'] as int? ?? 1) == 1;
+          // Reversal of difference: 
+          // If we increased the expense amount (amountDiff > 0), more money left, so we subtract amountDiff.
+          // If we decreased the expense amount (amountDiff < 0), less money left, so we add (subtracting negative adds).
           newValue = isExpense
-              ? (currentValue + amountDiff).clamp(0.0, double.infinity)
-              : (currentValue - amountDiff).clamp(0.0, double.infinity);
+              ? (currentValue - amountDiff).clamp(0.0, double.infinity)
+              : (currentValue + amountDiff).clamp(0.0, double.infinity);
         }
         await db.update(
           'assets',
