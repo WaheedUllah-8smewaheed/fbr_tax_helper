@@ -59,8 +59,7 @@ class TransactionLocalDataSourceImpl implements TransactionLocalDataSource {
         receiptImagePath: map['receiptImagePath'] as String?,
         khataEntryId: map['khataEntryId'] as int?,
         assetId: map['assetId'] as int?,
-        linkedCounterpartyOrAsset:
-            map['linkedCounterpartyOrAsset'] as String?,
+        linkedCounterpartyOrAsset: map['linkedCounterpartyOrAsset'] as String?,
       );
     }).toList();
   }
@@ -127,7 +126,9 @@ class TransactionLocalDataSourceImpl implements TransactionLocalDataSource {
     );
 
     if (existingRows.isNotEmpty) {
-      await databaseHelper.handleTransactionDeletionReversal(existingRows.first);
+      await databaseHelper.handleTransactionDeletionReversal(
+        existingRows.first,
+      );
     }
   }
 }

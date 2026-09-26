@@ -100,124 +100,143 @@ void main() {
     },
   );
 
-  test('adding and removing custom subcategories persists and updates hierarchy', () async {
-    FlutterSecureStorage.setMockInitialValues({});
-    final service = CategoryPreferencesService();
-    addTearDown(service.dispose);
+  test(
+    'adding and removing custom subcategories persists and updates hierarchy',
+    () async {
+      FlutterSecureStorage.setMockInitialValues({});
+      final service = CategoryPreferencesService();
+      addTearDown(service.dispose);
 
-    await service.loadForUser('user-custom-cat');
+      await service.loadForUser('user-custom-cat');
 
-    // Add custom subcategory under Bills
-    await service.addSubcategory(
-      parentName: 'Bills',
-      categoryName: 'Solar Maintenance',
-    );
+      // Add custom subcategory under Bills
+      await service.addSubcategory(
+        parentName: 'Bills',
+        categoryName: 'Solar Maintenance',
+      );
 
-    expect(service.isCustomCategory('Solar Maintenance'), isTrue);
-    expect(service.parentNameFor('Solar Maintenance'), 'Bills');
-    expect(service.isExpense('Solar Maintenance'), isTrue);
-    expect(
-      service.childrenOf('Bills').map((c) => c.name),
-      contains('Solar Maintenance'),
-    );
+      expect(service.isCustomCategory('Solar Maintenance'), isTrue);
+      expect(service.parentNameFor('Solar Maintenance'), 'Bills');
+      expect(service.isExpense('Solar Maintenance'), isTrue);
+      expect(
+        service.childrenOf('Bills').map((c) => c.name),
+        contains('Solar Maintenance'),
+      );
 
-    // Verify hierarchy includes it
-    final billsOptions = service.hierarchy['Home']?['Bills']?.map((c) => c.name);
-    expect(billsOptions, contains('Solar Maintenance'));
+      // Verify hierarchy includes it
+      final billsOptions = service.hierarchy['Home']?['Bills']?.map(
+        (c) => c.name,
+      );
+      expect(billsOptions, contains('Solar Maintenance'));
 
-    // Remove custom subcategory
-    await service.removeSubcategory(
-      parentName: 'Bills',
-      categoryName: 'Solar Maintenance',
-    );
+      // Remove custom subcategory
+      await service.removeSubcategory(
+        parentName: 'Bills',
+        categoryName: 'Solar Maintenance',
+      );
 
-    expect(service.isCustomCategory('Solar Maintenance'), isFalse);
-    expect(
-      service.childrenOf('Bills').map((c) => c.name),
-      isNot(contains('Solar Maintenance')),
-    );
+      expect(service.isCustomCategory('Solar Maintenance'), isFalse);
+      expect(
+        service.childrenOf('Bills').map((c) => c.name),
+        isNot(contains('Solar Maintenance')),
+      );
 
-    // Add and reload to test persistence
-    await service.addSubcategory(
-      parentName: 'Bills',
-      categoryName: 'Gardener',
-    );
+      // Add and reload to test persistence
+      await service.addSubcategory(
+        parentName: 'Bills',
+        categoryName: 'Gardener',
+      );
 
-    final service2 = CategoryPreferencesService();
-    addTearDown(service2.dispose);
-    await service2.loadForUser('user-custom-cat');
+      final service2 = CategoryPreferencesService();
+      addTearDown(service2.dispose);
+      await service2.loadForUser('user-custom-cat');
 
-    expect(service2.isCustomCategory('Gardener'), isTrue);
-    expect(
-      service2.childrenOf('Bills').map((c) => c.name),
-      contains('Gardener'),
-    );
-  });
+      expect(service2.isCustomCategory('Gardener'), isTrue);
+      expect(
+        service2.childrenOf('Bills').map((c) => c.name),
+        contains('Gardener'),
+      );
+    },
+  );
 
-  test('income parent categories and their subcategories are recognized as income', () async {
-    FlutterSecureStorage.setMockInitialValues({});
-    final service = CategoryPreferencesService();
-    addTearDown(service.dispose);
+  test(
+    'income parent categories and their subcategories are recognized as income',
+    () async {
+      FlutterSecureStorage.setMockInitialValues({});
+      final service = CategoryPreferencesService();
+      addTearDown(service.dispose);
 
-    await service.loadForUser('user-income-test');
+      await service.loadForUser('user-income-test');
 
-    // Business is a level-2 parent under 'Money In'
-    expect(service.isParentCategory('Business'), isTrue);
-    expect(service.isParentCategory('Salary'), isTrue);
-    expect(service.modeForParent('Business'), CategoryMode.income);
-    expect(service.isExpense('Business'), isFalse);
+      // Business is a level-2 parent under 'Money In'
+      expect(service.isParentCategory('Business'), isTrue);
+      expect(service.isParentCategory('Salary'), isTrue);
+      expect(service.modeForParent('Business'), CategoryMode.income);
+      expect(service.isExpense('Business'), isFalse);
 
-    // Add custom subcategory under Business
-    await service.addSubcategory(
-      parentName: 'Business',
-      categoryName: 'Online Store',
-    );
-
-    expect(service.isCustomCategory('Online Store'), isTrue);
-    expect(service.parentNameFor('Online Store'), 'Business');
-    expect(service.isExpense('Online Store'), isFalse);
-    expect(
-      service.childrenOf('Business').firstWhere((c) => c.name == 'Online Store').isExpense,
-      isFalse,
-    );
-    expect(
-      service.resolveTransactionTypeForCategory(
+      // Add custom subcategory under Business
+      await service.addSubcategory(
+        parentName: 'Business',
         categoryName: 'Online Store',
-        transactionIsExpense: true,
-      ),
-      isFalse,
-    );
+      );
 
-    // Add custom subcategory under Salary
-    await service.addSubcategory(
-      parentName: 'Salary',
-      categoryName: 'Side Gig',
-    );
-    expect(service.isExpense('Side Gig'), isFalse);
-    expect(
-      service.childrenOf('Salary').firstWhere((c) => c.name == 'Side Gig').isExpense,
-      isFalse,
-    );
-  });
+      expect(service.isCustomCategory('Online Store'), isTrue);
+      expect(service.parentNameFor('Online Store'), 'Business');
+      expect(service.isExpense('Online Store'), isFalse);
+      expect(
+        service
+            .childrenOf('Business')
+            .firstWhere((c) => c.name == 'Online Store')
+            .isExpense,
+        isFalse,
+      );
+      expect(
+        service.resolveTransactionTypeForCategory(
+          categoryName: 'Online Store',
+          transactionIsExpense: true,
+        ),
+        isFalse,
+      );
 
-  test('loadForUser heals previously poisoned income subcategory classifications', () async {
-    // Simulate corrupted storage where an income subcategory was saved with isExpense = true
-    FlutterSecureStorage.setMockInitialValues({
-      'category_preferences_user-poisoned':
-          '{"custom_subcategories":{"Business":["Online Store"]},"classifications":{"Online Store":true}}',
-    });
+      // Add custom subcategory under Salary
+      await service.addSubcategory(
+        parentName: 'Salary',
+        categoryName: 'Side Gig',
+      );
+      expect(service.isExpense('Side Gig'), isFalse);
+      expect(
+        service
+            .childrenOf('Salary')
+            .firstWhere((c) => c.name == 'Side Gig')
+            .isExpense,
+        isFalse,
+      );
+    },
+  );
 
-    final service = CategoryPreferencesService();
-    addTearDown(service.dispose);
+  test(
+    'loadForUser heals previously poisoned income subcategory classifications',
+    () async {
+      // Simulate corrupted storage where an income subcategory was saved with isExpense = true
+      FlutterSecureStorage.setMockInitialValues({
+        'category_preferences_user-poisoned':
+            '{"custom_subcategories":{"Business":["Online Store"]},"classifications":{"Online Store":true}}',
+      });
 
-    await service.loadForUser('user-poisoned');
+      final service = CategoryPreferencesService();
+      addTearDown(service.dispose);
 
-    // The corrupted 'true' should be healed to 'false' based on parent mode
-    expect(service.isExpense('Online Store'), isFalse);
-    expect(
-      service.childrenOf('Business').firstWhere((c) => c.name == 'Online Store').isExpense,
-      isFalse,
-    );
-  });
+      await service.loadForUser('user-poisoned');
+
+      // The corrupted 'true' should be healed to 'false' based on parent mode
+      expect(service.isExpense('Online Store'), isFalse);
+      expect(
+        service
+            .childrenOf('Business')
+            .firstWhere((c) => c.name == 'Online Store')
+            .isExpense,
+        isFalse,
+      );
+    },
+  );
 }
-

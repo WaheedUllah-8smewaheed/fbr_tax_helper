@@ -367,8 +367,9 @@ class CategoryPreferencesService extends ChangeNotifier {
       _customSubcategories[trimmedParent]!.remove(trimmedName);
     }
 
-    final isDefaultChild = TransactionCategory.childrenOf(trimmedParent)
-        .any((cat) => cat.name == trimmedName);
+    final isDefaultChild = TransactionCategory.childrenOf(
+      trimmedParent,
+    ).any((cat) => cat.name == trimmedName);
     if (isDefaultChild) {
       _removedCategories.add(trimmedName);
     }

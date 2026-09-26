@@ -10,7 +10,6 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 class TransactionReportService {
-
   pw.Widget _buildCategoryComparisonTable(
     List<Transaction> firstTransactions,
     List<Transaction> secondTransactions,
@@ -18,7 +17,7 @@ class TransactionReportService {
     String secondLabel,
   ) {
     final Map<String, Map<String, double>> categoryStats = {};
-    
+
     void process(List<Transaction> transactions, String periodKey) {
       for (final t in transactions) {
         final cat = t.category;
@@ -27,30 +26,35 @@ class TransactionReportService {
         if (!categoryStats.containsKey(key)) {
           categoryStats[key] = {'p1': 0.0, 'p2': 0.0};
         }
-        categoryStats[key]![periodKey] = (categoryStats[key]![periodKey] ?? 0.0) + t.amount;
+        categoryStats[key]![periodKey] =
+            (categoryStats[key]![periodKey] ?? 0.0) + t.amount;
       }
     }
-    
+
     process(firstTransactions, 'p1');
     process(secondTransactions, 'p2');
-    
+
     if (categoryStats.isEmpty) {
-      return pw.Text('No transactions found in either period.', style: const pw.TextStyle(color: PdfColors.grey600));
+      return pw.Text(
+        'No transactions found in either period.',
+        style: const pw.TextStyle(color: PdfColors.grey600),
+      );
     }
-    
-    final sortedKeys = categoryStats.keys.toList()..sort((a, b) {
-      final aParts = a.split('|');
-      final bParts = b.split('|');
-      final aType = aParts[1];
-      final bType = bParts[1];
-      
-      if (aType != bType) {
-        return aType == 'income' ? -1 : 1;
-      }
-      
-      return aParts[0].compareTo(bParts[0]);
-    });
-    
+
+    final sortedKeys = categoryStats.keys.toList()
+      ..sort((a, b) {
+        final aParts = a.split('|');
+        final bParts = b.split('|');
+        final aType = aParts[1];
+        final bType = bParts[1];
+
+        if (aType != bType) {
+          return aType == 'income' ? -1 : 1;
+        }
+
+        return aParts[0].compareTo(bParts[0]);
+      });
+
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
       columnWidths: {
@@ -66,23 +70,56 @@ class TransactionReportService {
           children: [
             pw.Padding(
               padding: const pw.EdgeInsets.all(8),
-              child: pw.Text('Category', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+              child: pw.Text(
+                'Category',
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 10,
+                ),
+              ),
             ),
             pw.Padding(
               padding: const pw.EdgeInsets.all(8),
-              child: pw.Text('Type', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+              child: pw.Text(
+                'Type',
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 10,
+                ),
+              ),
             ),
             pw.Padding(
               padding: const pw.EdgeInsets.all(8),
-              child: pw.Text(firstLabel, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10), textAlign: pw.TextAlign.right),
+              child: pw.Text(
+                firstLabel,
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 10,
+                ),
+                textAlign: pw.TextAlign.right,
+              ),
             ),
             pw.Padding(
               padding: const pw.EdgeInsets.all(8),
-              child: pw.Text(secondLabel, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10), textAlign: pw.TextAlign.right),
+              child: pw.Text(
+                secondLabel,
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 10,
+                ),
+                textAlign: pw.TextAlign.right,
+              ),
             ),
             pw.Padding(
               padding: const pw.EdgeInsets.all(8),
-              child: pw.Text('Difference', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10), textAlign: pw.TextAlign.right),
+              child: pw.Text(
+                'Difference',
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 10,
+                ),
+                textAlign: pw.TextAlign.right,
+              ),
             ),
           ],
         ),
@@ -93,31 +130,54 @@ class TransactionReportService {
           final p1 = categoryStats[key]!['p1'] ?? 0.0;
           final p2 = categoryStats[key]!['p2'] ?? 0.0;
           final diff = p2 - p1;
-          
+
           final isExpense = type == 'expense';
           final typeColor = isExpense ? PdfColors.red700 : PdfColors.green700;
-          
+
           return pw.TableRow(
             children: [
               pw.Padding(
                 padding: const pw.EdgeInsets.all(8),
-                child: pw.Text(category, style: const pw.TextStyle(fontSize: 10)),
+                child: pw.Text(
+                  category,
+                  style: const pw.TextStyle(fontSize: 10),
+                ),
               ),
               pw.Padding(
                 padding: const pw.EdgeInsets.all(8),
-                child: pw.Text(isExpense ? 'Exp' : 'Inc', style: pw.TextStyle(fontSize: 10, color: typeColor)),
+                child: pw.Text(
+                  isExpense ? 'Exp' : 'Inc',
+                  style: pw.TextStyle(fontSize: 10, color: typeColor),
+                ),
               ),
               pw.Padding(
                 padding: const pw.EdgeInsets.all(8),
-                child: pw.Text(_formatMoney(p1), style: const pw.TextStyle(fontSize: 10), textAlign: pw.TextAlign.right),
+                child: pw.Text(
+                  _formatMoney(p1),
+                  style: const pw.TextStyle(fontSize: 10),
+                  textAlign: pw.TextAlign.right,
+                ),
               ),
               pw.Padding(
                 padding: const pw.EdgeInsets.all(8),
-                child: pw.Text(_formatMoney(p2), style: const pw.TextStyle(fontSize: 10), textAlign: pw.TextAlign.right),
+                child: pw.Text(
+                  _formatMoney(p2),
+                  style: const pw.TextStyle(fontSize: 10),
+                  textAlign: pw.TextAlign.right,
+                ),
               ),
               pw.Padding(
                 padding: const pw.EdgeInsets.all(8),
-                child: pw.Text(_formatSignedMoney(diff), style: pw.TextStyle(fontSize: 10, color: diff > 0 ? PdfColors.green700 : (diff < 0 ? PdfColors.red700 : PdfColors.black)), textAlign: pw.TextAlign.right),
+                child: pw.Text(
+                  _formatSignedMoney(diff),
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    color: diff > 0
+                        ? PdfColors.green700
+                        : (diff < 0 ? PdfColors.red700 : PdfColors.black),
+                  ),
+                  textAlign: pw.TextAlign.right,
+                ),
               ),
             ],
           );
@@ -277,17 +337,22 @@ class TransactionReportService {
               ],
             ),
           ),
-            pw.SizedBox(height: 24),
-            pw.Text(
-              'Category Breakdown',
-              style: pw.TextStyle(
-                fontSize: 16,
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColor.fromHex('#0F6B57'),
-              ),
+          pw.SizedBox(height: 24),
+          pw.Text(
+            'Category Breakdown',
+            style: pw.TextStyle(
+              fontSize: 16,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColor.fromHex('#0F6B57'),
             ),
-            pw.SizedBox(height: 12),
-            _buildCategoryComparisonTable(firstTransactions, secondTransactions, firstLabel, secondLabel),
+          ),
+          pw.SizedBox(height: 12),
+          _buildCategoryComparisonTable(
+            firstTransactions,
+            secondTransactions,
+            firstLabel,
+            secondLabel,
+          ),
         ],
       ),
     );

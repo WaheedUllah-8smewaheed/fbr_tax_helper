@@ -9,19 +9,20 @@ enum AssetCategory {
   other;
 
   String get displayName => switch (this) {
-        AssetCategory.cash => 'Cash',
-        AssetCategory.bank => 'Bank',
-        AssetCategory.property => 'Property',
-        AssetCategory.vehicle => 'Vehicle',
-        AssetCategory.investment => 'Investment',
-        AssetCategory.other => 'Other',
-      };
+    AssetCategory.cash => 'Cash',
+    AssetCategory.bank => 'Bank',
+    AssetCategory.property => 'Property',
+    AssetCategory.vehicle => 'Vehicle',
+    AssetCategory.investment => 'Investment',
+    AssetCategory.other => 'Other',
+  };
 
   static AssetCategory fromString(String? value) {
     if (value == null) return AssetCategory.other;
     return AssetCategory.values.firstWhere(
-      (c) => c.name.toLowerCase() == value.toLowerCase() ||
-             c.displayName.toLowerCase() == value.toLowerCase(),
+      (c) =>
+          c.name.toLowerCase() == value.toLowerCase() ||
+          c.displayName.toLowerCase() == value.toLowerCase(),
       orElse: () => AssetCategory.other,
     );
   }
@@ -90,9 +91,11 @@ class Asset extends Equatable {
       name: map['name'] as String? ?? '',
       category: AssetCategory.fromString(map['category'] as String?),
       value: (map['value'] as num?)?.toDouble() ?? 0.0,
-      createdAt: DateTime.tryParse(map['createdAt'] as String? ?? '') ??
+      createdAt:
+          DateTime.tryParse(map['createdAt'] as String? ?? '') ??
           DateTime.now(),
-      updatedAt: DateTime.tryParse(map['updatedAt'] as String? ?? '') ??
+      updatedAt:
+          DateTime.tryParse(map['updatedAt'] as String? ?? '') ??
           DateTime.now(),
       description: map['description'] as String? ?? '',
     );
@@ -100,14 +103,13 @@ class Asset extends Equatable {
 
   @override
   List<Object?> get props => [
-        id,
-        userId,
-        name,
-        category,
-        value,
-        createdAt,
-        updatedAt,
-        description,
-      ];
+    id,
+    userId,
+    name,
+    category,
+    value,
+    createdAt,
+    updatedAt,
+    description,
+  ];
 }
-

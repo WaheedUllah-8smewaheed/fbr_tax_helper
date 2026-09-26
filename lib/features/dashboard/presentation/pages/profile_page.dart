@@ -9,7 +9,6 @@ class _ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<_ProfilePage>
     with WidgetsBindingObserver {
-
   Widget _buildIntroCard() {
     return Container(
       width: double.infinity,
@@ -620,8 +619,8 @@ class _ProfilePageState extends State<_ProfilePage>
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-              _buildIntroCard(),
-              const SizedBox(height: 12),
+            _buildIntroCard(),
+            const SizedBox(height: 12),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(18),
@@ -1054,4 +1053,3 @@ class _ConfirmPasswordDialogState extends State<_ConfirmPasswordDialog> {
     );
   }
 }
-

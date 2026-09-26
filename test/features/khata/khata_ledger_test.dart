@@ -56,8 +56,10 @@ class FakeKhataTransactionRepository implements TransactionRepository {
   }
 
   @override
-  Future<void> deleteTransaction(
-      {required int id, required String userId}) async {
+  Future<void> deleteTransaction({
+    required int id,
+    required String userId,
+  }) async {
     _transactions.removeWhere((t) => t.id == id);
   }
 }
@@ -125,83 +127,85 @@ void main() {
 
   group('Khata Ledger UI tests', () {
     testWidgets(
-        'renders 2 segmented filter tabs (Payable, Receivable) and adds directly without asking',
-        (tester) async {
-      FlutterSecureStorage.setMockInitialValues({});
-      final authService = FakeKhataAuthService();
-      final repo = FakeKhataTransactionRepository();
-      final bloc = TransactionBloc(
-        transactionRepository: repo,
-        authService: authService,
-      );
-      addTearDown(bloc.close);
+      'renders 2 segmented filter tabs (Payable, Receivable) and adds directly without asking',
+      (tester) async {
+        FlutterSecureStorage.setMockInitialValues({});
+        final authService = FakeKhataAuthService();
+        final repo = FakeKhataTransactionRepository();
+        final bloc = TransactionBloc(
+          transactionRepository: repo,
+          authService: authService,
+        );
+        addTearDown(bloc.close);
 
-      await tester.pumpWidget(
-        MultiRepositoryProvider(
-          providers: [
-            RepositoryProvider<AuthService>.value(value: authService),
-            RepositoryProvider<TransactionRepository>.value(value: repo),
-          ],
-          child: BlocProvider<TransactionBloc>.value(
-            value: bloc,
-            child: const MaterialApp(
-              home: DashboardScreen(),
+        await tester.pumpWidget(
+          MultiRepositoryProvider(
+            providers: [
+              RepositoryProvider<AuthService>.value(value: authService),
+              RepositoryProvider<TransactionRepository>.value(value: repo),
+            ],
+            child: BlocProvider<TransactionBloc>.value(
+              value: bloc,
+              child: const MaterialApp(home: DashboardScreen()),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-      // Switch to Khata tab
-      await tester.tap(find.text('Khata').first);
-      await tester.pumpAndSettle();
+        // Switch to Khata tab
+        await tester.tap(find.text('Khata').first);
+        await tester.pumpAndSettle();
 
-      // Verify header and only 2 distribution tabs (Payable and Receivable; no Both)
-      expect(find.text('Khata'), findsWidgets);
-      expect(find.text('Payable'), findsWidgets);
-      expect(find.text('Receivable'), findsWidgets);
-      expect(find.text('Both'), findsNothing);
+        // Verify header and only 2 distribution tabs (Payable and Receivable; no Both)
+        expect(find.text('Khata'), findsWidgets);
+        expect(find.text('Payable'), findsWidgets);
+        expect(find.text('Receivable'), findsWidgets);
+        expect(find.text('Both'), findsNothing);
 
-      // Verify Add Payable button when on Payable tab
-      final addPayableBtn = find.text('Add Payable');
-      expect(addPayableBtn, findsOneWidget);
+        // Verify Add Payable button when on Payable tab
+        final addPayableBtn = find.text('Add Payable');
+        expect(addPayableBtn, findsOneWidget);
 
-      // Open Add Payable sheet
-      await tester.tap(addPayableBtn);
-      await tester.pumpAndSettle();
+        // Open Add Payable sheet
+        await tester.tap(addPayableBtn);
+        await tester.pumpAndSettle();
 
-      // Check sheet has no type toggle asking the user
-      expect(find.text('New Payable'), findsOneWidget);
-      expect(find.text('Payable (You owe)'), findsNothing);
-      expect(find.text('Receivable (Owed to you)'), findsNothing);
-      expect(find.text('To (Supplier / Vendor / Person) *'), findsOneWidget);
+        // Check sheet has no type toggle asking the user
+        expect(find.text('New Payable'), findsOneWidget);
+        expect(find.text('Payable (You owe)'), findsNothing);
+        expect(find.text('Receivable (Owed to you)'), findsNothing);
+        expect(find.text('To (Supplier / Vendor / Person) *'), findsOneWidget);
 
-      // Close the sheet
-      await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
+        // Close the sheet
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
 
-      // Switch to Receivable tab
-      await tester.tap(find.text('Receivable').first);
-      await tester.pumpAndSettle();
+        // Switch to Receivable tab
+        await tester.tap(find.text('Receivable').first);
+        await tester.pumpAndSettle();
 
-      // Verify button is now Add Receivable
-      final addReceivableBtn = find.text('Add Receivable');
-      expect(addReceivableBtn, findsOneWidget);
+        // Verify button is now Add Receivable
+        final addReceivableBtn = find.text('Add Receivable');
+        expect(addReceivableBtn, findsOneWidget);
 
-      // Open Add Receivable sheet
-      await tester.tap(addReceivableBtn);
-      await tester.pumpAndSettle();
+        // Open Add Receivable sheet
+        await tester.tap(addReceivableBtn);
+        await tester.pumpAndSettle();
 
-      // Check sheet automatically adds Receivable without asking
-      expect(find.text('New Receivable'), findsOneWidget);
-      expect(find.text('Payable (You owe)'), findsNothing);
-      expect(find.text('Receivable (Owed to you)'), findsNothing);
-      expect(find.text('From (Customer / Client / Debtor) *'), findsOneWidget);
+        // Check sheet automatically adds Receivable without asking
+        expect(find.text('New Receivable'), findsOneWidget);
+        expect(find.text('Payable (You owe)'), findsNothing);
+        expect(find.text('Receivable (Owed to you)'), findsNothing);
+        expect(
+          find.text('From (Customer / Client / Debtor) *'),
+          findsOneWidget,
+        );
 
-      // Close the sheet
-      await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
-    });
+        // Close the sheet
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+      },
+    );
 
     test('Unsettled entries do not impact transactions repository', () async {
       final repo = FakeKhataTransactionRepository();
@@ -222,58 +226,61 @@ void main() {
       expect(await repo.getTransactions('khata-user-123'), isEmpty);
     });
 
-    test('Partial and full settlement calculate remaining amount correctly', () {
-      final entry = KhataEntry(
-        id: 10,
-        userId: 'u1',
-        title: 'Wholesale Stock',
-        party: 'Kamran & Co',
-        amount: 50000.0,
-        isPayable: true,
-        date: DateTime(2026, 9, 1),
-      );
+    test(
+      'Partial and full settlement calculate remaining amount correctly',
+      () {
+        final entry = KhataEntry(
+          id: 10,
+          userId: 'u1',
+          title: 'Wholesale Stock',
+          party: 'Kamran & Co',
+          amount: 50000.0,
+          isPayable: true,
+          date: DateTime(2026, 9, 1),
+        );
 
-      expect(entry.remainingAmount, 50000.0);
-      expect(entry.isPaid, isFalse);
+        expect(entry.remainingAmount, 50000.0);
+        expect(entry.isPaid, isFalse);
 
-      // Partial settlement of 20,000
-      final partial = entry.copyWith(settledAmount: 20000.0);
-      expect(partial.settledAmount, 20000.0);
-      expect(partial.remainingAmount, 30000.0);
-      expect(partial.isPaid, isFalse);
+        // Partial settlement of 20,000
+        final partial = entry.copyWith(settledAmount: 20000.0);
+        expect(partial.settledAmount, 20000.0);
+        expect(partial.remainingAmount, 30000.0);
+        expect(partial.isPaid, isFalse);
 
-      // Full settlement of remaining 30,000
-      final fullyPaid = partial.copyWith(
-        settledAmount: 50000.0,
-        isPaid: true,
-      );
-      expect(fullyPaid.settledAmount, 50000.0);
-      expect(fullyPaid.remainingAmount, 0.0);
-      expect(fullyPaid.isPaid, isTrue);
-    });
+        // Full settlement of remaining 30,000
+        final fullyPaid = partial.copyWith(
+          settledAmount: 50000.0,
+          isPaid: true,
+        );
+        expect(fullyPaid.settledAmount, 50000.0);
+        expect(fullyPaid.remainingAmount, 0.0);
+        expect(fullyPaid.isPaid, isTrue);
+      },
+    );
 
-    test('Write off marks debt closed with zero transactions created', () async {
-      final repo = FakeKhataTransactionRepository();
-      final badDebt = KhataEntry(
-        id: 99,
-        userId: 'u1',
-        title: 'Unrecoverable loan',
-        party: 'Defaulted Debtor',
-        amount: 10000.0,
-        isPayable: false,
-        date: DateTime(2026, 8, 1),
-      );
+    test(
+      'Write off marks debt closed with zero transactions created',
+      () async {
+        final repo = FakeKhataTransactionRepository();
+        final badDebt = KhataEntry(
+          id: 99,
+          userId: 'u1',
+          title: 'Unrecoverable loan',
+          party: 'Defaulted Debtor',
+          amount: 10000.0,
+          isPayable: false,
+          date: DateTime(2026, 8, 1),
+        );
 
-      final writtenOff = badDebt.copyWith(
-        isWrittenOff: true,
-        isPaid: true,
-      );
+        final writtenOff = badDebt.copyWith(isWrittenOff: true, isPaid: true);
 
-      expect(writtenOff.isWrittenOff, isTrue);
-      expect(writtenOff.isPaid, isTrue);
-      // Verify no transaction added to repo
-      expect(await repo.getTransactions('u1'), isEmpty);
-    });
+        expect(writtenOff.isWrittenOff, isTrue);
+        expect(writtenOff.isPaid, isTrue);
+        // Verify no transaction added to repo
+        expect(await repo.getTransactions('u1'), isEmpty);
+      },
+    );
 
     test('Asset entity serialization and category mapping', () {
       final now = DateTime(2026, 9, 21, 10, 0);
@@ -319,94 +326,97 @@ void main() {
       expect(wealth.totalWealth, 1230000.0);
     });
 
-    test('Mark as paid adds Expense for Payable and Income for Receivable',
-        () async {
-      final authService = FakeKhataAuthService(const MockFirebaseUser());
-      final repo = FakeKhataTransactionRepository();
-      final bloc = TransactionBloc(
-        transactionRepository: repo,
-        authService: authService,
-      );
-      addTearDown(bloc.close);
+    test(
+      'Mark as paid adds Expense for Payable and Income for Receivable',
+      () async {
+        final authService = FakeKhataAuthService(const MockFirebaseUser());
+        final repo = FakeKhataTransactionRepository();
+        final bloc = TransactionBloc(
+          transactionRepository: repo,
+          authService: authService,
+        );
+        addTearDown(bloc.close);
 
-      // Simulate marking a Payable entry as paid:
-      final payableEntry = KhataEntry(
-        id: 1,
-        userId: 'khata-user-123',
-        title: 'Warehouse Rent',
-        party: 'Landlord Mr. Khan',
-        amount: 35000.0,
-        isPayable: true,
-        date: DateTime(2026, 9, 1),
-        description: 'Rent for Sep 2026',
-      );
+        // Simulate marking a Payable entry as paid:
+        final payableEntry = KhataEntry(
+          id: 1,
+          userId: 'khata-user-123',
+          title: 'Warehouse Rent',
+          party: 'Landlord Mr. Khan',
+          amount: 35000.0,
+          isPayable: true,
+          date: DateTime(2026, 9, 1),
+          description: 'Rent for Sep 2026',
+        );
 
-      bloc.add(
-        AddTransaction(
-          entity.Transaction(
-            userId: payableEntry.userId,
-            title: payableEntry.title,
-            beneficiary: payableEntry.party,
-            purpose: payableEntry.description,
-            amount: payableEntry.amount,
-            isExpense: payableEntry.isPayable,
-            date: DateTime(2026, 9, 18),
-            category: "Khata Ada'igi",
-            khataEntryId: payableEntry.id,
-            linkedCounterpartyOrAsset: payableEntry.party,
+        bloc.add(
+          AddTransaction(
+            entity.Transaction(
+              userId: payableEntry.userId,
+              title: payableEntry.title,
+              beneficiary: payableEntry.party,
+              purpose: payableEntry.description,
+              amount: payableEntry.amount,
+              isExpense: payableEntry.isPayable,
+              date: DateTime(2026, 9, 18),
+              category: "Khata Ada'igi",
+              khataEntryId: payableEntry.id,
+              linkedCounterpartyOrAsset: payableEntry.party,
+            ),
           ),
-        ),
-      );
+        );
 
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-      var txs = await repo.getTransactions('khata-user-123');
-      expect(txs.length, 1);
-      expect(txs.first.title, 'Warehouse Rent');
-      expect(txs.first.isExpense, isTrue); // Payable becomes Expense
-      expect(txs.first.amount, 35000.0);
-      expect(txs.first.beneficiary, 'Landlord Mr. Khan');
-      expect(txs.first.category, "Khata Ada'igi");
-      expect(txs.first.khataEntryId, 1);
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        var txs = await repo.getTransactions('khata-user-123');
+        expect(txs.length, 1);
+        expect(txs.first.title, 'Warehouse Rent');
+        expect(txs.first.isExpense, isTrue); // Payable becomes Expense
+        expect(txs.first.amount, 35000.0);
+        expect(txs.first.beneficiary, 'Landlord Mr. Khan');
+        expect(txs.first.category, "Khata Ada'igi");
+        expect(txs.first.khataEntryId, 1);
 
-      // Simulate marking a Receivable entry as paid:
-      final receivableEntry = KhataEntry(
-        id: 2,
-        userId: 'khata-user-123',
-        title: 'Consulting Project',
-        party: 'FinTech Corp',
-        amount: 75000.0,
-        isPayable: false,
-        date: DateTime(2026, 9, 5),
-        description: 'Phase 1 delivery',
-      );
+        // Simulate marking a Receivable entry as paid:
+        final receivableEntry = KhataEntry(
+          id: 2,
+          userId: 'khata-user-123',
+          title: 'Consulting Project',
+          party: 'FinTech Corp',
+          amount: 75000.0,
+          isPayable: false,
+          date: DateTime(2026, 9, 5),
+          description: 'Phase 1 delivery',
+        );
 
-      bloc.add(
-        AddTransaction(
-          entity.Transaction(
-            userId: receivableEntry.userId,
-            title: receivableEntry.title,
-            beneficiary: receivableEntry.party,
-            purpose: receivableEntry.description,
-            amount: receivableEntry.amount,
-            isExpense: receivableEntry.isPayable,
-            date: DateTime(2026, 9, 18),
-            category: 'Khata Wasooli',
-            khataEntryId: receivableEntry.id,
-            linkedCounterpartyOrAsset: receivableEntry.party,
+        bloc.add(
+          AddTransaction(
+            entity.Transaction(
+              userId: receivableEntry.userId,
+              title: receivableEntry.title,
+              beneficiary: receivableEntry.party,
+              purpose: receivableEntry.description,
+              amount: receivableEntry.amount,
+              isExpense: receivableEntry.isPayable,
+              date: DateTime(2026, 9, 18),
+              category: 'Khata Wasooli',
+              khataEntryId: receivableEntry.id,
+              linkedCounterpartyOrAsset: receivableEntry.party,
+            ),
           ),
-        ),
-      );
+        );
 
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-      txs = await repo.getTransactions('khata-user-123');
-      expect(txs.length, 2);
-      final receivableTx =
-          txs.firstWhere((t) => t.title == 'Consulting Project');
-      expect(receivableTx.isExpense, isFalse); // Receivable becomes Income
-      expect(receivableTx.amount, 75000.0);
-      expect(receivableTx.beneficiary, 'FinTech Corp');
-      expect(receivableTx.category, 'Khata Wasooli');
-      expect(receivableTx.khataEntryId, 2);
-    });
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        txs = await repo.getTransactions('khata-user-123');
+        expect(txs.length, 2);
+        final receivableTx = txs.firstWhere(
+          (t) => t.title == 'Consulting Project',
+        );
+        expect(receivableTx.isExpense, isFalse); // Receivable becomes Income
+        expect(receivableTx.amount, 75000.0);
+        expect(receivableTx.beneficiary, 'FinTech Corp');
+        expect(receivableTx.category, 'Khata Wasooli');
+        expect(receivableTx.khataEntryId, 2);
+      },
+    );
   });
 }

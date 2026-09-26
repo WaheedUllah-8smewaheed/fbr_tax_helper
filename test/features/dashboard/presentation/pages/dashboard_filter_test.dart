@@ -370,16 +370,10 @@ void main() {
     });
 
     test('filterDashboardTransactions filters by Month only', () {
-      final julys = filterDashboardTransactions(
-        transactions,
-        month: 7,
-      );
+      final julys = filterDashboardTransactions(transactions, month: 7);
       expect(julys, [t1, t3]);
 
-      final febs = filterDashboardTransactions(
-        transactions,
-        month: 2,
-      );
+      final febs = filterDashboardTransactions(transactions, month: 2);
       expect(febs, [t2]);
     });
 
@@ -392,9 +386,12 @@ void main() {
       expect(result, [t1]);
     });
 
-    test('filterDashboardTransactions returns all when no filters selected', () {
-      final result = filterDashboardTransactions(transactions);
-      expect(result.length, 3);
-    });
+    test(
+      'filterDashboardTransactions returns all when no filters selected',
+      () {
+        final result = filterDashboardTransactions(transactions);
+        expect(result.length, 3);
+      },
+    );
   });
 }

@@ -10,7 +10,6 @@ class _MorePage extends StatefulWidget {
 }
 
 class _MorePageState extends State<_MorePage> {
-
   Widget _buildIntroCard() {
     return Container(
       width: double.infinity,
@@ -84,8 +83,8 @@ class _MorePageState extends State<_MorePage> {
     return ListView(
       padding: EdgeInsets.fromLTRB(16, 8, 16, bottomPadding),
       children: [
-          _buildIntroCard(),
-          const SizedBox(height: 12),
+        _buildIntroCard(),
+        const SizedBox(height: 12),
         Text(
           'More Tools',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -843,7 +842,10 @@ class _CategorySettingsPage extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(
                     'Toggle a category to show or hide all its items, customize subcategories, or add new ones.',
-                    style: TextStyle(color: Colors.white.withAlpha(220), fontSize: 14),
+                    style: TextStyle(
+                      color: Colors.white.withAlpha(220),
+                      fontSize: 14,
+                    ),
                   ),
                 ],
               ),
@@ -1016,4 +1018,3 @@ class _CategorySettingsPage extends StatelessWidget {
     );
   }
 }
-

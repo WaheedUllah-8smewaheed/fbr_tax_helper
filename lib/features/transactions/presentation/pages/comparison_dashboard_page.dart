@@ -281,65 +281,77 @@ class _ReferenceComparisonDashboardState
                 ),
                 const SizedBox(height: 12),
                 Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Text('Income Comparison', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      const SizedBox(height: 8),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 240),
-                        child: _SelectableComparisonChart(
-                          key: ValueKey(
-                            'comparison-inc-${_mode.name}-$firstMonth-$secondMonth-$firstYear-$secondYear',
-                          ),
-                          firstValues: _comparisonSeries(
-                            widget.transactions,
-                            mode: _mode,
-                            month: firstMonth,
-                            year: firstYear,
-                            isExpense: false,
-                          ),
-                          secondValues: _comparisonSeries(
-                            widget.transactions,
-                            mode: _mode,
-                            month: secondMonth,
-                            year: secondYear,
-                            isExpense: false,
-                          ),
-                          firstLabel: firstLabel,
-                          secondLabel: secondLabel,
-                          mode: _mode,
-                        ),
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Income Comparison',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
                       ),
-                      const SizedBox(height: 24),
-                      const Text('Expense Comparison', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      const SizedBox(height: 8),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 240),
-                        child: _SelectableComparisonChart(
-                          key: ValueKey(
-                            'comparison-exp-${_mode.name}-$firstMonth-$secondMonth-$firstYear-$secondYear',
-                          ),
-                          firstValues: _comparisonSeries(
-                            widget.transactions,
-                            mode: _mode,
-                            month: firstMonth,
-                            year: firstYear,
-                            isExpense: true,
-                          ),
-                          secondValues: _comparisonSeries(
-                            widget.transactions,
-                            mode: _mode,
-                            month: secondMonth,
-                            year: secondYear,
-                            isExpense: true,
-                          ),
-                          firstLabel: firstLabel,
-                          secondLabel: secondLabel,
-                          mode: _mode,
+                    ),
+                    const SizedBox(height: 8),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 240),
+                      child: _SelectableComparisonChart(
+                        key: ValueKey(
+                          'comparison-inc-${_mode.name}-$firstMonth-$secondMonth-$firstYear-$secondYear',
                         ),
+                        firstValues: _comparisonSeries(
+                          widget.transactions,
+                          mode: _mode,
+                          month: firstMonth,
+                          year: firstYear,
+                          isExpense: false,
+                        ),
+                        secondValues: _comparisonSeries(
+                          widget.transactions,
+                          mode: _mode,
+                          month: secondMonth,
+                          year: secondYear,
+                          isExpense: false,
+                        ),
+                        firstLabel: firstLabel,
+                        secondLabel: secondLabel,
+                        mode: _mode,
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Expense Comparison',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 240),
+                      child: _SelectableComparisonChart(
+                        key: ValueKey(
+                          'comparison-exp-${_mode.name}-$firstMonth-$secondMonth-$firstYear-$secondYear',
+                        ),
+                        firstValues: _comparisonSeries(
+                          widget.transactions,
+                          mode: _mode,
+                          month: firstMonth,
+                          year: firstYear,
+                          isExpense: true,
+                        ),
+                        secondValues: _comparisonSeries(
+                          widget.transactions,
+                          mode: _mode,
+                          month: secondMonth,
+                          year: secondYear,
+                          isExpense: true,
+                        ),
+                        firstLabel: firstLabel,
+                        secondLabel: secondLabel,
+                        mode: _mode,
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 18),
                 _ComparisonTotalsSummary(
                   firstLabel: firstLabel,
@@ -2200,43 +2212,43 @@ class _IncomeExpenseTrendDashboardState
                 LayoutBuilder(
                   builder: (context, constraints) {
                     final charts = [
-                        _ComparisonChartCard(
-                          title: 'Income Histogram',
-                          icon: Icons.bar_chart_rounded,
-                          child: _ComparisonHistogram(
-                            buckets: buckets,
-                            period: _period,
-                            isIncome: true,
-                          ),
+                      _ComparisonChartCard(
+                        title: 'Income Histogram',
+                        icon: Icons.bar_chart_rounded,
+                        child: _ComparisonHistogram(
+                          buckets: buckets,
+                          period: _period,
+                          isIncome: true,
                         ),
-                        _ComparisonChartCard(
-                          title: 'Expense Histogram',
-                          icon: Icons.bar_chart_rounded,
-                          child: _ComparisonHistogram(
-                            buckets: buckets,
-                            period: _period,
-                            isIncome: false,
-                          ),
+                      ),
+                      _ComparisonChartCard(
+                        title: 'Expense Histogram',
+                        icon: Icons.bar_chart_rounded,
+                        child: _ComparisonHistogram(
+                          buckets: buckets,
+                          period: _period,
+                          isIncome: false,
                         ),
-                        _ComparisonChartCard(
-                          title: 'Income Trend',
-                          icon: Icons.show_chart_rounded,
-                          child: _ComparisonLineChart(
-                            buckets: buckets,
-                            period: _period,
-                            isIncome: true,
-                          ),
+                      ),
+                      _ComparisonChartCard(
+                        title: 'Income Trend',
+                        icon: Icons.show_chart_rounded,
+                        child: _ComparisonLineChart(
+                          buckets: buckets,
+                          period: _period,
+                          isIncome: true,
                         ),
-                        _ComparisonChartCard(
-                          title: 'Expense Trend',
-                          icon: Icons.show_chart_rounded,
-                          child: _ComparisonLineChart(
-                            buckets: buckets,
-                            period: _period,
-                            isIncome: false,
-                          ),
+                      ),
+                      _ComparisonChartCard(
+                        title: 'Expense Trend',
+                        icon: Icons.show_chart_rounded,
+                        child: _ComparisonLineChart(
+                          buckets: buckets,
+                          period: _period,
+                          isIncome: false,
                         ),
-                      ];
+                      ),
+                    ];
 
                     if (constraints.maxWidth >= 760) {
                       return Row(
@@ -2309,7 +2321,11 @@ class _ComparisonChartCard extends StatelessWidget {
 }
 
 class _ComparisonHistogram extends StatelessWidget {
-  const _ComparisonHistogram({required this.buckets, required this.period, required this.isIncome});
+  const _ComparisonHistogram({
+    required this.buckets,
+    required this.period,
+    required this.isIncome,
+  });
 
   final List<_TrendBucket> buckets;
   final _ComparisonPeriod period;
@@ -2347,13 +2363,15 @@ class _ComparisonHistogram extends StatelessWidget {
                 x: index,
                 barsSpace: 3,
                 barRods: [
-                    BarChartRodData(
-                      toY: isIncome ? bucket.income : bucket.expense,
-                      width: rodWidth,
-                      color: isIncome ? AppColors.primary : AppColors.coral,
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                  BarChartRodData(
+                    toY: isIncome ? bucket.income : bucket.expense,
+                    width: rodWidth,
+                    color: isIncome ? AppColors.primary : AppColors.coral,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(4),
                     ),
-                  ],
+                  ),
+                ],
               );
             }),
           ),
@@ -2364,7 +2382,11 @@ class _ComparisonHistogram extends StatelessWidget {
 }
 
 class _ComparisonLineChart extends StatelessWidget {
-  const _ComparisonLineChart({required this.buckets, required this.period, required this.isIncome});
+  const _ComparisonLineChart({
+    required this.buckets,
+    required this.period,
+    required this.isIncome,
+  });
 
   final List<_TrendBucket> buckets;
   final _ComparisonPeriod period;
@@ -2395,8 +2417,12 @@ class _ComparisonLineChart extends StatelessWidget {
             titlesData: _trendTitles(buckets, period, interval, step),
             lineTouchData: const LineTouchData(enabled: true),
             lineBarsData: [
-                _trendLine(buckets, (bucket) => isIncome ? bucket.income : bucket.expense, isIncome ? AppColors.primary : AppColors.coral),
-              ],
+              _trendLine(
+                buckets,
+                (bucket) => isIncome ? bucket.income : bucket.expense,
+                isIncome ? AppColors.primary : AppColors.coral,
+              ),
+            ],
           ),
         );
       },
@@ -2571,8 +2597,12 @@ List<_TrendBucket> _comparisonBuckets(
 double _trendChartMax(List<_TrendBucket> buckets, {bool? isIncome}) {
   final highest = buckets.fold<double>(
     0,
-    (current, bucket) =>
-        math.max(current, isIncome == null ? math.max(bucket.income, bucket.expense) : (isIncome ? bucket.income : bucket.expense)),
+    (current, bucket) => math.max(
+      current,
+      isIncome == null
+          ? math.max(bucket.income, bucket.expense)
+          : (isIncome ? bucket.income : bucket.expense),
+    ),
   );
   return highest <= 0 ? 1 : highest * 1.15;
 }
@@ -2615,4 +2645,3 @@ String _formatPieBalance(double amount) {
   }
   return '$sign${_formatNumber(absolute)}';
 }
-

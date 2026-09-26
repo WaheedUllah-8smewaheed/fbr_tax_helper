@@ -181,7 +181,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       }
       return;
     }
-    
+
     if (_categoryPreferences.isDualMode(selectedCategory)) {
       if (widget.isSettlement && widget.initialIsExpense != null) {
         // Automatically save as income if settling a payable, or expense if settling a receivable

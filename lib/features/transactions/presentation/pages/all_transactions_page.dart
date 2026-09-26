@@ -18,7 +18,6 @@ class _AllTransactionsPage extends StatefulWidget {
 }
 
 class _AllTransactionsPageState extends State<_AllTransactionsPage> {
-
   Widget _buildIntroCard() {
     return Container(
       width: double.infinity,
@@ -250,8 +249,8 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
                       if (constraints.maxWidth < 430) {
                         return Column(
                           children: [
-                  _buildIntroCard(),
-                  const SizedBox(height: 12),
+                            _buildIntroCard(),
+                            const SizedBox(height: 12),
                             _rangeDateField(isStart: true),
                             const SizedBox(height: 10),
                             _rangeDateField(isStart: false),
@@ -388,4 +387,3 @@ bool transactionBelongsToCategory(
         category,
       ).any((child) => child.name == transaction.category);
 }
-

@@ -239,11 +239,7 @@ class TaxDatabase {
 
   Future<int> deleteKhataEntry(int id) async {
     final db = await instance.database;
-    return await db.delete(
-      'khata_entries',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    return await db.delete('khata_entries', where: 'id = ?', whereArgs: [id]);
   }
 
   // Gets the exact path of the database file on disk to pass to Google Drive API
@@ -332,21 +328,12 @@ class TaxDatabase {
     final db = await instance.database;
     final id = row['id'] as int?;
     if (id == null) return 0;
-    return await db.update(
-      'assets',
-      row,
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    return await db.update('assets', row, where: 'id = ?', whereArgs: [id]);
   }
 
   Future<int> deleteAsset(int id) async {
     final db = await instance.database;
-    return await db.delete(
-      'assets',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    return await db.delete('assets', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> handleTransactionDeletionReversal(
@@ -402,10 +389,7 @@ class TaxDatabase {
         }
         await db.update(
           'assets',
-          {
-            'value': newValue,
-            'updatedAt': DateTime.now().toIso8601String(),
-          },
+          {'value': newValue, 'updatedAt': DateTime.now().toIso8601String()},
           where: 'id = ?',
           whereArgs: [assetId],
         );
@@ -418,14 +402,17 @@ class TaxDatabase {
     required Map<String, dynamic> newTransactionRow,
   }) async {
     final db = await instance.database;
-    final khataEntryId = newTransactionRow['khataEntryId'] as int? ??
+    final khataEntryId =
+        newTransactionRow['khataEntryId'] as int? ??
         oldTransactionRow['khataEntryId'] as int?;
-    final assetId = newTransactionRow['assetId'] as int? ??
+    final assetId =
+        newTransactionRow['assetId'] as int? ??
         oldTransactionRow['assetId'] as int?;
     final oldAmount = (oldTransactionRow['amount'] as num?)?.toDouble() ?? 0.0;
     final newAmount = (newTransactionRow['amount'] as num?)?.toDouble() ?? 0.0;
     final amountDiff = newAmount - oldAmount;
-    final category = newTransactionRow['category'] as String? ??
+    final category =
+        newTransactionRow['category'] as String? ??
         oldTransactionRow['category'] as String? ??
         '';
 
@@ -440,8 +427,10 @@ class TaxDatabase {
         final totalAmount = (khata['amount'] as num?)?.toDouble() ?? 0.0;
         final currentSettled =
             (khata['settledAmount'] as num?)?.toDouble() ?? 0.0;
-        final newSettled =
-            (currentSettled + amountDiff).clamp(0.0, totalAmount);
+        final newSettled = (currentSettled + amountDiff).clamp(
+          0.0,
+          totalAmount,
+        );
         final isPaid = newSettled >= totalAmount ? 1 : 0;
         await db.update(
           'khata_entries',
@@ -474,10 +463,7 @@ class TaxDatabase {
         }
         await db.update(
           'assets',
-          {
-            'value': newValue,
-            'updatedAt': DateTime.now().toIso8601String(),
-          },
+          {'value': newValue, 'updatedAt': DateTime.now().toIso8601String()},
           where: 'id = ?',
           whereArgs: [assetId],
         );

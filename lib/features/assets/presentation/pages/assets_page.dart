@@ -623,7 +623,9 @@ class _AssetsPageState extends State<_AssetsPage> {
               : TransactionTypeFilter.income,
           onFilterChanged: (_) {},
           showAppBar: true,
-          showTypeFilter: false,
+          showTypeFilter: true, // Allow user to toggle if they want
+          isSettlement:
+              false, // Don't show Asset toggle, just Income/Expense toggle
           onParentCategorySelected: (parentCategory, categoryOptions) async {
             final categorySaved = await Navigator.of(context).push<bool>(
               MaterialPageRoute(
@@ -631,7 +633,6 @@ class _AssetsPageState extends State<_AssetsPage> {
                   parentCategory: parentCategory,
                   categoryOptions: categoryOptions,
                   categoryPreferences: _categoryPreferences,
-                  initialIsExpense: isIncrease,
                   initialAmount: amount,
                   initialPurpose: reason.isEmpty
                       ? asset.name
@@ -1034,4 +1035,3 @@ class _AssetsPageState extends State<_AssetsPage> {
     );
   }
 }
-

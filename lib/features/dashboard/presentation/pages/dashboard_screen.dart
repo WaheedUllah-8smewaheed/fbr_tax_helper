@@ -617,7 +617,9 @@ class _TransactionsPageState extends State<_TransactionsPage> {
                           itemBuilder: (context, index) {
                             final card = categoryCards[index];
                             return _AnimatedTransactionCategoryCard(
-                              key: ValueKey('${_filter.name}-${card.categoryName}'),
+                              key: ValueKey(
+                                '${_filter.name}-${card.categoryName}',
+                              ),
                               data: card,
                               index: index,
                               onTap: () => _openParentTransaction(
@@ -3705,7 +3707,8 @@ class _TransactionTile extends StatelessWidget {
                             ),
                           ),
                         ),
-                      ] else if (transaction.assetId != null) ...[
+                      ],
+                      if (transaction.assetId != null) ...[
                         const SizedBox(height: 4),
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -3742,32 +3745,35 @@ class _TransactionTile extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            AddTransactionPage(transaction: transaction),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.edit_outlined),
-                  label: const Text('Edit'),
-                ),
-                const SizedBox(width: 8),
-                TextButton.icon(
-                  onPressed: transaction.id == null
-                      ? null
-                      : () => _confirmDelete(context),
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text('Delete'),
-                ),
-              ],
-            ),
+            if (transaction.khataEntryId == null &&
+                transaction.assetId == null) ...[
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              AddTransactionPage(transaction: transaction),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Edit'),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: transaction.id == null
+                        ? null
+                        : () => _confirmDelete(context),
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Delete'),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

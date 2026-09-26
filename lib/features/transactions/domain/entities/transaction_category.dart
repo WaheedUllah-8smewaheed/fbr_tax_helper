@@ -158,10 +158,7 @@ class TransactionCategory {
       ],
     },
     'Commitments': {
-      'Commitments': [
-        monthlyHomePayment,
-        committee,
-      ],
+      'Commitments': [monthlyHomePayment, committee],
     },
     'Others': {
       'Others': [misc],

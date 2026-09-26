@@ -105,19 +105,18 @@ class KhataEntry extends Equatable {
 
   @override
   List<Object?> get props => [
-        id,
-        userId,
-        title,
-        party,
-        amount,
-        isPayable,
-        date,
-        dueDate,
-        description,
-        isPaid,
-        settledAmount,
-        isWrittenOff,
-        fromIncome,
-      ];
+    id,
+    userId,
+    title,
+    party,
+    amount,
+    isPayable,
+    date,
+    dueDate,
+    description,
+    isPaid,
+    settledAmount,
+    isWrittenOff,
+    fromIncome,
+  ];
 }
-

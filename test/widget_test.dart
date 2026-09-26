@@ -142,40 +142,41 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('forgot password opens dialog with email prefill and allows cancel', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      RepositoryProvider<AuthService>.value(
-        value: AuthService(),
-        child: const MaterialApp(home: LoginPage()),
-      ),
-    );
-    await tester.pump();
+  testWidgets(
+    'forgot password opens dialog with email prefill and allows cancel',
+    (tester) async {
+      await tester.pumpWidget(
+        RepositoryProvider<AuthService>.value(
+          value: AuthService(),
+          child: const MaterialApp(home: LoginPage()),
+        ),
+      );
+      await tester.pump();
 
-    // Type email on login page
-    await tester.enterText(
-      find.widgetWithText(TextFormField, 'Email address'),
-      'user@example.com',
-    );
-    await tester.tap(find.text('Forgot password?'));
-    await tester.pump(const Duration(milliseconds: 300));
+      // Type email on login page
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Email address'),
+        'user@example.com',
+      );
+      await tester.tap(find.text('Forgot password?'));
+      await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Forgot Password'), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.text('user@example.com'),
-      ),
-      findsOneWidget,
-    );
-    expect(find.text('Send link'), findsOneWidget);
+      expect(find.text('Forgot Password'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('user@example.com'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Send link'), findsOneWidget);
 
-    await tester.tap(find.text('Cancel'));
-    await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('Cancel'));
+      await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Forgot Password'), findsNothing);
-  });
+      expect(find.text('Forgot Password'), findsNothing);
+    },
+  );
 
   testWidgets('refresh clears fields and estimate results', (tester) async {
     final bloc = TaxCalculatorBloc(
@@ -209,41 +210,42 @@ void main() {
     expect(incomeField.controller?.text, isEmpty);
   });
 
-  testWidgets('AddTransactionPage replicates subcategories from preferences without inline add button', (
-    tester,
-  ) async {
-    FlutterSecureStorage.setMockInitialValues({});
-    final preferences = CategoryPreferencesService();
-    addTearDown(preferences.dispose);
-    await preferences.loadForUser('test-user');
+  testWidgets(
+    'AddTransactionPage replicates subcategories from preferences without inline add button',
+    (tester) async {
+      FlutterSecureStorage.setMockInitialValues({});
+      final preferences = CategoryPreferencesService();
+      addTearDown(preferences.dispose);
+      await preferences.loadForUser('test-user');
 
-    // Add a custom subcategory via preferences (as done from settings)
-    await preferences.addSubcategory(
-      parentName: 'Bills',
-      categoryName: 'Internet Fiber',
-      isExpense: true,
-    );
+      // Add a custom subcategory via preferences (as done from settings)
+      await preferences.addSubcategory(
+        parentName: 'Bills',
+        categoryName: 'Internet Fiber',
+        isExpense: true,
+      );
 
-    await tester.pumpWidget(
-      RepositoryProvider<AuthService>.value(
-        value: AuthService(),
-        child: MaterialApp(
-          home: AddTransactionPage(
-            parentCategory: 'Bills',
-            categoryOptions: preferences.childrenOf('Bills'),
-            categoryPreferences: preferences,
+      await tester.pumpWidget(
+        RepositoryProvider<AuthService>.value(
+          value: AuthService(),
+          child: MaterialApp(
+            home: AddTransactionPage(
+              parentCategory: 'Bills',
+              categoryOptions: preferences.childrenOf('Bills'),
+              categoryPreferences: preferences,
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    // Inline add button should NOT be present on AddTransactionPage
-    expect(find.text('Add subcategory to Bills'), findsNothing);
+      // Inline add button should NOT be present on AddTransactionPage
+      expect(find.text('Add subcategory to Bills'), findsNothing);
 
-    // Newly added subcategory from preferences is replicated on transaction screen
-    expect(find.text('Internet Fiber'), findsOneWidget);
-  });
+      // Newly added subcategory from preferences is replicated on transaction screen
+      expect(find.text('Internet Fiber'), findsOneWidget);
+    },
+  );
 }
 
 Future<void> _pumpAppAtSize(WidgetTester tester, Size size) async {

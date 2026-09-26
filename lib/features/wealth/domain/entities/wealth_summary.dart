@@ -23,11 +23,10 @@ class WealthSummary extends Equatable {
 
   @override
   List<Object?> get props => [
-        cumulativeIncome,
-        cumulativeExpense,
-        totalAssets,
-        openReceivables,
-        openPayables,
-      ];
+    cumulativeIncome,
+    cumulativeExpense,
+    totalAssets,
+    openReceivables,
+    openPayables,
+  ];
 }
-
