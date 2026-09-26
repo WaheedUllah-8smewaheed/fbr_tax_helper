@@ -32,13 +32,13 @@ import 'package:path/path.dart' as path;
 import 'package:fbr_tax_helper/core/widgets/filer_flow_logo.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-
 part '../../../transactions/presentation/pages/all_transactions_page.dart';
 part '../../../khata/presentation/pages/khata_page.dart';
 part '../../../assets/presentation/pages/assets_page.dart';
 part 'more_page.dart';
 part 'profile_page.dart';
 part '../../../transactions/presentation/pages/comparison_dashboard_page.dart';
+
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -139,7 +139,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             context: context,
             builder: (context) => AlertDialog(
               title: const Text('Exit App'),
-              content: const Text('Are you sure you want to exit the application?'),
+              content: const Text(
+                'Are you sure you want to exit the application?',
+              ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(false),
@@ -161,116 +163,121 @@ class _DashboardScreenState extends State<DashboardScreen> {
         appBar: _selectedIndex == 0
             ? null
             : AppBar(title: Text(titles[_selectedIndex])),
-      body: ListenableBuilder(
-        listenable: _categoryPreferences,
-        builder: (context, _) => IndexedStack(
-          index: _selectedIndex,
-          children: [
-            _HomeDashboard(
-              key: _homeDashboardKey,
-              categoryPreferences: _categoryPreferences,
-              onOpenKhata: () => _onItemTapped(1),
-              onOpenAssets: () => _onItemTapped(2),
-            ),
-            _KhataPage(
-              key: _khataPageKey,
-              categoryPreferences: _categoryPreferences,
-            ),
-            _AssetsPage(
-              key: _assetsPageKey,
-              categoryPreferences: _categoryPreferences,
-            ),
-            _CategorySettingsPage(categoryPreferences: _categoryPreferences),
-            _MorePage(categoryPreferences: _categoryPreferences),
-          ],
-        ),
-      ),
-      floatingActionButton: _selectedIndex != 0 ? null : FloatingActionButton(
-        heroTag: 'add-transaction-fab',
-        onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => _TransactionsPage(
+        body: ListenableBuilder(
+          listenable: _categoryPreferences,
+          builder: (context, _) => IndexedStack(
+            index: _selectedIndex,
+            children: [
+              _HomeDashboard(
+                key: _homeDashboardKey,
                 categoryPreferences: _categoryPreferences,
-                filter: _transactionFilter,
-                onFilterChanged: (filter) {
-                  setState(() => _transactionFilter = filter);
-                },
-                showAppBar: true,
+                onOpenKhata: () => _onItemTapped(1),
+                onOpenAssets: () => _onItemTapped(2),
               ),
-            ),
-          );
-        },
-        backgroundColor: AppColors.warmGold,
-        foregroundColor: AppColors.forest,
-        elevation: 4,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.add_rounded, size: 30),
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: AppColors.cream,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 10,
-              offset: const Offset(0, -2),
-            ),
-          ],
+              _KhataPage(
+                key: _khataPageKey,
+                categoryPreferences: _categoryPreferences,
+              ),
+              _AssetsPage(
+                key: _assetsPageKey,
+                categoryPreferences: _categoryPreferences,
+              ),
+              _CategorySettingsPage(categoryPreferences: _categoryPreferences),
+              _MorePage(categoryPreferences: _categoryPreferences),
+            ],
+          ),
         ),
-        child: SafeArea(
-          top: false,
-          child: ClipRRect(
+        floatingActionButton: _selectedIndex != 0
+            ? null
+            : FloatingActionButton(
+                heroTag: 'add-transaction-fab',
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => _TransactionsPage(
+                        categoryPreferences: _categoryPreferences,
+                        filter: _transactionFilter,
+                        onFilterChanged: (filter) {
+                          setState(() => _transactionFilter = filter);
+                        },
+                        showAppBar: true,
+                      ),
+                    ),
+                  );
+                },
+                backgroundColor: AppColors.warmGold,
+                foregroundColor: AppColors.forest,
+                elevation: 4,
+                shape: const CircleBorder(),
+                child: const Icon(Icons.add_rounded, size: 30),
+              ),
+        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+            color: AppColors.cream,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            child: BottomNavigationBar(
-              type: BottomNavigationBarType.fixed,
-              backgroundColor: AppColors.cream,
-              elevation: 0,
-              currentIndex: _selectedIndex,
-              onTap: _onItemTapped,
-              selectedItemColor: AppColors.forest,
-              unselectedItemColor: const Color(0xFF6B7280),
-              selectedLabelStyle: const TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 10,
+                offset: const Offset(0, -2),
               ),
-              unselectedLabelStyle: const TextStyle(
-                fontWeight: FontWeight.w500,
-                fontSize: 12,
+            ],
+          ),
+          child: SafeArea(
+            top: false,
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
               ),
-              items: const [
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.grid_view_rounded),
-                  activeIcon: Icon(Icons.grid_view_rounded),
-                  label: 'Dashboard',
+              child: BottomNavigationBar(
+                type: BottomNavigationBarType.fixed,
+                backgroundColor: AppColors.cream,
+                elevation: 0,
+                currentIndex: _selectedIndex,
+                onTap: _onItemTapped,
+                selectedItemColor: AppColors.forest,
+                unselectedItemColor: const Color(0xFF6B7280),
+                selectedLabelStyle: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
                 ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.currency_exchange_rounded),
-                  activeIcon: Icon(Icons.currency_exchange_rounded),
-                  label: 'Khata',
+                unselectedLabelStyle: const TextStyle(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 12,
                 ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.account_balance_rounded),
-                  activeIcon: Icon(Icons.account_balance_rounded),
-                  label: 'Assets',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.settings_outlined),
-                  activeIcon: Icon(Icons.settings_rounded),
-                  label: 'Settings',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.menu_rounded),
-                  activeIcon: Icon(Icons.menu_rounded),
-                  label: 'More',
-                ),
-              ],
+                items: const [
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.grid_view_rounded),
+                    activeIcon: Icon(Icons.grid_view_rounded),
+                    label: 'Dashboard',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.currency_exchange_rounded),
+                    activeIcon: Icon(Icons.currency_exchange_rounded),
+                    label: 'Khata',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.account_balance_rounded),
+                    activeIcon: Icon(Icons.account_balance_rounded),
+                    label: 'Assets',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.settings_outlined),
+                    activeIcon: Icon(Icons.settings_rounded),
+                    label: 'Settings',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.menu_rounded),
+                    activeIcon: Icon(Icons.menu_rounded),
+                    label: 'More',
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
   }
 }
 
@@ -324,6 +331,9 @@ class _TransactionsPage extends StatefulWidget {
     this.showAppBar = false,
     this.onParentCategorySelected,
     this.showTypeFilter = true,
+    this.isSettlement = false,
+    this.isPayableSettlement,
+    this.onAssetSelected,
   });
 
   final CategoryPreferencesService categoryPreferences;
@@ -331,6 +341,9 @@ class _TransactionsPage extends StatefulWidget {
   final ValueChanged<TransactionTypeFilter> onFilterChanged;
   final bool showAppBar;
   final bool showTypeFilter;
+  final bool isSettlement;
+  final bool? isPayableSettlement;
+  final Future<void> Function(Map<String, dynamic> asset)? onAssetSelected;
   final Future<void> Function(
     String parentCategory,
     List<TransactionCategory> categoryOptions,
@@ -342,7 +355,6 @@ class _TransactionsPage extends StatefulWidget {
 }
 
 class _TransactionsPageState extends State<_TransactionsPage> {
-
   Widget _buildIntroCard() {
     return Container(
       width: double.infinity,
@@ -378,11 +390,23 @@ class _TransactionsPageState extends State<_TransactionsPage> {
   }
 
   late TransactionTypeFilter _filter;
+  bool _showAssets = false;
+  List<Map<String, dynamic>>? _assets;
 
   @override
   void initState() {
     super.initState();
     _filter = widget.filter;
+    if (widget.isSettlement) {
+      _loadAssets();
+    }
+  }
+
+  Future<void> _loadAssets() async {
+    final assets = await TaxDatabase.instance.fetchAssets();
+    if (mounted) {
+      setState(() => _assets = assets);
+    }
   }
 
   @override
@@ -477,61 +501,133 @@ class _TransactionsPageState extends State<_TransactionsPage> {
           body: ListView(
             padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPadding),
             children: [
-                _buildIntroCard(),
+              _buildIntroCard(),
               if (widget.showTypeFilter) ...[
-                SegmentedButton<TransactionTypeFilter>(
-                  expandedInsets: EdgeInsets.zero,
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(
-                      value: TransactionTypeFilter.income,
-                      label: Text('Income'),
-                    ),
-                    ButtonSegment(
-                      value: TransactionTypeFilter.expense,
-                      label: Text('Expense'),
-                    ),
-                  ],
-                  selected: {_filter},
-                  onSelectionChanged: (selection) {
-                    setState(() {
-                      _filter = selection.first;
-                    });
-                    widget.onFilterChanged(selection.first);
-                  },
-                ),
+                widget.isSettlement
+                    ? SegmentedButton<bool>(
+                        expandedInsets: EdgeInsets.zero,
+                        showSelectedIcon: false,
+                        segments: [
+                          ButtonSegment(
+                            value: false,
+                            label: Text(
+                              widget.isPayableSettlement == true
+                                  ? 'Expense'
+                                  : 'Income',
+                            ),
+                          ),
+                          const ButtonSegment(
+                            value: true,
+                            label: Text('Asset'),
+                          ),
+                        ],
+                        selected: {_showAssets},
+                        onSelectionChanged: (selection) {
+                          setState(() => _showAssets = selection.first);
+                        },
+                      )
+                    : SegmentedButton<TransactionTypeFilter>(
+                        expandedInsets: EdgeInsets.zero,
+                        showSelectedIcon: false,
+                        segments: const [
+                          ButtonSegment(
+                            value: TransactionTypeFilter.income,
+                            label: Text('Income'),
+                          ),
+                          ButtonSegment(
+                            value: TransactionTypeFilter.expense,
+                            label: Text('Expense'),
+                          ),
+                        ],
+                        selected: {_filter},
+                        onSelectionChanged: (selection) {
+                          setState(() {
+                            _filter = selection.first;
+                          });
+                          widget.onFilterChanged(selection.first);
+                        },
+                      ),
                 const SizedBox(height: 20),
               ],
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 280),
                 switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeInCubic,
-                child: LayoutBuilder(
-                  key: ValueKey(_filter),
-                  builder: (context, constraints) => GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: categoryCards.length,
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: constraints.maxWidth < 360 ? 1.12 : 1.3,
-                    ),
-                    itemBuilder: (context, index) {
-                      final card = categoryCards[index];
-                      return _AnimatedTransactionCategoryCard(
-                        key: ValueKey('${_filter.name}-${card.categoryName}'),
-                        data: card,
-                        index: index,
-                        onTap: () => _openParentTransaction(
-                          card.categoryName,
-                          card.options,
+                child: _showAssets
+                    ? (_assets == null
+                          ? const Center(child: CircularProgressIndicator())
+                          : _assets!.isEmpty
+                          ? const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(20),
+                                child: Text('No assets found.'),
+                              ),
+                            )
+                          : ListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: _assets!.length,
+                              itemBuilder: (context, index) {
+                                final asset = _assets![index];
+                                return Card(
+                                  elevation: 0,
+                                  color: Colors.grey.shade50,
+                                  margin: const EdgeInsets.symmetric(
+                                    vertical: 4,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    side: BorderSide(
+                                      color: Colors.grey.shade200,
+                                    ),
+                                  ),
+                                  child: ListTile(
+                                    leading: const Icon(
+                                      Icons.account_balance_wallet_outlined,
+                                      color: Color(0xFF0F6B57),
+                                    ),
+                                    title: Text(asset['name']),
+                                    subtitle: Text(
+                                      'Balance: PKR ${asset['value']}',
+                                    ),
+                                    onTap: () {
+                                      if (widget.onAssetSelected != null) {
+                                        widget.onAssetSelected!(asset);
+                                      }
+                                    },
+                                  ),
+                                );
+                              },
+                            ))
+                    : LayoutBuilder(
+                        key: ValueKey(_filter),
+                        builder: (context, constraints) => GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: categoryCards.length,
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 2,
+                                crossAxisSpacing: 12,
+                                mainAxisSpacing: 12,
+                                childAspectRatio: constraints.maxWidth < 360
+                                    ? 1.12
+                                    : 1.3,
+                              ),
+                          itemBuilder: (context, index) {
+                            final card = categoryCards[index];
+                            return _AnimatedTransactionCategoryCard(
+                              key: ValueKey('${_filter.name}-${card.categoryName}'),
+                              data: card,
+                              index: index,
+                              onTap: () => _openParentTransaction(
+                                card.categoryName,
+                                card.options,
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
-                ),
+                      ),
               ),
             ],
           ),
@@ -730,8 +826,6 @@ class _HomeDashboard extends StatefulWidget {
 }
 
 class _HomeDashboardState extends State<_HomeDashboard> {
-
-
   static const _profileStorage = FlutterSecureStorage();
   String? _selectedFinancialYear;
   int? _selectedMonth;
@@ -1402,7 +1496,9 @@ class _DriveSyncButtonState extends State<_DriveSyncButton> {
       builder: (context) {
         return Dialog(
           backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
             child: Column(
@@ -1416,11 +1512,15 @@ class _DriveSyncButtonState extends State<_DriveSyncButton> {
                       height: 68,
                       child: CircularProgressIndicator(
                         strokeWidth: 4.5,
-                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0F9D58)),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Color(0xFF0F9D58),
+                        ),
                       ),
                     ),
                     Icon(
-                      isRestore ? Icons.restore_rounded : Icons.cloud_upload_rounded,
+                      isRestore
+                          ? Icons.restore_rounded
+                          : Icons.cloud_upload_rounded,
                       color: const Color(0xFF0F9D58),
                       size: 32,
                     ),
@@ -1429,15 +1529,23 @@ class _DriveSyncButtonState extends State<_DriveSyncButton> {
                 const SizedBox(height: 28),
                 Text(
                   isRestore ? 'Restoring Data...' : 'Backing Up Data...',
-                  style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
+                  style: const TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF111827),
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  isRestore 
-                      ? 'Please wait while we safely download your backup from Google Drive.' 
+                  isRestore
+                      ? 'Please wait while we safely download your backup from Google Drive.'
                       : 'Please wait while we securely upload your data to Google Drive.',
-                  style: TextStyle(fontSize: 14.5, color: Colors.grey.shade600, height: 1.4),
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    color: Colors.grey.shade600,
+                    height: 1.4,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -3693,4 +3801,3 @@ class _TransactionTile extends StatelessWidget {
     }
   }
 }
-
