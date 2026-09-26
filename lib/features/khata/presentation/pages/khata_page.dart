@@ -475,7 +475,7 @@ class _KhataPageState extends State<_KhataPage> {
     final remaining = entry.remainingAmount;
     if (!mounted) return;
 
-    final saved = await Navigator.of(context).push<bool>(
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
       MaterialPageRoute(
         builder: (context) => _TransactionsPage(
           categoryPreferences: _categoryPreferences,
@@ -484,7 +484,7 @@ class _KhataPageState extends State<_KhataPage> {
               : TransactionTypeFilter.income,
           onFilterChanged: (_) {},
           showAppBar: true,
-          showTypeFilter: true, // We now want to show the toggle!
+          showTypeFilter: true,
           isSettlement: true,
           isPayableSettlement: entry.isPayable,
           onParentCategorySelected: (parentCategory, categoryOptions) async {
@@ -505,26 +505,53 @@ class _KhataPageState extends State<_KhataPage> {
               ),
             );
             if (categorySaved == true && context.mounted) {
-              Navigator.of(context).pop(true);
+              Navigator.of(
+                context,
+              ).pop({'type': 'category', 'amount': remaining});
             }
           },
           onAssetSelected: (selectedAsset) async {
             final amountController = TextEditingController(
               text: remaining.toStringAsFixed(0),
             );
-            final amount = await showDialog<double>(
+            final descController = TextEditingController();
+            final assetValueStr =
+                'PKR ${(selectedAsset['value'] as num).toStringAsFixed(0)}';
+
+            final val = await showDialog<Map<String, dynamic>>(
               context: context,
               builder: (context) => AlertDialog(
-                title: const Text('Settlement Amount'),
-                content: TextField(
-                  controller: amountController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(
-                    labelText: 'Amount to settle',
-                    prefixText: 'PKR ',
-                  ),
+                title: const Text('Asset Settlement'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: TextEditingController(text: assetValueStr),
+                      readOnly: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Current Asset Value',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: descController,
+                      decoration: const InputDecoration(
+                        labelText: 'Description',
+                        hintText: 'e.g. Paid via bank transfer',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: amountController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Amount to settle',
+                        prefixText: 'PKR ',
+                      ),
+                    ),
+                  ],
                 ),
                 actions: [
                   TextButton(
@@ -533,11 +560,14 @@ class _KhataPageState extends State<_KhataPage> {
                   ),
                   ElevatedButton(
                     onPressed: () {
-                      final val = double.tryParse(
+                      final amountVal = double.tryParse(
                         amountController.text.replaceAll(',', ''),
                       );
-                      if (val != null && val > 0) {
-                        Navigator.pop(context, val);
+                      if (amountVal != null && amountVal > 0) {
+                        Navigator.pop(context, {
+                          'amount': amountVal,
+                          'desc': descController.text.trim(),
+                        });
                       }
                     },
                     child: const Text('Settle'),
@@ -546,7 +576,10 @@ class _KhataPageState extends State<_KhataPage> {
               ),
             );
 
-            if (amount == null || !mounted) return;
+            if (val == null || !mounted) return;
+
+            final amount = val['amount'] as double;
+            final desc = val['desc'] as String;
 
             final isPayable = entry.isPayable;
             double newAssetValue = (selectedAsset['value'] as num).toDouble();
@@ -563,17 +596,19 @@ class _KhataPageState extends State<_KhataPage> {
               'updatedAt': DateTime.now().toIso8601String(),
             });
 
-            final newSettledAmount = entry.settledAmount + amount;
-            final isFullySettled = newSettledAmount >= entry.amount - 0.001;
-
-            await TaxDatabase.instance.updateKhataEntry(
-              entry
-                  .copyWith(
-                    settledAmount: newSettledAmount,
-                    isPaid: isFullySettled,
-                  )
-                  .toMap(),
-            );
+            // Create a Transaction for the asset settlement so the description is saved
+            await TaxDatabase.instance.insertTransaction({
+              'userId': entry.userId,
+              'title': isPayable ? 'Settled Payable' : 'Settled Receivable',
+              'beneficiary': entry.party,
+              'purpose': desc.isNotEmpty ? desc : 'Asset Settlement',
+              'amount': amount,
+              'isExpense': isPayable ? 1 : 0,
+              'date': DateTime.now().toIso8601String(),
+              'category': 'Asset Settlement',
+              'khataEntryId': entry.id,
+              'assetId': selectedAsset['id'],
+            });
 
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
@@ -587,14 +622,39 @@ class _KhataPageState extends State<_KhataPage> {
               ),
             );
 
-            Navigator.of(context).pop(true);
+            Navigator.of(context).pop({'type': 'asset', 'amount': amount});
           },
         ),
       ),
     );
 
-    if (saved == true && mounted) {
+    if (result != null && mounted) {
+      final type = result['type'] as String;
+      final amount = result['amount'] as double;
+
+      final newSettledAmount = entry.settledAmount + amount;
+      final isFullySettled = newSettledAmount >= entry.amount - 0.001;
+
+      await TaxDatabase.instance.updateKhataEntry(
+        entry
+            .copyWith(settledAmount: newSettledAmount, isPaid: isFullySettled)
+            .toMap(),
+      );
+
       await _loadEntries();
+
+      if (type == 'category' && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isFullySettled
+                  ? 'Fully settled! Added to ${entry.isPayable ? "Expenses" : "Income"}.'
+                  : 'Settlement recorded in ${entry.isPayable ? "Expenses" : "Income"}.',
+            ),
+            backgroundColor: const Color(0xFF0F6B57),
+          ),
+        );
+      }
     }
   }
 
