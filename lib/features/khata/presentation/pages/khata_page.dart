@@ -313,7 +313,9 @@ class _KhataPageState extends State<_KhataPage> {
                           if (!isPayable)
                             CheckboxListTile(
                               title: const Text('From Income'),
-                              subtitle: const Text('Minimize this amount from total income'),
+                              subtitle: const Text(
+                                'Minimize this amount from total income',
+                              ),
                               value: fromIncome,
                               onChanged: (val) {
                                 setModalState(() {
@@ -386,25 +388,32 @@ class _KhataPageState extends State<_KhataPage> {
                                             entryToSave.toMap(),
                                           );
                                     } else {
-                                      final newKhataId = await TaxDatabase.instance
+                                      final newKhataId = await TaxDatabase
+                                          .instance
                                           .insertKhataEntry(
                                             entryToSave.toMap(),
                                           );
                                       if (!isPayable && fromIncome) {
-                                         await TaxDatabase.instance.insertTransaction({
-                                            'userId': userId,
-                                            'title': 'Receivable: ${entryToSave.title}',
-                                            'beneficiary': entryToSave.party,
-                                            'purpose': 'Khata Loan (From Income)',
-                                            'amount': amount,
-                                            'isExpense': 1,
-                                            'date': entryToSave.date.toIso8601String(),
-                                            'category': 'Khata',
-                                            'khataEntryId': newKhataId,
-                                         });
-                                         if (bottomSheetContext.mounted) {
-                                           bottomSheetContext.read<TransactionBloc>().add(LoadTransactions());
-                                         }
+                                        await TaxDatabase.instance
+                                            .insertTransaction({
+                                              'userId': userId,
+                                              'title':
+                                                  'Receivable: ${entryToSave.title}',
+                                              'beneficiary': entryToSave.party,
+                                              'purpose':
+                                                  'Khata Loan (From Income)',
+                                              'amount': amount,
+                                              'isExpense': 1,
+                                              'date': entryToSave.date
+                                                  .toIso8601String(),
+                                              'category': 'Khata',
+                                              'khataEntryId': newKhataId,
+                                            });
+                                        if (bottomSheetContext.mounted) {
+                                          bottomSheetContext
+                                              .read<TransactionBloc>()
+                                              .add(LoadTransactions());
+                                        }
                                       }
                                     }
 
@@ -466,64 +475,240 @@ class _KhataPageState extends State<_KhataPage> {
     final remaining = entry.remainingAmount;
     if (!mounted) return;
 
-    final saved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (context) => _TransactionsPage(
-          categoryPreferences: _categoryPreferences,
-          filter: entry.isPayable
-              ? TransactionTypeFilter.expense
-              : TransactionTypeFilter.income,
-          onFilterChanged: (_) {},
-          showAppBar: true,
-          showTypeFilter: false,
-          onParentCategorySelected: (parentCategory, categoryOptions) async {
-            final categorySaved = await Navigator.of(context).push<bool>(
-              MaterialPageRoute(
-                builder: (context) => AddTransactionPage(
-                  parentCategory: parentCategory,
-                  categoryOptions: categoryOptions,
-                  categoryPreferences: _categoryPreferences,
-                  initialIsExpense: entry.isPayable,
-                  initialAmount: remaining,
-                  initialPurpose: entry.party,
-                  initialDate: DateTime.now(),
-                  isSettlement: true,
-                  khataEntryId: entry.id,
-                  linkedCounterpartyOrAsset: entry.party,
+    final method = await showModalBottomSheet<String>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Text(
+                  'Settle using',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ),
-            );
-            if (categorySaved == true && context.mounted) {
-              Navigator.of(context).pop(true);
-            }
-          },
+              ListTile(
+                leading: const Icon(
+                  Icons.category_outlined,
+                  color: Color(0xFF0F6B57),
+                ),
+                title: const Text('Income / Expense Category'),
+                subtitle: const Text('Record as a categorized transaction'),
+                onTap: () => Navigator.pop(context, 'category'),
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: Color(0xFF0F6B57),
+                ),
+                title: const Text('Asset'),
+                subtitle: const Text(
+                  'Deduct or add to an existing asset (Cash, Bank)',
+                ),
+                onTap: () => Navigator.pop(context, 'asset'),
+              ),
+            ],
+          ),
         ),
       ),
     );
-    if (saved != true || !mounted) return;
 
-    final newSettledAmount = entry.amount;
-    final isFullySettled = newSettledAmount >= entry.amount - 0.001;
+    if (method == null || !mounted) return;
 
-    await TaxDatabase.instance.updateKhataEntry(
-      entry
-          .copyWith(settledAmount: newSettledAmount, isPaid: isFullySettled)
-          .toMap(),
-    );
+    if (method == 'category') {
+      final saved = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (context) => _TransactionsPage(
+            categoryPreferences: _categoryPreferences,
+            filter: entry.isPayable
+                ? TransactionTypeFilter.expense
+                : TransactionTypeFilter.income,
+            onFilterChanged: (_) {},
+            showAppBar: true,
+            showTypeFilter: false,
+            onParentCategorySelected: (parentCategory, categoryOptions) async {
+              final categorySaved = await Navigator.of(context).push<bool>(
+                MaterialPageRoute(
+                  builder: (context) => AddTransactionPage(
+                    parentCategory: parentCategory,
+                    categoryOptions: categoryOptions,
+                    categoryPreferences: _categoryPreferences,
+                    initialIsExpense: entry.isPayable,
+                    initialAmount: remaining,
+                    initialPurpose: entry.party,
+                    initialDate: DateTime.now(),
+                    isSettlement: true,
+                    khataEntryId: entry.id,
+                    linkedCounterpartyOrAsset: entry.party,
+                  ),
+                ),
+              );
+              if (categorySaved == true && context.mounted) {
+                Navigator.of(context).pop(true);
+              }
+            },
+          ),
+        ),
+      );
+      if (saved != true || !mounted) return;
 
-    await _loadEntries();
+      final newSettledAmount = entry.amount;
+      final isFullySettled = newSettledAmount >= entry.amount - 0.001;
 
-    if (mounted) {
+      await TaxDatabase.instance.updateKhataEntry(
+        entry
+            .copyWith(settledAmount: newSettledAmount, isPaid: isFullySettled)
+            .toMap(),
+      );
+
+      await _loadEntries();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isFullySettled
+                  ? 'Fully settled! Added to ${entry.isPayable ? "Expenses" : "Income"}.'
+                  : 'Settlement recorded in ${entry.isPayable ? "Expenses" : "Income"}.',
+            ),
+            backgroundColor: const Color(0xFF0F6B57),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (method == 'asset') {
+      final assets = await TaxDatabase.instance.fetchAssets();
+
+      if (!mounted) return;
+
+      if (assets.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No assets found. Please add an asset first.'),
+          ),
+        );
+        return;
+      }
+
+      final selectedAsset = await showModalBottomSheet<Map<String, dynamic>>(
+        context: context,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (context) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Text(
+                  'Select Asset',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: assets.length,
+                  itemBuilder: (context, index) {
+                    final asset = assets[index];
+                    return ListTile(
+                      title: Text(asset['name']),
+                      subtitle: Text('Balance: PKR ${asset['value']}'),
+                      onTap: () => Navigator.pop(context, asset),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      if (selectedAsset == null || !mounted) return;
+
+      final amountController = TextEditingController(
+        text: remaining.toStringAsFixed(0),
+      );
+      final amount = await showDialog<double>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Settlement Amount'),
+          content: TextField(
+            controller: amountController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              labelText: 'Amount to settle',
+              prefixText: 'PKR ',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final val = double.tryParse(
+                  amountController.text.replaceAll(',', ''),
+                );
+                if (val != null && val > 0) {
+                  Navigator.pop(context, val);
+                }
+              },
+              child: const Text('Settle'),
+            ),
+          ],
+        ),
+      );
+
+      if (amount == null || !mounted) return;
+
+      final isPayable = entry.isPayable;
+      double newAssetValue = (selectedAsset['value'] as num).toDouble();
+
+      if (isPayable) {
+        newAssetValue -= amount;
+      } else {
+        newAssetValue += amount;
+      }
+
+      await TaxDatabase.instance.updateAsset({
+        'id': selectedAsset['id'],
+        'value': newAssetValue,
+        'updatedAt': DateTime.now().toIso8601String(),
+      });
+
+      final newSettledAmount = entry.settledAmount + amount;
+      final isFullySettled = newSettledAmount >= entry.amount - 0.001;
+
+      await TaxDatabase.instance.updateKhataEntry(
+        entry
+            .copyWith(settledAmount: newSettledAmount, isPaid: isFullySettled)
+            .toMap(),
+      );
+
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            isFullySettled
-                ? 'Fully settled! Added to ${entry.isPayable ? "Expenses" : "Income"}.'
-                : 'Settlement recorded in ${entry.isPayable ? "Expenses" : "Income"}.',
+            isPayable
+                ? 'Settled! Deducted PKR $amount from ${selectedAsset['name']}'
+                : 'Settled! Added PKR $amount to ${selectedAsset['name']}',
           ),
           backgroundColor: const Color(0xFF0F6B57),
         ),
       );
+
+      await _loadEntries();
     }
   }
 
@@ -1200,4 +1385,3 @@ class _KhataPageState extends State<_KhataPage> {
     );
   }
 }
-
