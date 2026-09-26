@@ -141,7 +141,7 @@ void main() {
     expect(
       filterTransactionsForSelection(
         transactions,
-        TransactionTypeFilter.both,
+        TransactionTypeFilter.income,
         preferences,
       ).map((transaction) => transaction.title),
       ['Gift Given'],

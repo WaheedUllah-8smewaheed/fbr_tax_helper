@@ -274,7 +274,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-enum TransactionTypeFilter { income, expense, both }
+enum TransactionTypeFilter { income, expense }
 
 class TransactionFilterTotals {
   const TransactionFilterTotals({required this.income, required this.expenses});
@@ -441,9 +441,6 @@ class _TransactionsPageState extends State<_TransactionsPage> {
           categoryName: category.name,
           isExpenseSection: true,
         ),
-      TransactionTypeFilter.both => widget.categoryPreferences.isDualMode(
-        category.name,
-      ),
     };
   }
 
@@ -493,10 +490,6 @@ class _TransactionsPageState extends State<_TransactionsPage> {
                     ButtonSegment(
                       value: TransactionTypeFilter.expense,
                       label: Text('Expense'),
-                    ),
-                    ButtonSegment(
-                      value: TransactionTypeFilter.both,
-                      label: Text('Both'),
                     ),
                   ],
                   selected: {_filter},
@@ -2587,11 +2580,9 @@ List<entity.Transaction> filterTransactionsForSelection(
   CategoryPreferencesService categoryPreferences,
 ) {
   return transactions.where((transaction) {
-    final isDualMode = categoryPreferences.isDualMode(transaction.category);
     return switch (filter) {
-      TransactionTypeFilter.income => !isDualMode && !transaction.isExpense,
-      TransactionTypeFilter.expense => !isDualMode && transaction.isExpense,
-      TransactionTypeFilter.both => isDualMode,
+      TransactionTypeFilter.income => !transaction.isExpense,
+      TransactionTypeFilter.expense => transaction.isExpense,
     };
   }).toList();
 }
