@@ -255,7 +255,7 @@ class _CalculatorsPage extends StatelessWidget {
 class _SupportPage extends StatelessWidget {
   const _SupportPage();
 
-  static const _supportEmail = 'kpxdigital@gmail.com';
+  static const _supportEmail = 'wemtechdigital@gmail.com';
 
   Future<void> _contactSupport(BuildContext context) async {
     final emailUri = Uri(
