@@ -187,23 +187,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
         ),
-        floatingActionButton: _selectedIndex != 0
+        floatingActionButton: _selectedIndex > 2
             ? null
             : FloatingActionButton(
                 heroTag: 'add-transaction-fab',
                 onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => _TransactionsPage(
-                        categoryPreferences: _categoryPreferences,
-                        filter: _transactionFilter,
-                        onFilterChanged: (filter) {
-                          setState(() => _transactionFilter = filter);
-                        },
-                        showAppBar: true,
+                  if (_selectedIndex == 1) {
+                    _khataPageKey.currentState?._openAddOrEditEntryDialog();
+                  } else if (_selectedIndex == 2) {
+                    _assetsPageKey.currentState?._openAddAssetSheet();
+                  } else {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => _TransactionsPage(
+                          categoryPreferences: _categoryPreferences,
+                          filter: _transactionFilter,
+                          onFilterChanged: (filter) {
+                            setState(() => _transactionFilter = filter);
+                          },
+                          showAppBar: true,
+                        ),
                       ),
-                    ),
-                  );
+                    );
+                  }
                 },
                 backgroundColor: AppColors.warmGold,
                 foregroundColor: AppColors.forest,
