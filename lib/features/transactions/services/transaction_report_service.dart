@@ -38,7 +38,18 @@ class TransactionReportService {
       return pw.Text('No transactions found in either period.', style: const pw.TextStyle(color: PdfColors.grey600));
     }
     
-    final sortedKeys = categoryStats.keys.toList()..sort();
+    final sortedKeys = categoryStats.keys.toList()..sort((a, b) {
+      final aParts = a.split('|');
+      final bParts = b.split('|');
+      final aType = aParts[1];
+      final bType = bParts[1];
+      
+      if (aType != bType) {
+        return aType == 'income' ? -1 : 1;
+      }
+      
+      return aParts[0].compareTo(bParts[0]);
+    });
     
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
