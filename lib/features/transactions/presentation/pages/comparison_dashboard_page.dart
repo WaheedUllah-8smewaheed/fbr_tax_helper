@@ -280,29 +280,66 @@ class _ReferenceComparisonDashboardState
                   secondLabel: secondLabel,
                 ),
                 const SizedBox(height: 12),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 240),
-                  child: _SelectableComparisonChart(
-                    key: ValueKey(
-                      'comparison-${_mode.name}-$firstMonth-$secondMonth-$firstYear-$secondYear',
-                    ),
-                    firstValues: _comparisonSeries(
-                      widget.transactions,
-                      mode: _mode,
-                      month: firstMonth,
-                      year: firstYear,
-                    ),
-                    secondValues: _comparisonSeries(
-                      widget.transactions,
-                      mode: _mode,
-                      month: secondMonth,
-                      year: secondYear,
-                    ),
-                    firstLabel: firstLabel,
-                    secondLabel: secondLabel,
-                    mode: _mode,
+                Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text('Income Comparison', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      const SizedBox(height: 8),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 240),
+                        child: _SelectableComparisonChart(
+                          key: ValueKey(
+                            'comparison-inc-${_mode.name}-$firstMonth-$secondMonth-$firstYear-$secondYear',
+                          ),
+                          firstValues: _comparisonSeries(
+                            widget.transactions,
+                            mode: _mode,
+                            month: firstMonth,
+                            year: firstYear,
+                            isExpense: false,
+                          ),
+                          secondValues: _comparisonSeries(
+                            widget.transactions,
+                            mode: _mode,
+                            month: secondMonth,
+                            year: secondYear,
+                            isExpense: false,
+                          ),
+                          firstLabel: firstLabel,
+                          secondLabel: secondLabel,
+                          mode: _mode,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      const Text('Expense Comparison', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      const SizedBox(height: 8),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 240),
+                        child: _SelectableComparisonChart(
+                          key: ValueKey(
+                            'comparison-exp-${_mode.name}-$firstMonth-$secondMonth-$firstYear-$secondYear',
+                          ),
+                          firstValues: _comparisonSeries(
+                            widget.transactions,
+                            mode: _mode,
+                            month: firstMonth,
+                            year: firstYear,
+                            isExpense: true,
+                          ),
+                          secondValues: _comparisonSeries(
+                            widget.transactions,
+                            mode: _mode,
+                            month: secondMonth,
+                            year: secondYear,
+                            isExpense: true,
+                          ),
+                          firstLabel: firstLabel,
+                          secondLabel: secondLabel,
+                          mode: _mode,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
                 const SizedBox(height: 18),
                 _ComparisonTotalsSummary(
                   firstLabel: firstLabel,
@@ -853,12 +890,14 @@ List<double> _comparisonSeries(
   required _SelectableComparisonMode mode,
   DateTime? month,
   int? year,
+  required bool isExpense,
 }) {
   if (mode == _SelectableComparisonMode.month) {
     if (month == null) return const [];
     final days = DateUtils.getDaysInMonth(month.year, month.month);
     final values = List<double>.filled(days, 0);
     for (final transaction in transactions) {
+      if (transaction.isExpense != isExpense) continue;
       if (transaction.date.year == month.year &&
           transaction.date.month == month.month) {
         values[transaction.date.day - 1] += transaction.amount;
@@ -870,6 +909,7 @@ List<double> _comparisonSeries(
   if (year == null) return const [];
   final values = List<double>.filled(12, 0);
   for (final transaction in transactions) {
+    if (transaction.isExpense != isExpense) continue;
     if (transaction.date.year == year) {
       values[transaction.date.month - 1] += transaction.amount;
     }
