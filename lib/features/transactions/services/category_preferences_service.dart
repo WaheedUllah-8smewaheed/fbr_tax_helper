@@ -144,7 +144,7 @@ class CategoryPreferencesService extends ChangeNotifier {
     required bool isExpenseSection,
   }) {
     if (isDualMode(categoryName)) {
-      return false;
+      return true; // Show dual mode categories in both sections
     }
     return isExpense(categoryName) == isExpenseSection;
   }
