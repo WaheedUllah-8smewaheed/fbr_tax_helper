@@ -2160,23 +2160,43 @@ class _IncomeExpenseTrendDashboardState
                 LayoutBuilder(
                   builder: (context, constraints) {
                     final charts = [
-                      _ComparisonChartCard(
-                        title: 'Histogram',
-                        icon: Icons.bar_chart_rounded,
-                        child: _ComparisonHistogram(
-                          buckets: buckets,
-                          period: _period,
+                        _ComparisonChartCard(
+                          title: 'Income Histogram',
+                          icon: Icons.bar_chart_rounded,
+                          child: _ComparisonHistogram(
+                            buckets: buckets,
+                            period: _period,
+                            isIncome: true,
+                          ),
                         ),
-                      ),
-                      _ComparisonChartCard(
-                        title: 'Trend line',
-                        icon: Icons.show_chart_rounded,
-                        child: _ComparisonLineChart(
-                          buckets: buckets,
-                          period: _period,
+                        _ComparisonChartCard(
+                          title: 'Expense Histogram',
+                          icon: Icons.bar_chart_rounded,
+                          child: _ComparisonHistogram(
+                            buckets: buckets,
+                            period: _period,
+                            isIncome: false,
+                          ),
                         ),
-                      ),
-                    ];
+                        _ComparisonChartCard(
+                          title: 'Income Trend',
+                          icon: Icons.show_chart_rounded,
+                          child: _ComparisonLineChart(
+                            buckets: buckets,
+                            period: _period,
+                            isIncome: true,
+                          ),
+                        ),
+                        _ComparisonChartCard(
+                          title: 'Expense Trend',
+                          icon: Icons.show_chart_rounded,
+                          child: _ComparisonLineChart(
+                            buckets: buckets,
+                            period: _period,
+                            isIncome: false,
+                          ),
+                        ),
+                      ];
 
                     if (constraints.maxWidth >= 760) {
                       return Row(
@@ -2249,14 +2269,15 @@ class _ComparisonChartCard extends StatelessWidget {
 }
 
 class _ComparisonHistogram extends StatelessWidget {
-  const _ComparisonHistogram({required this.buckets, required this.period});
+  const _ComparisonHistogram({required this.buckets, required this.period, required this.isIncome});
 
   final List<_TrendBucket> buckets;
   final _ComparisonPeriod period;
+  final bool isIncome;
 
   @override
   Widget build(BuildContext context) {
-    final chartMax = _trendChartMax(buckets);
+    final chartMax = _trendChartMax(buckets, isIncome: isIncome);
     final interval = chartMax / 4;
 
     return LayoutBuilder(
@@ -2313,14 +2334,15 @@ class _ComparisonHistogram extends StatelessWidget {
 }
 
 class _ComparisonLineChart extends StatelessWidget {
-  const _ComparisonLineChart({required this.buckets, required this.period});
+  const _ComparisonLineChart({required this.buckets, required this.period, required this.isIncome});
 
   final List<_TrendBucket> buckets;
   final _ComparisonPeriod period;
+  final bool isIncome;
 
   @override
   Widget build(BuildContext context) {
-    final chartMax = _trendChartMax(buckets);
+    final chartMax = _trendChartMax(buckets, isIncome: isIncome);
     final interval = chartMax / 4;
 
     return LayoutBuilder(
@@ -2517,11 +2539,11 @@ List<_TrendBucket> _comparisonBuckets(
       : buckets.sublist(buckets.length - limit);
 }
 
-double _trendChartMax(List<_TrendBucket> buckets) {
+double _trendChartMax(List<_TrendBucket> buckets, {bool? isIncome}) {
   final highest = buckets.fold<double>(
     0,
     (current, bucket) =>
-        math.max(current, math.max(bucket.income, bucket.expense)),
+        math.max(current, isIncome == null ? math.max(bucket.income, bucket.expense) : (isIncome ? bucket.income : bucket.expense)),
   );
   return highest <= 0 ? 1 : highest * 1.15;
 }
