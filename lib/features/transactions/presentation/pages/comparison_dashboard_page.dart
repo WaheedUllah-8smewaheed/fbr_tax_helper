@@ -2307,23 +2307,13 @@ class _ComparisonHistogram extends StatelessWidget {
                 x: index,
                 barsSpace: 3,
                 barRods: [
-                  BarChartRodData(
-                    toY: bucket.income,
-                    width: rodWidth,
-                    color: AppColors.primary,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(4),
+                    BarChartRodData(
+                      toY: isIncome ? bucket.income : bucket.expense,
+                      width: rodWidth,
+                      color: isIncome ? AppColors.primary : AppColors.coral,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
                     ),
-                  ),
-                  BarChartRodData(
-                    toY: bucket.expense,
-                    width: rodWidth,
-                    color: AppColors.coral,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(4),
-                    ),
-                  ),
-                ],
+                  ],
               );
             }),
           ),
@@ -2365,9 +2355,8 @@ class _ComparisonLineChart extends StatelessWidget {
             titlesData: _trendTitles(buckets, period, interval, step),
             lineTouchData: const LineTouchData(enabled: true),
             lineBarsData: [
-              _trendLine(buckets, (bucket) => bucket.income, AppColors.primary),
-              _trendLine(buckets, (bucket) => bucket.expense, AppColors.coral),
-            ],
+                _trendLine(buckets, (bucket) => isIncome ? bucket.income : bucket.expense, isIncome ? AppColors.primary : AppColors.coral),
+              ],
           ),
         );
       },
