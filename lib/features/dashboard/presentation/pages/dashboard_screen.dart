@@ -3745,12 +3745,12 @@ class _TransactionTile extends StatelessWidget {
                 ),
               ],
             ),
-            if (transaction.khataEntryId == null &&
-                transaction.assetId == null) ...[
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (transaction.khataEntryId == null &&
+                    transaction.assetId == null) ...[
                   TextButton.icon(
                     onPressed: () {
                       Navigator.of(context).push(
@@ -3764,16 +3764,19 @@ class _TransactionTile extends StatelessWidget {
                     label: const Text('Edit'),
                   ),
                   const SizedBox(width: 8),
-                  TextButton.icon(
-                    onPressed: transaction.id == null
-                        ? null
-                        : () => _confirmDelete(context),
-                    icon: const Icon(Icons.delete_outline),
-                    label: const Text('Delete'),
-                  ),
                 ],
-              ),
-            ],
+                TextButton.icon(
+                  onPressed: transaction.id == null
+                      ? null
+                      : () => _confirmDelete(context),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.red.shade700,
+                  ),
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Delete'),
+                ),
+              ],
+            ),
           ],
         ),
       ),

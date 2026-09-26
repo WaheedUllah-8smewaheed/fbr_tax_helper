@@ -226,23 +226,16 @@ class _SignupFormState extends State<SignupForm>
                     final bottomPadding =
                         24.0 + MediaQuery.viewInsetsOf(context).bottom;
 
-                    return SingleChildScrollView(
-                      keyboardDismissBehavior:
-                          ScrollViewKeyboardDismissBehavior.onDrag,
+                    return Padding(
                       padding: EdgeInsets.fromLTRB(
                         16,
                         topPadding,
                         16,
                         bottomPadding,
                       ),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minHeight: math.max(
-                            0,
-                            constraints.maxHeight - topPadding - bottomPadding,
-                          ),
-                        ),
-                        child: Center(
+                      child: Center(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
                           child: SizedBox(
                             width: 460,
                             child: _SignupPanel(
