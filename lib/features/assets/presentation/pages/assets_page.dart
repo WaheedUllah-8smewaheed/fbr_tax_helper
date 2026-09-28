@@ -12,15 +12,14 @@ class _AssetsPage extends StatefulWidget {
 class _AssetsPageState extends State<_AssetsPage> {
   CategoryPreferencesService get _categoryPreferences =>
       widget.categoryPreferences;
-  List<Asset> _assets = [];
-  bool _isLoading = true;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _loadAssets();
+    final userId = context.read<AuthService>().currentUser?.uid ?? '';
+    context.read<AssetBloc>().add(LoadAssets(userId: userId));
   }
 
   @override
@@ -29,45 +28,21 @@ class _AssetsPageState extends State<_AssetsPage> {
     super.dispose();
   }
 
-  Future<void> _loadAssets() async {
-    setState(() => _isLoading = true);
-    try {
-      final userId = context.read<AuthService>().currentUser?.uid;
-      final rows = await TaxDatabase.instance
-          .fetchAssets(userId: userId)
-          .timeout(const Duration(seconds: 2));
-      final list = rows.map((r) => Asset.fromMap(r)).toList();
-      if (mounted) {
-        setState(() {
-          _assets = list;
-        });
-      }
-    } catch (_) {
-      // Gracefully handle in tests
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
 
   String _formatAmount(double amount) {
     final formatter = NumberFormat('#,##0.00', 'en_US');
     return 'Rs ${formatter.format(amount)}';
   }
 
-  double get _totalAssetsValue => _assets.fold(0.0, (sum, a) => sum + a.value);
+  double _getTotalAssetsValue(List<Asset> assets) => assets.fold(0.0, (sum, a) => sum + a.value);
 
-  List<Asset> get _filteredAssets {
-    return _assets.where((asset) {
+  List<Asset> _getFilteredAssets(List<Asset> assets) {
+    return assets.where((asset) {
       if (_searchQuery.trim().isEmpty) return true;
       final q = _searchQuery.toLowerCase().trim();
       return asset.name.toLowerCase().contains(q) ||
           asset.category.displayName.toLowerCase().contains(q) ||
-          asset.value.toString().contains(q) ||
-          asset.value.toStringAsFixed(2).contains(q);
+          asset.description.toLowerCase().contains(q);
     }).toList();
   }
 
@@ -279,7 +254,7 @@ class _AssetsPageState extends State<_AssetsPage> {
                                     if (bottomSheetContext.mounted) {
                                       Navigator.pop(bottomSheetContext);
                                     }
-                                    _loadAssets();
+                                    context.read<AssetBloc>().add(LoadAssets(userId: context.read<AuthService>().currentUser?.uid ?? ''));
                                     if (mounted) {
                                       messenger.showSnackBar(
                                         const SnackBar(
@@ -558,15 +533,13 @@ class _AssetsPageState extends State<_AssetsPage> {
                                       updatedAt: DateTime.now(),
                                     );
 
-                                    await TaxDatabase.instance.updateAsset(
-                                      updatedAsset.toMap(),
-                                    );
+                                    context.read<AssetBloc>().add(UpdateAsset(asset: updatedAsset));
 
                                     if (assetEditContext.mounted) {
                                       Navigator.pop(assetEditContext);
                                     }
 
-                                    _loadAssets();
+                                    context.read<AssetBloc>().add(LoadAssets(userId: context.read<AuthService>().currentUser?.uid ?? ''));
                                     if (mounted) {
                                       messenger.showSnackBar(
                                         SnackBar(
@@ -709,7 +682,7 @@ class _AssetsPageState extends State<_AssetsPage> {
 
     if (confirmed == true && asset.id != null) {
       await TaxDatabase.instance.deleteAsset(asset.id!);
-      _loadAssets();
+      context.read<AssetBloc>().add(LoadAssets(userId: context.read<AuthService>().currentUser?.uid ?? ''));
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -720,11 +693,18 @@ class _AssetsPageState extends State<_AssetsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _filteredAssets;
-    final bottomPadding = MediaQuery.paddingOf(context).bottom + 24.0;
+    return BlocBuilder<AssetBloc, AssetState>(
+      builder: (context, state) {
+        final List<Asset> assets = state is AssetLoaded ? state.assets : [];
+        final bool isLoading = state is AssetLoading;
+        final filtered = _getFilteredAssets(assets);
+        final bottomPadding = MediaQuery.paddingOf(context).bottom + 24.0;
 
-    return RefreshIndicator(
-      onRefresh: _loadAssets,
+        return RefreshIndicator(
+          onRefresh: () async {
+            final userId = context.read<AuthService>().currentUser?.uid ?? '';
+            context.read<AssetBloc>().add(LoadAssets(userId: userId));
+          },
       child: ListView(
         padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPadding),
         children: [
@@ -775,7 +755,7 @@ class _AssetsPageState extends State<_AssetsPage> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        '${_assets.length} assets',
+                        '${assets.length} assets',
                         style: const TextStyle(
                           color: AppColors.warmGold,
                           fontWeight: FontWeight.bold,
@@ -789,7 +769,7 @@ class _AssetsPageState extends State<_AssetsPage> {
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   child: Text(
-                    _formatAmount(_totalAssetsValue),
+                    _formatAmount(_getTotalAssetsValue(assets)),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 22,
@@ -831,7 +811,7 @@ class _AssetsPageState extends State<_AssetsPage> {
           const SizedBox(height: 14),
 
           // Search Field
-          if (_assets.isNotEmpty)
+          if (assets.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: TextField(
@@ -866,7 +846,7 @@ class _AssetsPageState extends State<_AssetsPage> {
             ),
 
           // Content List
-          if (_isLoading)
+          if (isLoading)
             const Center(
               child: Padding(
                 padding: EdgeInsets.all(40),
@@ -1032,6 +1012,8 @@ class _AssetsPageState extends State<_AssetsPage> {
             }),
         ],
       ),
+    );
+      },
     );
   }
 }

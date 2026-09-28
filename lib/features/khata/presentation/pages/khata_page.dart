@@ -13,8 +13,6 @@ class _KhataPage extends StatefulWidget {
 
 class _KhataPageState extends State<_KhataPage> {
   KhataSegmentFilter _selectedFilter = KhataSegmentFilter.payable;
-  List<KhataEntry> _entries = [];
-  bool _isLoading = true;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   CategoryPreferencesService get _categoryPreferences =>
@@ -23,7 +21,8 @@ class _KhataPageState extends State<_KhataPage> {
   @override
   void initState() {
     super.initState();
-    _loadEntries();
+    final userId = context.read<AuthService>().currentUser?.uid ?? '';
+    context.read<KhataBloc>().add(LoadKhataEntries(userId: userId));
   }
 
   @override
@@ -32,47 +31,25 @@ class _KhataPageState extends State<_KhataPage> {
     super.dispose();
   }
 
-  Future<void> _loadEntries() async {
-    setState(() => _isLoading = true);
-    try {
-      final userId = context.read<AuthService>().currentUser?.uid;
-      final rows = await TaxDatabase.instance
-          .fetchKhataEntries(userId: userId)
-          .timeout(const Duration(seconds: 2));
-      final list = rows.map((r) => KhataEntry.fromMap(r)).toList();
-      if (mounted) {
-        setState(() {
-          _entries = list;
-        });
-      }
-    } catch (_) {
-      // Gracefully handle in widget tests / unsupported platforms
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
 
   String _formatAmount(double amount) {
     final formatter = NumberFormat('#,##0.00', 'en_US');
     return 'Rs ${formatter.format(amount)}';
   }
 
-  double get _totalPayable => _entries
+
+  double _getTotalPayable(List<KhataEntry> entries) => entries
       .where((e) => e.isPayable && !e.isPaid && !e.isWrittenOff)
       .fold(0.0, (sum, e) => sum + e.remainingAmount);
 
-  double get _totalReceivable => _entries
+  double _getTotalReceivable(List<KhataEntry> entries) => entries
       .where((e) => !e.isPayable && !e.isPaid && !e.isWrittenOff)
       .fold(0.0, (sum, e) => sum + e.remainingAmount);
 
-  double get _netBalance => _totalReceivable - _totalPayable;
+  double _getNetBalance(List<KhataEntry> entries) => _getTotalReceivable(entries) - _getTotalPayable(entries);
 
-  List<KhataEntry> get _filteredEntries {
-    return _entries.where((entry) {
+  List<KhataEntry> _getFilteredEntries(List<KhataEntry> entries) {
+    return entries.where((entry) {
       if (entry.isPaid || entry.isWrittenOff) return false;
       final matchesFilter = switch (_selectedFilter) {
         KhataSegmentFilter.payable => entry.isPayable,
@@ -84,10 +61,7 @@ class _KhataPageState extends State<_KhataPage> {
       final q = _searchQuery.toLowerCase().trim();
       return entry.title.toLowerCase().contains(q) ||
           entry.party.toLowerCase().contains(q) ||
-          entry.description.toLowerCase().contains(q) ||
-          entry.amount.toString().contains(q) ||
-          entry.amount.toStringAsFixed(2).contains(q) ||
-          (entry.isPayable ? 'payable' : 'receivable').contains(q);
+          entry.description.toLowerCase().contains(q);
     }).toList();
   }
 
@@ -420,7 +394,7 @@ class _KhataPageState extends State<_KhataPage> {
                                     if (bottomSheetContext.mounted) {
                                       Navigator.pop(bottomSheetContext);
                                     }
-                                    _loadEntries();
+                                    context.read<KhataBloc>().add(LoadKhataEntries(userId: context.read<AuthService>().currentUser?.uid ?? ''));
                                     if (mounted) {
                                       messenger.showSnackBar(
                                         SnackBar(
@@ -641,7 +615,7 @@ class _KhataPageState extends State<_KhataPage> {
             .toMap(),
       );
 
-      await _loadEntries();
+      context.read<KhataBloc>().add(LoadKhataEntries(userId: context.read<AuthService>().currentUser?.uid ?? ''));
 
       if (type == 'category' && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -689,7 +663,7 @@ class _KhataPageState extends State<_KhataPage> {
   //     await TaxDatabase.instance.updateKhataEntry(
   //       entry.copyWith(isWrittenOff: true, isPaid: true).toMap(),
   //     );
-  //     _loadEntries();
+  //     context.read<KhataBloc>().add(LoadKhataEntries(userId: context.read<AuthService>().currentUser?.uid ?? ''));
   //     if (mounted) {
   //       ScaffoldMessenger.of(context).showSnackBar(
   //         const SnackBar(content: Text('Entry written off as bad debt')),
@@ -725,7 +699,7 @@ class _KhataPageState extends State<_KhataPage> {
 
     if (confirmed == true && entry.id != null) {
       await TaxDatabase.instance.deleteKhataEntry(entry.id!);
-      _loadEntries();
+      context.read<KhataBloc>().add(LoadKhataEntries(userId: context.read<AuthService>().currentUser?.uid ?? ''));
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -736,11 +710,18 @@ class _KhataPageState extends State<_KhataPage> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _filteredEntries;
-    final bottomPadding = MediaQuery.paddingOf(context).bottom + 96.0;
+    return BlocBuilder<KhataBloc, KhataState>(
+      builder: (context, state) {
+        final List<KhataEntry> entries = state is KhataLoaded ? state.entries : [];
+        final bool isLoading = state is KhataLoading;
+        final filtered = _getFilteredEntries(entries);
+        final bottomPadding = MediaQuery.paddingOf(context).bottom + 96.0;
 
-    return RefreshIndicator(
-      onRefresh: _loadEntries,
+        return RefreshIndicator(
+          onRefresh: () async {
+            final userId = context.read<AuthService>().currentUser?.uid ?? '';
+            context.read<KhataBloc>().add(LoadKhataEntries(userId: userId));
+          },
       child: ListView(
         padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPadding),
         children: [
@@ -788,7 +769,7 @@ class _KhataPageState extends State<_KhataPage> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        'Net: ${_formatAmount(_netBalance)}',
+                        'Net: ${_formatAmount(_getNetBalance(entries))}',
                         style: const TextStyle(
                           color: AppColors.warmGold,
                           fontWeight: FontWeight.bold,
@@ -840,7 +821,7 @@ class _KhataPageState extends State<_KhataPage> {
                               fit: BoxFit.scaleDown,
                               alignment: Alignment.centerLeft,
                               child: Text(
-                                _formatAmount(_totalPayable),
+                                _formatAmount(_getTotalPayable(entries)),
                                 style: const TextStyle(
                                   color: Color(0xFFFF8A80),
                                   fontSize: 15,
@@ -900,7 +881,7 @@ class _KhataPageState extends State<_KhataPage> {
                               fit: BoxFit.scaleDown,
                               alignment: Alignment.centerLeft,
                               child: Text(
-                                _formatAmount(_totalReceivable),
+                                _formatAmount(_getTotalReceivable(entries)),
                                 style: const TextStyle(
                                   color: Color(0xFFB9F6CA),
                                   fontSize: 15,
@@ -984,7 +965,7 @@ class _KhataPageState extends State<_KhataPage> {
           const SizedBox(height: 12),
 
           // Search Filter
-          if (_entries.isNotEmpty)
+          if (entries.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: TextField(
@@ -1019,7 +1000,7 @@ class _KhataPageState extends State<_KhataPage> {
             ),
 
           // Content List
-          if (_isLoading)
+          if (isLoading)
             const Center(
               child: Padding(
                 padding: EdgeInsets.all(40),
@@ -1326,8 +1307,10 @@ class _KhataPageState extends State<_KhataPage> {
                 ),
               );
             }),
-        ],
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

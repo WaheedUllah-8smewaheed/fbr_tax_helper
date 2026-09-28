@@ -14,7 +14,9 @@ import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction
 import 'package:fbr_tax_helper/features/transactions/services/transaction_report_service.dart';
 import 'package:fbr_tax_helper/features/transactions/services/category_preferences_service.dart';
 import 'package:fbr_tax_helper/features/khata/domain/entities/khata_entry.dart';
+import 'package:fbr_tax_helper/features/khata/presentation/bloc/khata_bloc.dart';
 import 'package:fbr_tax_helper/features/assets/domain/entities/asset.dart';
+import 'package:fbr_tax_helper/features/assets/presentation/bloc/asset_bloc.dart';
 
 import 'package:fbr_tax_helper/core/platform/app_storage.dart';
 import 'package:fbr_tax_helper/core/database/tax_database.dart';
@@ -118,9 +120,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _homeDashboardKey.currentState?._loadKhataAndAssetMetrics();
     }
     if (index == 1) {
-      _khataPageKey.currentState?._loadEntries();
+      context.read<KhataBloc>().add(LoadKhataEntries(userId: context.read<AuthService>().currentUser?.uid ?? ''));
     } else if (index == 2) {
-      _assetsPageKey.currentState?._loadAssets();
+      context.read<AssetBloc>().add(LoadAssets(userId: context.read<AuthService>().currentUser?.uid ?? ''));
     }
   }
 
