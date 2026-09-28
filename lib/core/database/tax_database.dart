@@ -20,7 +20,7 @@ class TaxDatabase {
 
     return await openDatabase(
       path,
-      version: 8,
+      version: 9,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -185,6 +185,20 @@ class TaxDatabase {
         table: 'khata_entries',
         column: 'fromIncome',
         definition: 'INTEGER NOT NULL DEFAULT 0',
+      );
+    }
+    if (oldVersion < 9) {
+      await _addColumnIfMissing(
+        db,
+        table: 'khata_entries',
+        column: 'description',
+        definition: "TEXT NOT NULL DEFAULT ''",
+      );
+      await _addColumnIfMissing(
+        db,
+        table: 'assets',
+        column: 'description',
+        definition: "TEXT NOT NULL DEFAULT ''",
       );
     }
   }

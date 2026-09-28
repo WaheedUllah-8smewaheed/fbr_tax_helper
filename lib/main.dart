@@ -6,6 +6,8 @@ import 'package:fbr_tax_helper/features/splash/presentation/pages/splash_screen.
 import 'package:fbr_tax_helper/features/transactions/data/datasources/transaction_local_data_source.dart';
 import 'package:fbr_tax_helper/features/transactions/data/repositories/transaction_repository_impl.dart';
 import 'package:fbr_tax_helper/features/transactions/presentation/bloc/transaction_bloc.dart';
+import 'package:fbr_tax_helper/features/khata/presentation/bloc/khata_bloc.dart';
+import 'package:fbr_tax_helper/features/assets/presentation/bloc/asset_bloc.dart';
 import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -86,11 +88,25 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ],
-      child: BlocProvider(
-        create: (context) => TransactionBloc(
-          transactionRepository: context.read<TransactionRepositoryImpl>(),
-          authService: context.read<AuthService>(),
-        ),
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider(
+            create: (context) => TransactionBloc(
+              transactionRepository: context.read<TransactionRepositoryImpl>(),
+              authService: context.read<AuthService>(),
+            ),
+          ),
+          BlocProvider(
+            create: (context) => KhataBloc(
+              database: TaxDatabase.instance,
+            ),
+          ),
+          BlocProvider(
+            create: (context) => AssetBloc(
+              database: TaxDatabase.instance,
+            ),
+          ),
+        ],
         child: MaterialApp(
           title: 'Filer Flow',
           debugShowCheckedModeBanner: false,
