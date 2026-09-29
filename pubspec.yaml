@@ -89,9 +89,9 @@ flutter:
   assets:
     - assets/app_icon.png
     - assets/app_logo_splash_gold.png
-    - assets/kpxdigitalwhite.png
     - assets/kpxdigitalgrey.png
-
+    - assets/wemtech.jpg
+   
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

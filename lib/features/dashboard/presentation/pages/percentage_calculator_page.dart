@@ -79,7 +79,7 @@ class _PercentageCalculatorPageState extends State<PercentageCalculatorPage> {
                 ],
                 decoration: InputDecoration(
                   labelText: 'Amount',
-                  hintText: 'Enter total amount',
+                  hintText: 'Enter amount',
                   prefixIcon: const Icon(Icons.attach_money_rounded),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -108,37 +108,37 @@ class _PercentageCalculatorPageState extends State<PercentageCalculatorPage> {
                 ),
               ),
               const SizedBox(height: 48),
-              if (_calculatedResult != null) ...[
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F6B57).withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: const Color(0xFF0F6B57).withValues(alpha: 0.3),
-                      width: 2,
-                    ),
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: _calculatedResult != null ? const Color(0xFF0F6B57).withValues(alpha: 0.08) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: _calculatedResult != null ? const Color(0xFF0F6B57).withValues(alpha: 0.3) : Colors.grey.shade300,
+                    width: 2,
                   ),
-                  child: Column(
-                    children: [
-                      const Text(
-                        'Percentage Amount',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF0F6B57),
-                        ),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      _calculatedResult != null ? 'Percentage Amount' : 'Result',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: _calculatedResult != null ? FontWeight.w600 : FontWeight.normal,
+                        color: _calculatedResult != null ? const Color(0xFF0F6B57) : Colors.grey.shade600,
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _calculatedResult!.toStringAsFixed(2),
-                        style: const TextStyle(
-                          fontSize: 36,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF0F6B57),
-                        ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _calculatedResult != null ? _calculatedResult!.toStringAsFixed(2) : '—',
+                      style: TextStyle(
+                        fontSize: 36,
+                        fontWeight: FontWeight.bold,
+                        color: _calculatedResult != null ? const Color(0xFF0F6B57) : Colors.black,
                       ),
-                      const SizedBox(height: 8),
+                    ),
+                    const SizedBox(height: 8),
+                    if (_calculatedResult != null)
                       Text(
                         '${_percentageController.text.trim()}% of ${_amountController.text.trim()}',
                         style: TextStyle(
@@ -147,10 +147,9 @@ class _PercentageCalculatorPageState extends State<PercentageCalculatorPage> {
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                    ],
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ],
           ),
         ),

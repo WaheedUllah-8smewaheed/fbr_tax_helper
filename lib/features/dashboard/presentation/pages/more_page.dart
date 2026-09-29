@@ -1,3 +1,4 @@
+import 'package:fbr_tax_helper/features/dashboard/presentation/pages/zakat_calculator_page.dart';
 import 'package:fbr_tax_helper/features/transactions/presentation/pages/transaction_widgets.dart';
 import 'dart:async';
 import 'dart:math' as math;
@@ -252,17 +253,15 @@ class _CalculatorsPage extends StatelessWidget {
             title: 'Zakat Calculator',
             subtitle: 'Calculate zakat on your wealth',
             color: const Color(0xFF2E7D32),
-            onTap: () => _showComingSoon(context, 'Zakat Calculator'),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => const ZakatCalculatorPage(),
+              ),
+            ),
           ),
         ],
       ),
     );
-  }
-
-  static void _showComingSoon(BuildContext context, String title) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('$title will be available soon.')));
   }
 }
 
@@ -327,7 +326,7 @@ class _SupportPage extends StatelessWidget {
                       children: [
                         Center(
                           child: Image.asset(
-                            'assets/kpxdigitalgrey.png',
+                            'assets/wemtech.jpg',
                             width: isCompact ? 130 : 155,
                             height: isCompact ? 44 : 54,
                             fit: BoxFit.contain,
@@ -462,7 +461,7 @@ class _AboutPage extends StatelessWidget {
                   children: [
                     Center(
                       child: Image.asset(
-                        'assets/kpxdigitalgrey.png',
+                        'assets/wemtech.jpg',
                         width: isCompact ? 120 : 145,
                         height: isCompact ? 42 : 50,
                         fit: BoxFit.contain,

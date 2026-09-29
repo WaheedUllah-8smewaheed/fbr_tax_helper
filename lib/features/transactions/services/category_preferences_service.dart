@@ -20,6 +20,13 @@ class CategoryPreferencesService extends ChangeNotifier {
 
   String? _userId;
   bool _isLoading = false;
+  bool _isDisposed = false;
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
   String? _loadError;
 
   bool get isLoading => _isLoading;
@@ -199,7 +206,7 @@ class CategoryPreferencesService extends ChangeNotifier {
     _groupModes.clear();
     _customSubcategories.clear();
     _removedCategories.clear();
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
 
     try {
       final storedValue = await _storage.read(key: _storageKey(userId));
@@ -293,7 +300,7 @@ class CategoryPreferencesService extends ChangeNotifier {
       _loadError = error.toString();
     } finally {
       _isLoading = false;
-      notifyListeners();
+      if (!_isDisposed) notifyListeners();
     }
   }
 
@@ -327,7 +334,7 @@ class CategoryPreferencesService extends ChangeNotifier {
         ? (isExpense ?? false)
         : (parentMode == CategoryMode.expense);
     _classifications[trimmedName] = effectiveIsExpense;
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
 
     try {
       await _storage.write(
@@ -341,7 +348,7 @@ class CategoryPreferencesService extends ChangeNotifier {
       if (!wasCustom) {
         _customSubcategories[trimmedParent] = existingList;
       }
-      notifyListeners();
+      if (!_isDisposed) notifyListeners();
       rethrow;
     }
   }
@@ -377,7 +384,7 @@ class CategoryPreferencesService extends ChangeNotifier {
     _disabledCategories.remove(trimmedName);
     _classifications.remove(trimmedName);
     _dualModeCategories.remove(trimmedName);
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
 
     try {
       await _storage.write(
@@ -391,7 +398,7 @@ class CategoryPreferencesService extends ChangeNotifier {
       if (!wasRemoved) {
         _removedCategories.remove(trimmedName);
       }
-      notifyListeners();
+      if (!_isDisposed) notifyListeners();
       rethrow;
     }
   }
@@ -408,7 +415,7 @@ class CategoryPreferencesService extends ChangeNotifier {
     final hadPreviousValue = _classifications.containsKey(categoryName);
     final previousValue = _classifications[categoryName];
     _classifications[categoryName] = isExpense;
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
 
     try {
       await _storage.write(
@@ -421,7 +428,7 @@ class CategoryPreferencesService extends ChangeNotifier {
       } else {
         _classifications.remove(categoryName);
       }
-      notifyListeners();
+      if (!_isDisposed) notifyListeners();
       rethrow;
     }
   }
@@ -438,7 +445,7 @@ class CategoryPreferencesService extends ChangeNotifier {
     } else {
       _dualModeCategories.remove(categoryName);
     }
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
 
     try {
       await _storage.write(
@@ -451,7 +458,7 @@ class CategoryPreferencesService extends ChangeNotifier {
       } else {
         _dualModeCategories.remove(categoryName);
       }
-      notifyListeners();
+      if (!_isDisposed) notifyListeners();
       rethrow;
     }
   }
@@ -468,7 +475,7 @@ class CategoryPreferencesService extends ChangeNotifier {
     } else {
       _disabledCategories.add(categoryName);
     }
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
 
     try {
       await _storage.write(
@@ -481,7 +488,7 @@ class CategoryPreferencesService extends ChangeNotifier {
       } else {
         _disabledCategories.remove(categoryName);
       }
-      notifyListeners();
+      if (!_isDisposed) notifyListeners();
       rethrow;
     }
   }
@@ -504,7 +511,7 @@ class CategoryPreferencesService extends ChangeNotifier {
         _disabledCategories.add(category.name);
       }
     }
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
 
     try {
       await _storage.write(
@@ -515,7 +522,7 @@ class CategoryPreferencesService extends ChangeNotifier {
       _disabledCategories
         ..clear()
         ..addAll(previousDisabledCategories);
-      notifyListeners();
+      if (!_isDisposed) notifyListeners();
       rethrow;
     }
   }
@@ -531,7 +538,7 @@ class CategoryPreferencesService extends ChangeNotifier {
 
     final previousMode = _groupModes[parentName];
     _groupModes[parentName] = mode;
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
 
     try {
       await _storage.write(
@@ -544,7 +551,7 @@ class CategoryPreferencesService extends ChangeNotifier {
       } else {
         _groupModes[parentName] = previousMode;
       }
-      notifyListeners();
+      if (!_isDisposed) notifyListeners();
       rethrow;
     }
   }

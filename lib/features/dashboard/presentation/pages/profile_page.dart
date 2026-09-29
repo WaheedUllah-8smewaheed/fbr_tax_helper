@@ -22,39 +22,6 @@ class ProfilePage extends StatefulWidget {
 
 class ProfilePageState extends State<ProfilePage>
     with WidgetsBindingObserver {
-  Widget _buildIntroCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          colors: [Colors.blueGrey.shade700, Colors.blueGrey.shade500],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Settings & Security',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Update your personal profile, secure your application, and manage data backups.',
-            style: TextStyle(color: Colors.white.withAlpha(220), fontSize: 14),
-          ),
-        ],
-      ),
-    );
-  }
-
   static const _profileStorage = FlutterSecureStorage();
   final _biometricLock = BiometricLockService();
 
@@ -632,7 +599,6 @@ class ProfilePageState extends State<ProfilePage>
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            _buildIntroCard(),
             const SizedBox(height: 12),
             Card(
               child: Padding(
