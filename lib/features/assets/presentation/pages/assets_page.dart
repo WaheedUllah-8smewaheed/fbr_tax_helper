@@ -1,17 +1,29 @@
-part of '../../../dashboard/presentation/pages/dashboard_screen.dart';
+// ignore_for_file: unused_local_variable, unnecessary_import
 
-class _AssetsPage extends StatefulWidget {
-  const _AssetsPage({super.key, required this.categoryPreferences});
+import 'dart:async';
+import 'package:fbr_tax_helper/core/theme/app_theme.dart';
+import 'package:fbr_tax_helper/features/transactions/services/category_preferences_service.dart';
+import 'package:fbr_tax_helper/features/assets/domain/entities/asset.dart';
+import 'package:fbr_tax_helper/features/assets/presentation/bloc/asset_bloc.dart';
+import 'package:fbr_tax_helper/core/database/tax_database.dart';
+import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
+
+
+
+class AssetsPage extends StatefulWidget {
+  const AssetsPage({super.key, required this.categoryPreferences});
 
   final CategoryPreferencesService categoryPreferences;
 
   @override
-  State<_AssetsPage> createState() => _AssetsPageState();
+  State<AssetsPage> createState() => AssetsPageState();
 }
 
-class _AssetsPageState extends State<_AssetsPage> {
-  CategoryPreferencesService get _categoryPreferences =>
-      widget.categoryPreferences;
+class AssetsPageState extends State<AssetsPage> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
@@ -68,7 +80,7 @@ class _AssetsPageState extends State<_AssetsPage> {
     };
   }
 
-  Future<void> _openAddAssetSheet() async {
+    Future<void> _openAddAssetSheet() async {
     final messenger = ScaffoldMessenger.of(context);
     final nameController = TextEditingController();
     final valueController = TextEditingController();
@@ -89,13 +101,8 @@ class _AssetsPageState extends State<_AssetsPage> {
                   width: double.infinity,
                   height: double.infinity,
                   padding: EdgeInsets.only(
-                    bottom:
-                        mediaQuery.viewInsets.bottom +
-                        mediaQuery.padding.bottom +
-                        20,
-                    top: 20,
-                    left: 20,
-                    right: 20,
+                    bottom: mediaQuery.viewInsets.bottom + mediaQuery.padding.bottom + 20,
+                    top: 20, left: 20, right: 20,
                   ),
                   decoration: const BoxDecoration(color: Colors.white),
                   child: SingleChildScrollView(
@@ -103,182 +110,72 @@ class _AssetsPageState extends State<_AssetsPage> {
                       key: formKey,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Center(
-                            child: Container(
-                              width: 40,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade300,
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'Add Asset',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1E3A2F),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Initial asset record (opening balance). No expense/income will be logged.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                          const SizedBox(height: 18),
                           TextFormField(
                             controller: nameController,
-                            decoration: InputDecoration(
-                              hintText: 'Title',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            validator: (v) => (v == null || v.trim().isEmpty)
-                                ? 'Please enter a name'
-                                : null,
+                            decoration: const InputDecoration(labelText: 'Asset Name', hintText: 'e.g. Bank Account'),
+                            validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
                           ),
-                          const SizedBox(height: 14),
-                          TextFormField(
-                            controller: descriptionController,
-                            decoration: InputDecoration(
-                              hintText: 'Description (Optional)',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          DropdownButtonFormField<AssetCategory>(
-                            initialValue: selectedCategory,
-                            decoration: InputDecoration(
-                              hintText: 'Category',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            items: AssetCategory.values.map((cat) {
-                              return DropdownMenuItem(
-                                value: cat,
-                                child: Text(cat.displayName),
-                              );
-                            }).toList(),
-                            onChanged: (val) {
-                              if (val != null) {
-                                setModalState(() => selectedCategory = val);
-                              }
-                            },
-                          ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 12),
                           TextFormField(
                             controller: valueController,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(
-                                RegExp(r'^\d*\.?\d{0,2}'),
-                              ),
-                            ],
-                            decoration: InputDecoration(
-                              hintText: 'Amount',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            validator: (v) {
-                              if (v == null || v.trim().isEmpty) {
-                                return 'Please enter value';
-                              }
-                              final parsed = double.tryParse(v.trim());
-                              if (parsed == null || parsed < 0) {
-                                return 'Enter a valid non-negative number';
-                              }
-                              return null;
-                            },
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: 'Current Value (PKR)'),
+                            validator: (v) => v == null || v.trim().isEmpty || double.tryParse(v) == null ? 'Valid amount required' : null,
                           ),
-                          const SizedBox(height: 22),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () =>
-                                      Navigator.pop(bottomSheetContext),
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 14,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  child: const Text('Cancel'),
-                                ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: descriptionController,
+                            decoration: const InputDecoration(labelText: 'Description (Optional)'),
+                          ),
+                          const SizedBox(height: 24),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                if (!formKey.currentState!.validate()) return;
+                                final user = context.read<AuthService>().currentUser;
+                                final userId = user?.uid ?? '';
+                                final value = double.parse(valueController.text.trim());
+
+                                final assetToSave = Asset(
+                                  userId: userId,
+                                  name: nameController.text.trim(),
+                                  value: value,
+                                  description: descriptionController.text.trim(),
+                                  category: selectedCategory,
+                                  createdAt: DateTime.now(),
+                                  updatedAt: DateTime.now(),
+                                );
+
+                                final assetId = await TaxDatabase.instance.insertAsset(assetToSave.toMap());
+                                
+                                await TaxDatabase.instance.insertTransaction({
+                                  'userId': userId,
+                                  'title': 'Asset Created',
+                                  'beneficiary': assetToSave.name,
+                                  'purpose': 'Initial value',
+                                  'amount': value,
+                                  'isExpense': 0,
+                                  'date': DateTime.now().toIso8601String(),
+                                  'category': 'Asset History',
+                                  'assetId': assetId,
+                                });
+
+                                if (bottomSheetContext.mounted) {
+                                  Navigator.pop(bottomSheetContext);
+                                }
+                                if (mounted) {
+                                  context.read<AssetBloc>().add(LoadAssets(userId: userId));
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0F6B57),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: ElevatedButton(
-                                  onPressed: () async {
-                                    if (!formKey.currentState!.validate()) {
-                                      return;
-                                    }
-                                    final user = context
-                                        .read<AuthService>()
-                                        .currentUser;
-                                    final userId = user?.uid ?? '';
-                                    final val = double.parse(
-                                      valueController.text.trim(),
-                                    );
-
-                                    final now = DateTime.now();
-                                    final newAsset = Asset(
-                                      userId: userId,
-                                      name: nameController.text.trim(),
-                                      category: selectedCategory,
-                                      value: val,
-                                      createdAt: now,
-                                      updatedAt: now,
-                                    );
-
-                                    await TaxDatabase.instance.insertAsset(
-                                      newAsset.toMap(),
-                                    );
-
-                                    if (bottomSheetContext.mounted) {
-                                      Navigator.pop(bottomSheetContext);
-                                    }
-                                    context.read<AssetBloc>().add(LoadAssets(userId: context.read<AuthService>().currentUser?.uid ?? ''));
-                                    if (mounted) {
-                                      messenger.showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'Asset added to ledger',
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF0F6B57),
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 14,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  child: const Text('Add Asset'),
-                                ),
-                              ),
-                            ],
+                              child: const Text('Add Asset'),
+                            ),
                           ),
                         ],
                       ),
@@ -293,31 +190,28 @@ class _AssetsPageState extends State<_AssetsPage> {
     );
   }
 
-  Future<void> _openEditAssetSheet(Asset asset) async {
+  Future<void> _openAssetEditSheet(Asset asset) async {
     final messenger = ScaffoldMessenger.of(context);
     final changeController = TextEditingController();
     final reasonController = TextEditingController();
+    bool isIncrease = true;
     final formKey = GlobalKey<FormState>();
-    var isIncrease = false;
-    var cashInvolved = true;
 
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (assetEditContext) => Scaffold(
-          appBar: AppBar(title: Text('Edit "${asset.name}"')),
+          appBar: AppBar(title: Text('Edit ')),
           body: SafeArea(
+            top: false,
             child: StatefulBuilder(
               builder: (builderContext, setModalState) {
+                final mediaQuery = MediaQuery.of(builderContext);
                 return Container(
                   width: double.infinity,
+                  height: double.infinity,
                   padding: EdgeInsets.only(
-                    bottom:
-                        MediaQuery.of(builderContext).viewInsets.bottom +
-                        MediaQuery.of(builderContext).padding.bottom +
-                        20,
-                    top: 20,
-                    left: 20,
-                    right: 20,
+                    bottom: mediaQuery.viewInsets.bottom + mediaQuery.padding.bottom + 20,
+                    top: 20, left: 20, right: 20,
                   ),
                   decoration: const BoxDecoration(color: Colors.white),
                   child: SingleChildScrollView(
@@ -325,247 +219,83 @@ class _AssetsPageState extends State<_AssetsPage> {
                       key: formKey,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const SizedBox(height: 8),
                           Text(
-                            'Edit "${asset.name}"',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1E3A2F),
-                            ),
+                            'Current Value: PKR ',
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Current recorded value: ${_formatAmount(asset.value)}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          const Text('Did the value go up or down? *'),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 16),
                           Row(
                             children: [
                               Expanded(
                                 child: _assetChoiceButton(
-                                  label: '↓ Decreased',
-                                  selected: !isIncrease,
-                                  onPressed: () =>
-                                      setModalState(() => isIncrease = false),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _assetChoiceButton(
-                                  label: '↑ Increased',
+                                  label: 'Increase (+)',
                                   selected: isIncrease,
-                                  onPressed: () =>
-                                      setModalState(() => isIncrease = true),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 18),
-                          TextFormField(
-                            controller: changeController,
-                            onChanged: (_) => setModalState(() {}),
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(
-                                RegExp(r'^\d*\.?\d{0,2}'),
-                              ),
-                            ],
-                            decoration: InputDecoration(
-                              labelText: 'By how much (PKR)? *',
-                              hintText: '0',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                            validator: (v) {
-                              if (v == null || v.trim().isEmpty) {
-                                return 'Please enter value';
-                              }
-                              final parsed = double.tryParse(v.trim());
-                              if (parsed == null || parsed <= 0) {
-                                return 'Enter a valid positive number';
-                              }
-                              if (!isIncrease && parsed > asset.value) {
-                                return 'Decrease cannot exceed current value';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: reasonController,
-                            maxLines: 2,
-                            textCapitalization: TextCapitalization.sentences,
-                            decoration: InputDecoration(
-                              labelText: 'Reason (optional)',
-                              hintText: 'Why is this asset value changing?',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFDF0F2),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Row(
-                              children: [
-                                const Expanded(child: Text('Cash involved?')),
-                                _assetChoiceButton(
-                                  label: 'Yes',
-                                  selected: cashInvolved,
-                                  onPressed: () =>
-                                      setModalState(() => cashInvolved = true),
-                                ),
-                                const SizedBox(width: 8),
-                                _assetChoiceButton(
-                                  label: 'No',
-                                  selected: !cashInvolved,
-                                  onPressed: () =>
-                                      setModalState(() => cashInvolved = false),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Builder(
-                            builder: (context) {
-                              final entered =
-                                  double.tryParse(
-                                    changeController.text.trim(),
-                                  ) ??
-                                  0.0;
-                              final preview = isIncrease
-                                  ? asset.value + entered
-                                  : asset.value - entered;
-                              return Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 14,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFE5F8EC),
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Column(
-                                  children: [
-                                    const Text('New value will be'),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      _formatAmount(preview),
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w900,
-                                        color: Color(0xFF008A45),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 22),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () =>
-                                      Navigator.pop(assetEditContext),
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 14,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  child: const Text('Cancel'),
+                                  onPressed: () => setModalState(() => isIncrease = true),
                                 ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
-                                child: ElevatedButton(
-                                  onPressed: () async {
-                                    if (!formKey.currentState!.validate()) {
-                                      return;
-                                    }
-                                    final change = double.parse(
-                                      changeController.text.trim(),
-                                    );
-                                    final reason = reasonController.text.trim();
-                                    final newValue = isIncrease
-                                        ? asset.value + change
-                                        : asset.value - change;
-                                    final valueChanged =
-                                        (newValue - asset.value).abs() > 0.01;
-
-                                    if (valueChanged && cashInvolved) {
-                                      if (assetEditContext.mounted) {
-                                        Navigator.pop(assetEditContext);
-                                      }
-                                      final transactionSaved =
-                                          await _openAssetAdjustmentTransaction(
-                                            asset,
-                                            change,
-                                            isIncrease,
-                                            reason,
-                                          );
-                                      if (!transactionSaved || !mounted) {
-                                        return;
-                                      }
-                                    }
-
-                                    final updatedAsset = asset.copyWith(
-                                      value: newValue,
-                                      updatedAt: DateTime.now(),
-                                    );
-
-                                    context.read<AssetBloc>().add(UpdateAsset(asset: updatedAsset));
-
-                                    if (assetEditContext.mounted) {
-                                      Navigator.pop(assetEditContext);
-                                    }
-
-                                    context.read<AssetBloc>().add(LoadAssets(userId: context.read<AuthService>().currentUser?.uid ?? ''));
-                                    if (mounted) {
-                                      messenger.showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            valueChanged && cashInvolved
-                                                ? 'Asset updated and transaction recorded'
-                                                : 'Asset updated',
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF0F6B57),
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 14,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  child: const Text('Save Changes'),
+                                child: _assetChoiceButton(
+                                  label: 'Decrease (-)',
+                                  selected: !isIncrease,
+                                  onPressed: () => setModalState(() => isIncrease = false),
                                 ),
                               ),
                             ],
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: changeController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: 'Amount Change (PKR)'),
+                            validator: (v) => v == null || v.trim().isEmpty || double.tryParse(v) == null ? 'Valid amount required' : null,
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: reasonController,
+                            decoration: const InputDecoration(labelText: 'Reason for change'),
+                          ),
+                          const SizedBox(height: 24),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                if (!formKey.currentState!.validate()) return;
+                                final change = double.parse(changeController.text.trim());
+                                final reason = reasonController.text.trim();
+                                final newValue = isIncrease ? asset.value + change : asset.value - change;
+
+                                final updatedAsset = asset.copyWith(value: newValue, updatedAt: DateTime.now());
+                                context.read<AssetBloc>().add(UpdateAsset(asset: updatedAsset));
+
+                                await TaxDatabase.instance.insertTransaction({
+                                  'userId': asset.userId,
+                                  'title': isIncrease ? 'Asset Value Increased' : 'Asset Value Decreased',
+                                  'beneficiary': asset.name,
+                                  'purpose': reason.isNotEmpty ? reason : 'Manual Adjustment',
+                                  'amount': change,
+                                  'isExpense': 0,
+                                  'date': DateTime.now().toIso8601String(),
+                                  'category': 'Asset History',
+                                  'assetId': asset.id,
+                                });
+
+                                if (assetEditContext.mounted) {
+                                  Navigator.pop(assetEditContext);
+                                }
+                                if (mounted) {
+                                  context.read<AssetBloc>().add(LoadAssets(userId: context.read<AuthService>().currentUser?.uid ?? ''));
+                                  messenger.showSnackBar(const SnackBar(content: Text('Asset updated and history recorded')));
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0F6B57),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                              ),
+                              child: const Text('Save Changes'),
+                            ),
                           ),
                         ],
                       ),
@@ -579,55 +309,7 @@ class _AssetsPageState extends State<_AssetsPage> {
       ),
     );
   }
-
-  Future<bool> _openAssetAdjustmentTransaction(
-    Asset asset,
-    double amount,
-    bool isIncrease,
-    String reason,
-  ) async {
-    if (!mounted) return false;
-    final saved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (context) => _TransactionsPage(
-          categoryPreferences: _categoryPreferences,
-          filter: isIncrease
-              ? TransactionTypeFilter.expense
-              : TransactionTypeFilter.income,
-          onFilterChanged: (_) {},
-          showAppBar: true,
-          showTypeFilter: true, // Allow user to toggle if they want
-          isSettlement:
-              false, // Don't show Asset toggle, just Income/Expense toggle
-          onParentCategorySelected: (parentCategory, categoryOptions) async {
-            final categorySaved = await Navigator.of(context).push<bool>(
-              MaterialPageRoute(
-                builder: (context) => AddTransactionPage(
-                  parentCategory: parentCategory,
-                  categoryOptions: categoryOptions,
-                  categoryPreferences: _categoryPreferences,
-                  initialAmount: amount,
-                  initialPurpose: reason.isEmpty
-                      ? asset.name
-                      : '${asset.name}: $reason',
-                  initialDate: DateTime.now(),
-                  isSettlement: true,
-                  assetId: asset.id,
-                  linkedCounterpartyOrAsset: asset.name,
-                ),
-              ),
-            );
-            if (categorySaved == true && context.mounted) {
-              Navigator.of(context).pop(true);
-            }
-          },
-        ),
-      ),
-    );
-    return saved == true;
-  }
-
-  Widget _assetChoiceButton({
+Widget _assetChoiceButton({
     required String label,
     required bool selected,
     required VoidCallback onPressed,
@@ -682,6 +364,7 @@ class _AssetsPageState extends State<_AssetsPage> {
 
     if (confirmed == true && asset.id != null) {
       await TaxDatabase.instance.deleteAsset(asset.id!);
+      // ignore: use_build_context_synchronously
       context.read<AssetBloc>().add(LoadAssets(userId: context.read<AuthService>().currentUser?.uid ?? ''));
       if (mounted) {
         ScaffoldMessenger.of(
@@ -979,14 +662,14 @@ class _AssetsPageState extends State<_AssetsPage> {
                                 icon: const Icon(
                                   Icons.delete_outline,
                                   size: 20,
-                                  color: Colors.grey,
+                                  color: Color.fromARGB(255, 238, 3, 3),
                                 ),
                                 tooltip: 'Delete',
                                 visualDensity: VisualDensity.compact,
                                 onPressed: () => _deleteAsset(asset),
                               ),
                               OutlinedButton.icon(
-                                onPressed: () => _openEditAssetSheet(asset),
+                                onPressed: () => _openAssetEditSheet(asset),
                                 icon: const Icon(Icons.edit_outlined, size: 16),
                                 label: const Text('Edit Value'),
                                 style: OutlinedButton.styleFrom(

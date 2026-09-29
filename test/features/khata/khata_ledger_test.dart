@@ -13,6 +13,7 @@ import 'package:fbr_tax_helper/features/transactions/presentation/bloc/transacti
 import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:fbr_tax_helper/features/dashboard/presentation/pages/dashboard_screen.dart';
 
+
 class MockFirebaseUser implements User {
   const MockFirebaseUser();
 

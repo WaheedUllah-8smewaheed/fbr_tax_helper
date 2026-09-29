@@ -1,13 +1,26 @@
-part of 'dashboard_screen.dart';
+import 'dart:async';
+import 'dart:io';
+import 'package:fbr_tax_helper/core/theme/app_theme.dart';
+import 'package:fbr_tax_helper/core/platform/app_storage.dart';
+import 'package:fbr_tax_helper/core/database/tax_database.dart';
+import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
+import 'package:fbr_tax_helper/features/auth/services/biometric_lock_service.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as path;
+import 'package:fbr_tax_helper/core/widgets/filer_flow_logo.dart';
 
-class _ProfilePage extends StatefulWidget {
-  const _ProfilePage();
+
+class ProfilePage extends StatefulWidget {
+  const ProfilePage({super.key});
 
   @override
-  State<_ProfilePage> createState() => _ProfilePageState();
+  State<ProfilePage> createState() => ProfilePageState();
 }
 
-class _ProfilePageState extends State<_ProfilePage>
+class ProfilePageState extends State<ProfilePage>
     with WidgetsBindingObserver {
   Widget _buildIntroCard() {
     return Container(

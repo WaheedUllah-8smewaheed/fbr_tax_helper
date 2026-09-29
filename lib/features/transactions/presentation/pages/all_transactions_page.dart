@@ -1,9 +1,20 @@
-part of '../../../dashboard/presentation/pages/dashboard_screen.dart';
+import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction.dart' as entity;
+import 'dart:async';
+import 'package:fbr_tax_helper/features/transactions/presentation/bloc/transaction_bloc.dart';
+import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction_category.dart';
+import 'package:fbr_tax_helper/features/transactions/services/category_preferences_service.dart';
+import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
+import 'package:fbr_tax_helper/features/dashboard/presentation/pages/dashboard_screen.dart';
+import 'package:fbr_tax_helper/features/transactions/presentation/pages/transaction_widgets.dart';
+
 
 enum _TransactionDateFilter { all, month, range }
 
-class _AllTransactionsPage extends StatefulWidget {
-  const _AllTransactionsPage({
+class AllTransactionsPage extends StatefulWidget {
+  const AllTransactionsPage({super.key, 
     required this.categoryPreferences,
     this.initialCategory,
     this.initialCategoryIncludesChildren = false,
@@ -14,10 +25,10 @@ class _AllTransactionsPage extends StatefulWidget {
   final bool initialCategoryIncludesChildren;
 
   @override
-  State<_AllTransactionsPage> createState() => _AllTransactionsPageState();
+  State<AllTransactionsPage> createState() => AllTransactionsPageState();
 }
 
-class _AllTransactionsPageState extends State<_AllTransactionsPage> {
+class AllTransactionsPageState extends State<AllTransactionsPage> {
   Widget _buildIntroCard() {
     return Container(
       width: double.infinity,
@@ -179,7 +190,7 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
                   ),
                 )
                 .toList();
-            final monthOptions = _buildMonthOptions(resolvedTransactions);
+            final monthOptions = buildMonthOptions(resolvedTransactions);
             final visibleTransactions = _applyFilters(resolvedTransactions);
             final visibleTotals = calculateTransactionFilterTotals(
               visibleTransactions,
@@ -234,7 +245,7 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
                         .map(
                           (month) => DropdownMenuItem(
                             value: month,
-                            child: Text(_monthLabel(month)),
+                            child: Text(monthLabel(month)),
                           ),
                         )
                         .toList(),
@@ -282,7 +293,7 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
                       totals: visibleTotals,
                       mode: categoryMode,
                     );
-                    final printButton = _PrintTransactionsButton(
+                    final printButton = PrintTransactionsButton(
                       transactions: visibleTransactions,
                       filterLabel: _filterLabel(),
                       buttonLabel: 'Print',
@@ -309,7 +320,7 @@ class _AllTransactionsPageState extends State<_AllTransactionsPage> {
                   },
                 ),
                 const SizedBox(height: 10),
-                _TransactionList(
+                TransactionList(
                   state: state,
                   currentUserId: currentUserId,
                   transactions: visibleTransactions,
@@ -361,12 +372,12 @@ class _TransactionFilterSummary extends StatelessWidget {
           children: [
             if (showIncome)
               Text(
-                'Income: ${_formatDashboardMoney(totals.income)}',
+                'Income: ${formatMoney(totals.income)}',
                 style: totalStyle?.copyWith(color: Colors.green.shade700),
               ),
             if (showExpense)
               Text(
-                'Expenses: ${_formatDashboardMoney(totals.expenses)}',
+                'Expenses: ${formatMoney(totals.expenses)}',
                 style: totalStyle?.copyWith(color: Colors.red.shade700),
               ),
           ],

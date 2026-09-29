@@ -1,17 +1,30 @@
-part of '../../../dashboard/presentation/pages/dashboard_screen.dart';
+import 'package:fbr_tax_helper/features/transactions/domain/entities/transaction.dart' as entity;
+import 'dart:async';
+import 'dart:math' as math;
+import 'package:fl_chart/fl_chart.dart';
+import 'package:fbr_tax_helper/core/theme/app_theme.dart';
+import 'package:fbr_tax_helper/features/transactions/presentation/bloc/transaction_bloc.dart';
+import 'package:fbr_tax_helper/features/transactions/services/transaction_report_service.dart';
+import 'package:fbr_tax_helper/features/transactions/services/category_preferences_service.dart';
+import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
+import 'package:fbr_tax_helper/features/transactions/presentation/pages/transaction_widgets.dart';
 
-class _ComparisonDashboardPage extends StatefulWidget {
-  const _ComparisonDashboardPage({required this.categoryPreferences});
+
+class ComparisonDashboardPage extends StatefulWidget {
+  const ComparisonDashboardPage({super.key, required this.categoryPreferences});
 
   final CategoryPreferencesService categoryPreferences;
 
   @override
-  State<_ComparisonDashboardPage> createState() =>
-      _ComparisonDashboardPageState();
+  State<ComparisonDashboardPage> createState() =>
+      ComparisonDashboardPageState();
 }
 
-class _ComparisonDashboardPageState extends State<_ComparisonDashboardPage> {
-  final _ComparisonScope _scope = _ComparisonScope.overall;
+class ComparisonDashboardPageState extends State<ComparisonDashboardPage> {
+  final ComparisonScope _scope = ComparisonScope.overall;
   String? _selectedCategory;
   DateTime? _rangeStart;
   DateTime? _rangeEnd;
@@ -72,7 +85,7 @@ class _ComparisonDashboardPageState extends State<_ComparisonDashboardPage> {
     List<entity.Transaction> transactions,
   ) {
     return transactions.where((transaction) {
-      if (_scope == _ComparisonScope.category &&
+      if (_scope == ComparisonScope.category &&
           transaction.category != _selectedCategory) {
         return false;
       }
@@ -1278,13 +1291,13 @@ class _ComparisonFilterPanel extends StatelessWidget {
     required this.onClearRange,
   });
 
-  final _ComparisonScope scope;
+  final ComparisonScope scope;
   final List<String> categories;
   final String? selectedCategory;
   final DateTime? rangeStart;
   final DateTime? rangeEnd;
   final int transactionCount;
-  final ValueChanged<_ComparisonScope> onScopeChanged;
+  final ValueChanged<ComparisonScope> onScopeChanged;
   final ValueChanged<String?> onCategoryChanged;
   final VoidCallback onPickStart;
   final VoidCallback onPickEnd;
@@ -1315,17 +1328,17 @@ class _ComparisonFilterPanel extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-            SegmentedButton<_ComparisonScope>(
+            SegmentedButton<ComparisonScope>(
               expandedInsets: EdgeInsets.zero,
               showSelectedIcon: false,
               segments: const [
                 ButtonSegment(
-                  value: _ComparisonScope.overall,
+                  value: ComparisonScope.overall,
                   icon: Icon(Icons.dashboard_outlined),
                   label: Text('Overall'),
                 ),
                 ButtonSegment(
-                  value: _ComparisonScope.category,
+                  value: ComparisonScope.category,
                   icon: Icon(Icons.category_outlined),
                   label: Text('Category'),
                 ),
@@ -1334,7 +1347,7 @@ class _ComparisonFilterPanel extends StatelessWidget {
               onSelectionChanged: (selection) =>
                   onScopeChanged(selection.first),
             ),
-            if (scope == _ComparisonScope.category) ...[
+            if (scope == ComparisonScope.category) ...[
               const SizedBox(height: 14),
               DropdownButtonFormField<String>(
                 initialValue: selectedCategory,
@@ -1903,7 +1916,7 @@ class _PeriodComparisonSummary extends StatelessWidget {
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      _formatDashboardMoney(comparison.currentTotal),
+                      formatMoney(comparison.currentTotal),
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
@@ -1964,7 +1977,7 @@ class _PeriodComparisonSummary extends StatelessWidget {
                       const SizedBox(height: 3),
                       Text(
                         '${dominant.title.isEmpty ? dominant.category : dominant.title} · '
-                        '${_formatDashboardMoney(dominant.amount)} '
+                        '${formatMoney(dominant.amount)} '
                         '(${dominantShare.toStringAsFixed(1)}% of this period)',
                       ),
                     ],
@@ -2632,7 +2645,7 @@ String _compactChartAmount(double amount) {
   return amount.toStringAsFixed(0);
 }
 
-String _formatPieBalance(double amount) {
+String formatPieBalance(double amount) {
   final absolute = amount.abs();
   final sign = amount < 0
       ? '-'
@@ -2643,5 +2656,5 @@ String _formatPieBalance(double amount) {
     final millions = (absolute / 1000000).toStringAsFixed(1);
     return '$sign${millions}M';
   }
-  return '$sign${_formatNumber(absolute)}';
+  return '$sign${formatMoney(absolute)}';
 }

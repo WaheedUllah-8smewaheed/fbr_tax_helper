@@ -1,22 +1,32 @@
-part of '../../../dashboard/presentation/pages/dashboard_screen.dart';
+import 'dart:async';
+import 'package:fbr_tax_helper/core/theme/app_theme.dart';
+import 'package:fbr_tax_helper/features/transactions/services/category_preferences_service.dart';
+import 'package:fbr_tax_helper/features/khata/domain/entities/khata_entry.dart';
+import 'package:fbr_tax_helper/features/khata/presentation/bloc/khata_bloc.dart';
+import 'package:fbr_tax_helper/core/database/tax_database.dart';
+import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
+
+
+
 
 enum KhataSegmentFilter { payable, receivable }
 
-class _KhataPage extends StatefulWidget {
-  const _KhataPage({super.key, required this.categoryPreferences});
+class KhataPage extends StatefulWidget {
+  const KhataPage({super.key, required this.categoryPreferences});
 
   final CategoryPreferencesService categoryPreferences;
 
   @override
-  State<_KhataPage> createState() => _KhataPageState();
+  State<KhataPage> createState() => KhataPageState();
 }
 
-class _KhataPageState extends State<_KhataPage> {
+class KhataPageState extends State<KhataPage> {
   KhataSegmentFilter _selectedFilter = KhataSegmentFilter.payable;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
-  CategoryPreferencesService get _categoryPreferences =>
-      widget.categoryPreferences;
 
   @override
   void initState() {
@@ -123,27 +133,22 @@ class _KhataPageState extends State<_KhataPage> {
     );
   }
 
-  Future<void> _openAddOrEditEntryDialog({
+    Future<void> _openAddOrEditEntryDialog({
     KhataEntry? existingEntry,
     bool? isPayableDefault,
   }) async {
-    final messenger = ScaffoldMessenger.of(context);
+    ScaffoldMessenger.of(context);
     final isEditing = existingEntry != null;
-    final bool isPayable =
-        existingEntry?.isPayable ??
-        (isPayableDefault ?? (_selectedFilter == KhataSegmentFilter.payable));
-    final titleController = TextEditingController(
-      text: existingEntry?.title ?? '',
-    );
+    final isPayable = existingEntry?.isPayable ??
+        (isPayableDefault ?? _selectedFilter == KhataSegmentFilter.payable);
+
+    final titleController = TextEditingController(text: existingEntry?.title);
+    final partyController = TextEditingController(text: existingEntry?.party);
     final amountController = TextEditingController(
       text: existingEntry != null
-          ? existingEntry.amount.toStringAsFixed(2)
+          ? existingEntry.amount.toStringAsFixed(0)
           : '',
     );
-    final partyController = TextEditingController(
-      text: existingEntry?.party ?? '',
-    );
-    bool fromIncome = existingEntry?.fromIncome ?? false;
     final formKey = GlobalKey<FormState>();
 
     await Navigator.of(context).push(
@@ -165,13 +170,8 @@ class _KhataPageState extends State<_KhataPage> {
                   width: double.infinity,
                   height: double.infinity,
                   padding: EdgeInsets.only(
-                    bottom:
-                        mediaQuery.viewInsets.bottom +
-                        mediaQuery.padding.bottom +
-                        20,
-                    top: 20,
-                    left: 20,
-                    right: 20,
+                    bottom: mediaQuery.viewInsets.bottom + mediaQuery.padding.bottom + 20,
+                    top: 20, left: 20, right: 20,
                   ),
                   decoration: const BoxDecoration(color: Colors.white),
                   child: SingleChildScrollView(
@@ -179,258 +179,93 @@ class _KhataPageState extends State<_KhataPage> {
                       key: formKey,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Center(
-                            child: Container(
-                              width: 40,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade300,
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            isEditing
-                                ? (isPayable
-                                      ? 'Edit Payable'
-                                      : 'Edit Receivable')
-                                : (isPayable
-                                      ? 'New Payable'
-                                      : 'New Receivable'),
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1E3A2F),
-                            ),
-                          ),
-                          Text(
-                            isPayable
-                                ? 'Record a payable'
-                                : 'Record a receivable',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                          const SizedBox(height: 18),
                           TextFormField(
                             controller: titleController,
-                            decoration: InputDecoration(
-                              hintText: 'Title',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Please enter a title';
-                              }
-                              return null;
-                            },
+                            decoration: const InputDecoration(labelText: 'Title', hintText: 'e.g. Loan to friend'),
+                            validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 12),
                           TextFormField(
                             controller: partyController,
-                            decoration: InputDecoration(
-                              labelText: isPayable
-                                  ? 'To (Supplier / Vendor / Person) *'
-                                  : 'From (Customer / Client / Debtor) *',
-                              hintText: isPayable ? 'To' : 'From',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return isPayable
-                                    ? 'Please specify who to pay'
-                                    : 'Please specify who owes you';
-                              }
-                              return null;
-                            },
+                            decoration: InputDecoration(labelText: isPayable ? 'To whom?' : 'From whom?'),
+                            validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 12),
                           TextFormField(
                             controller: amountController,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(
-                                RegExp(r'^\d*\.?\d{0,2}'),
-                              ),
-                            ],
-                            decoration: InputDecoration(
-                              hintText: 'Amount',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Please enter an amount';
-                              }
-                              final parsed = double.tryParse(value.trim());
-                              if (parsed == null || parsed <= 0) {
-                                return 'Enter a valid positive number';
-                              }
-                              if (existingEntry != null &&
-                                  parsed < existingEntry.settledAmount) {
-                                return 'Amount cannot be less than already settled (Rs ${existingEntry.settledAmount.toStringAsFixed(0)})';
-                              }
-                              return null;
-                            },
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: 'Amount (PKR)'),
+                            validator: (v) => v == null || v.trim().isEmpty || double.tryParse(v) == null ? 'Valid amount required' : null,
                           ),
-                          if (!isPayable)
-                            CheckboxListTile(
-                              title: const Text('From Income'),
-                              subtitle: const Text(
-                                'Minimize this amount from total income',
-                              ),
-                              value: fromIncome,
-                              onChanged: (val) {
-                                setModalState(() {
-                                  fromIncome = val ?? false;
-                                });
+                          const SizedBox(height: 24),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                if (!formKey.currentState!.validate()) return;
+                                final user = context.read<AuthService>().currentUser;
+                                final userId = user?.uid ?? '';
+                                final amount = double.parse(amountController.text.trim());
+
+                                final entryToSave = KhataEntry(
+                                  id: existingEntry?.id,
+                                  userId: userId,
+                                  title: titleController.text.trim(),
+                                  party: partyController.text.trim(),
+                                  amount: amount,
+                                  isPayable: isPayable,
+                                  date: existingEntry?.date ?? DateTime.now(),
+                                  dueDate: existingEntry?.dueDate,
+                                  description: existingEntry?.description ?? '',
+                                  isPaid: existingEntry != null ? (existingEntry.settledAmount >= amount) : false,
+                                  settledAmount: existingEntry?.settledAmount ?? 0.0,
+                                  isWrittenOff: existingEntry?.isWrittenOff ?? false,
+                                  fromIncome: false,
+                                );
+
+                                if (isEditing) {
+                                  await TaxDatabase.instance.updateKhataEntry(entryToSave.toMap());
+                                  await TaxDatabase.instance.insertTransaction({
+                                    'userId': userId,
+                                    'title': isPayable ? 'Edited Payable' : 'Edited Receivable',
+                                    'beneficiary': entryToSave.party,
+                                    'purpose': 'Edited details/amount',
+                                    'amount': amount,
+                                    'isExpense': 0,
+                                    'date': DateTime.now().toIso8601String(),
+                                    'category': 'Khata History',
+                                    'khataEntryId': existingEntry.id,
+                                  });
+                                } else {
+                                  final entryId = await TaxDatabase.instance.insertKhataEntry(entryToSave.toMap());
+                                  await TaxDatabase.instance.insertTransaction({
+                                    'userId': userId,
+                                    'title': isPayable ? 'Added Payable' : 'Added Receivable',
+                                    'beneficiary': entryToSave.party,
+                                    'purpose': 'Initial creation',
+                                    'amount': amount,
+                                    'isExpense': 0,
+                                    'date': DateTime.now().toIso8601String(),
+                                    'category': 'Khata History',
+                                    'khataEntryId': entryId,
+                                  });
+                                }
+                                
+                                if (bottomSheetContext.mounted) {
+                                  Navigator.pop(bottomSheetContext);
+                                }
+                                if (mounted) {
+                                  context.read<KhataBloc>().add(LoadKhataEntries(userId: context.read<AuthService>().currentUser?.uid ?? ''));
+                                }
                               },
-                              contentPadding: EdgeInsets.zero,
-                              controlAffinity: ListTileControlAffinity.leading,
-                              activeColor: AppColors.primary,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0F6B57),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                              ),
+                              child: Text(isEditing ? 'Save Changes' : (isPayable ? 'Add Payable' : 'Add Receivable')),
                             ),
-                          const SizedBox(height: 22),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () =>
-                                      Navigator.pop(bottomSheetContext),
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 14,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  child: const Text('Cancel'),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: ElevatedButton(
-                                  onPressed: () async {
-                                    if (!formKey.currentState!.validate()) {
-                                      return;
-                                    }
-                                    final user = context
-                                        .read<AuthService>()
-                                        .currentUser;
-                                    final userId = user?.uid ?? '';
-                                    final amount = double.parse(
-                                      amountController.text.trim(),
-                                    );
-
-                                    final entryToSave = KhataEntry(
-                                      id: existingEntry?.id,
-                                      userId: userId,
-                                      title: titleController.text.trim(),
-                                      party: partyController.text.trim(),
-                                      amount: amount,
-                                      isPayable: isPayable,
-                                      date:
-                                          existingEntry?.date ?? DateTime.now(),
-                                      dueDate: existingEntry?.dueDate,
-                                      description:
-                                          existingEntry?.description ?? '',
-                                      isPaid: existingEntry != null
-                                          ? (existingEntry.settledAmount >=
-                                                amount)
-                                          : false,
-                                      settledAmount:
-                                          existingEntry?.settledAmount ?? 0.0,
-                                      isWrittenOff:
-                                          existingEntry?.isWrittenOff ?? false,
-                                      fromIncome: fromIncome,
-                                    );
-
-                                    if (isEditing) {
-                                      await TaxDatabase.instance
-                                          .updateKhataEntry(
-                                            entryToSave.toMap(),
-                                          );
-                                    } else {
-                                      final newKhataId = await TaxDatabase
-                                          .instance
-                                          .insertKhataEntry(
-                                            entryToSave.toMap(),
-                                          );
-                                      if (!isPayable && fromIncome) {
-                                        await TaxDatabase.instance
-                                            .insertTransaction({
-                                              'userId': userId,
-                                              'title':
-                                                  'Receivable: ${entryToSave.title}',
-                                              'beneficiary': entryToSave.party,
-                                              'purpose':
-                                                  'Khata Loan (From Income)',
-                                              'amount': amount,
-                                              'isExpense': 1,
-                                              'date': entryToSave.date
-                                                  .toIso8601String(),
-                                              'category': 'Khata',
-                                              'khataEntryId': newKhataId,
-                                            });
-                                        if (bottomSheetContext.mounted) {
-                                          bottomSheetContext
-                                              .read<TransactionBloc>()
-                                              .add(LoadTransactions());
-                                        }
-                                      }
-                                    }
-
-                                    if (bottomSheetContext.mounted) {
-                                      Navigator.pop(bottomSheetContext);
-                                    }
-                                    context.read<KhataBloc>().add(LoadKhataEntries(userId: context.read<AuthService>().currentUser?.uid ?? ''));
-                                    if (mounted) {
-                                      messenger.showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            isEditing
-                                                ? (isPayable
-                                                      ? 'Payable updated'
-                                                      : 'Receivable updated')
-                                                : (isPayable
-                                                      ? 'Payable added'
-                                                      : 'Receivable added'),
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF0F6B57),
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 14,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    isEditing
-                                        ? 'Save Changes'
-                                        : (isPayable
-                                              ? 'Add Payable'
-                                              : 'Add Receivable'),
-                                  ),
-                                ),
-                              ),
-                            ],
                           ),
                         ],
                       ),
@@ -449,228 +284,80 @@ class _KhataPageState extends State<_KhataPage> {
     final remaining = entry.remainingAmount;
     if (!mounted) return;
 
-    final result = await Navigator.of(context).push<Map<String, dynamic>>(
-      MaterialPageRoute(
-        builder: (context) => _TransactionsPage(
-          categoryPreferences: _categoryPreferences,
-          filter: entry.isPayable
-              ? TransactionTypeFilter.expense
-              : TransactionTypeFilter.income,
-          onFilterChanged: (_) {},
-          showAppBar: true,
-          showTypeFilter: true,
-          isSettlement: true,
-          isPayableSettlement: entry.isPayable,
-          onParentCategorySelected: (parentCategory, categoryOptions) async {
-            final categorySaved = await Navigator.of(context).push<bool>(
-              MaterialPageRoute(
-                builder: (context) => AddTransactionPage(
-                  parentCategory: parentCategory,
-                  categoryOptions: categoryOptions,
-                  categoryPreferences: _categoryPreferences,
-                  initialIsExpense: entry.isPayable,
-                  initialAmount: remaining,
-                  initialPurpose: entry.party,
-                  initialDate: DateTime.now(),
-                  isSettlement: true,
-                  khataEntryId: entry.id,
-                  linkedCounterpartyOrAsset: entry.party,
-                ),
-              ),
-            );
-            if (categorySaved == true && context.mounted) {
-              Navigator.of(
-                context,
-              ).pop({'type': 'category', 'amount': remaining});
-            }
-          },
-          onAssetSelected: (selectedAsset) async {
-            final amountController = TextEditingController(
-              text: remaining.toStringAsFixed(0),
-            );
-            final descController = TextEditingController();
-            final assetValueStr =
-                'PKR ${(selectedAsset['value'] as num).toStringAsFixed(0)}';
-
-            final val = await showDialog<Map<String, dynamic>>(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('Asset Settlement'),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: TextEditingController(text: assetValueStr),
-                      readOnly: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Current Asset Value',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: descController,
-                      decoration: const InputDecoration(
-                        labelText: 'Description',
-                        hintText: 'e.g. Paid via bank transfer',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: amountController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Amount to settle',
-                        prefixText: 'PKR ',
-                      ),
-                    ),
-                  ],
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  ElevatedButton(
-                    onPressed: () {
-                      final amountVal = double.tryParse(
-                        amountController.text.replaceAll(',', ''),
-                      );
-                      if (amountVal != null && amountVal > 0) {
-                        Navigator.pop(context, {
-                          'amount': amountVal,
-                          'desc': descController.text.trim(),
-                        });
-                      }
-                    },
-                    child: const Text('Settle'),
-                  ),
-                ],
-              ),
-            );
-
-            if (val == null || !mounted) return;
-
-            final amount = val['amount'] as double;
-            final desc = val['desc'] as String;
-
-            final isPayable = entry.isPayable;
-            double newAssetValue = (selectedAsset['value'] as num).toDouble();
-
-            if (isPayable) {
-              newAssetValue -= amount;
-            } else {
-              newAssetValue += amount;
-            }
-
-            await TaxDatabase.instance.updateAsset({
-              'id': selectedAsset['id'],
-              'value': newAssetValue,
-              'updatedAt': DateTime.now().toIso8601String(),
-            });
-
-            // Create a Transaction for the asset settlement so the description is saved
-            await TaxDatabase.instance.insertTransaction({
-              'userId': entry.userId,
-              'title': isPayable ? 'Settled Payable' : 'Settled Receivable',
-              'beneficiary': entry.party,
-              'purpose': desc.isNotEmpty ? desc : 'Asset Settlement',
-              'amount': amount,
-              'isExpense': isPayable ? 1 : 0,
-              'date': DateTime.now().toIso8601String(),
-              'category': 'Asset Settlement',
-              'khataEntryId': entry.id,
-              'assetId': selectedAsset['id'],
-            });
-
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  isPayable
-                      ? 'Settled! Deducted PKR $amount from ${selectedAsset['name']}'
-                      : 'Settled! Added PKR $amount to ${selectedAsset['name']}',
-                ),
-                backgroundColor: const Color(0xFF0F6B57),
-              ),
-            );
-
-            Navigator.of(context).pop({'type': 'asset', 'amount': amount});
-          },
+    final amountController = TextEditingController(text: remaining.toStringAsFixed(0));
+    final descController = TextEditingController();
+    
+    final val = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Settle '),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: descController,
+              decoration: const InputDecoration(labelText: 'Description', hintText: 'e.g. Paid in cash'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: amountController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Amount to settle', prefixText: 'PKR '),
+            ),
+          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final amountVal = double.tryParse(amountController.text.replaceAll(',', ''));
+              if (amountVal != null && amountVal > 0) {
+                Navigator.pop(context, {'amount': amountVal, 'desc': descController.text.trim()});
+              }
+            },
+            child: const Text('Settle'),
+          ),
+        ],
       ),
     );
 
-    if (result != null && mounted) {
-      final type = result['type'] as String;
-      final amount = result['amount'] as double;
-
+    if (val != null && mounted) {
+      final amount = val['amount'] as double;
+      final desc = val['desc'] as String;
+      
       final newSettledAmount = entry.settledAmount + amount;
       final isFullySettled = newSettledAmount >= entry.amount - 0.001;
-
+      
       await TaxDatabase.instance.updateKhataEntry(
-        entry
-            .copyWith(settledAmount: newSettledAmount, isPaid: isFullySettled)
-            .toMap(),
+        entry.copyWith(settledAmount: newSettledAmount, isPaid: isFullySettled).toMap(),
       );
 
-      context.read<KhataBloc>().add(LoadKhataEntries(userId: context.read<AuthService>().currentUser?.uid ?? ''));
+      await TaxDatabase.instance.insertTransaction({
+        'userId': entry.userId,
+        'title': entry.isPayable ? 'Settled Payable' : 'Settled Receivable',
+        'beneficiary': entry.party,
+        'purpose': desc.isNotEmpty ? desc : 'Settlement',
+        'amount': amount,
+        'isExpense': 0,
+        'date': DateTime.now().toIso8601String(),
+        'category': 'Khata History',
+        'khataEntryId': entry.id,
+      });
 
-      if (type == 'category' && mounted) {
+      if (mounted) {
+        context.read<KhataBloc>().add(LoadKhataEntries(userId: context.read<AuthService>().currentUser?.uid ?? ''));
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              isFullySettled
-                  ? 'Fully settled! Added to ${entry.isPayable ? "Expenses" : "Income"}.'
-                  : 'Settlement recorded in ${entry.isPayable ? "Expenses" : "Income"}.',
-            ),
+            content: Text(isFullySettled ? 'Fully settled!' : 'Settlement recorded.'),
             backgroundColor: const Color(0xFF0F6B57),
           ),
         );
       }
     }
   }
-
-  // Future<void> _writeOffEntry(KhataEntry entry) async {
-  //   final confirmed = await showDialog<bool>(
-  //     context: context,
-  //     builder: (dialogContext) {
-  //       return AlertDialog(
-  //         title: const Text('Write Off Bad Debt?'),
-  //         content: Text(
-  //           'Write off "${entry.title}" (${_formatAmount(entry.remainingAmount)}) as bad debt? This will close the entry without creating any income or expense transaction.',
-  //         ),
-  //         actions: [
-  //           TextButton(
-  //             onPressed: () => Navigator.pop(dialogContext, false),
-  //             child: const Text('Cancel'),
-  //           ),
-  //           ElevatedButton(
-  //             onPressed: () => Navigator.pop(dialogContext, true),
-  //             style: ElevatedButton.styleFrom(
-  //               backgroundColor: Colors.red.shade700,
-  //               foregroundColor: Colors.white,
-  //             ),
-  //             child: const Text('Write Off'),
-  //           ),
-  //         ],
-  //       );
-  //     },
-  //   );
-
-  //   if (confirmed == true && entry.id != null) {
-  //     await TaxDatabase.instance.updateKhataEntry(
-  //       entry.copyWith(isWrittenOff: true, isPaid: true).toMap(),
-  //     );
-  //     context.read<KhataBloc>().add(LoadKhataEntries(userId: context.read<AuthService>().currentUser?.uid ?? ''));
-  //     if (mounted) {
-  //       ScaffoldMessenger.of(context).showSnackBar(
-  //         const SnackBar(content: Text('Entry written off as bad debt')),
-  //       );
-  //     }
-  //   }
-  // }
 
   Future<void> _deleteEntry(KhataEntry entry) async {
     final confirmed = await showDialog<bool>(
@@ -699,6 +386,7 @@ class _KhataPageState extends State<_KhataPage> {
 
     if (confirmed == true && entry.id != null) {
       await TaxDatabase.instance.deleteKhataEntry(entry.id!);
+      // ignore: use_build_context_synchronously
       context.read<KhataBloc>().add(LoadKhataEntries(userId: context.read<AuthService>().currentUser?.uid ?? ''));
       if (mounted) {
         ScaffoldMessenger.of(
@@ -1314,3 +1002,4 @@ class _KhataPageState extends State<_KhataPage> {
     );
   }
 }
+

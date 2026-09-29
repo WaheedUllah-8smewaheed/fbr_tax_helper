@@ -1,15 +1,26 @@
-part of 'dashboard_screen.dart';
+import 'package:fbr_tax_helper/features/transactions/presentation/pages/transaction_widgets.dart';
+import 'dart:async';
+import 'dart:math' as math;
+import 'package:fbr_tax_helper/features/transactions/presentation/pages/comparison_dashboard_page.dart';
+import 'package:fbr_tax_helper/core/theme/app_theme.dart';
+import 'package:fbr_tax_helper/features/tax_calculator/presentation/pages/tax_calculator_screen.dart';
+import 'package:fbr_tax_helper/features/dashboard/presentation/pages/percentage_calculator_page.dart';
+import 'package:fbr_tax_helper/features/transactions/services/category_preferences_service.dart';
+import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:fbr_tax_helper/features/dashboard/presentation/pages/dashboard_screen.dart';
 
-class _MorePage extends StatefulWidget {
-  const _MorePage({this.categoryPreferences});
+
+class MorePage extends StatefulWidget {
+  const MorePage({super.key, this.categoryPreferences});
 
   final CategoryPreferencesService? categoryPreferences;
 
   @override
-  State<_MorePage> createState() => _MorePageState();
+  State<MorePage> createState() => MorePageState();
 }
 
-class _MorePageState extends State<_MorePage> {
+class MorePageState extends State<MorePage> {
   Widget _buildIntroCard() {
     return Container(
       width: double.infinity,
@@ -110,7 +121,7 @@ class _MorePageState extends State<_MorePage> {
               color: const Color(0xFF3949AB),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (context) => _ComparisonDashboardPage(
+                  builder: (context) => ComparisonDashboardPage(
                     categoryPreferences: widget.categoryPreferences!,
                   ),
                 ),
@@ -118,10 +129,10 @@ class _MorePageState extends State<_MorePage> {
             ),
         ]),
         _buildSection('Backup & Restore', [
-          const _DriveSyncButton(asListTile: true, action: _DriveAction.backup),
-          const _DriveSyncButton(
+          const DriveSyncButton(asListTile: true, action: DriveAction.backup),
+          const DriveSyncButton(
             asListTile: true,
-            action: _DriveAction.restore,
+            action: DriveAction.restore,
           ),
         ]),
         _buildSection('About & Support', [
@@ -587,8 +598,8 @@ class _AboutFeature extends StatelessWidget {
   }
 }
 
-class _CategorySettingsPage extends StatelessWidget {
-  const _CategorySettingsPage({required this.categoryPreferences});
+class CategorySettingsPage extends StatelessWidget {
+  const CategorySettingsPage({super.key, required this.categoryPreferences});
 
   final CategoryPreferencesService categoryPreferences;
 
@@ -888,7 +899,7 @@ class _CategorySettingsPage extends StatelessWidget {
                           ),
                           childrenPadding: EdgeInsets.zero,
                           leading: Icon(
-                            _getIconForCategory(parent.key),
+                            getIconForCategory(parent.key),
                             size: 21,
                           ),
                           title: Row(
