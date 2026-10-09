@@ -427,6 +427,8 @@ class _AboutPage extends StatelessWidget {
     'Visual dashboard with income, expense and balance overview',
     'Quick transaction entry — manually or via receipt scan',
     'Customizable income and expense categories',
+    'Khata ledger for payables, receivables and settlement history',
+    'Asset tracking with value adjustments and change history',
     'Built-in tax calculator for Salary, PSEB Export and WHT',
     'Secure backup and restore via Google Drive',
     'Fingerprint-secured profile with 2FA',
@@ -542,7 +544,7 @@ class _AboutPage extends StatelessWidget {
                         text: 'Version 1.0  |  Developed by ',
                         children: [
                           TextSpan(
-                            text: 'KPX Digital',
+                            text: 'WEM Tech Digital Solutions',
                             style: textTheme.bodySmall?.copyWith(
                               color: AppColors.primaryDark,
                               fontWeight: FontWeight.w800,

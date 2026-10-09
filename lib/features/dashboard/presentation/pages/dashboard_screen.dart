@@ -140,7 +140,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           setState(() {
             _selectedIndex = 0;
           });
-        } else {
+          _homeDashboardKey.currentState?._loadKhataAndAssetMetrics();
+          } else {
           final shouldQuit = await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
@@ -400,7 +401,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
   double _totalReceivable = 0.0;
   double _totalAssets = 0.0;
   BannerAd? _bannerAd;
-  bool _isBannerAdLoaded = false;
+  final bool _isBannerAdLoaded = false;
 
   @override
   void initState() {
@@ -409,40 +410,9 @@ class _HomeDashboardState extends State<_HomeDashboard> {
     _selectedMonth = null;
     _loadProfileImage();
     _loadKhataAndAssetMetrics();
-    _loadBannerAd();
+    // _loadBannerAd(); // Disabled for now to prevent ad loading crashes
   }
 
-  void _loadBannerAd() {
-    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) return;
-
-    // Dashboard-Banner
-    const dashboardBannerAdUnitId = 'ca-app-pub-9761861396179823/6624819291';
-    final adUnitId = Platform.isAndroid
-        ? dashboardBannerAdUnitId
-        : dashboardBannerAdUnitId;
-    final bannerAd = BannerAd(
-      adUnitId: adUnitId,
-      size: AdSize.banner,
-      request: const AdRequest(),
-      listener: BannerAdListener(
-        onAdLoaded: (ad) {
-          if (!mounted) {
-            ad.dispose();
-            return;
-          }
-          setState(() {
-            _bannerAd = ad as BannerAd;
-            _isBannerAdLoaded = true;
-          });
-        },
-        onAdFailedToLoad: (ad, error) {
-          debugPrint('Dashboard banner failed to load: ${error.message}');
-          ad.dispose();
-        },
-      ),
-    );
-    bannerAd.load();
-  }
 
   @override
   void dispose() {
@@ -728,7 +698,7 @@ class _HomeDashboardState extends State<_HomeDashboard> {
           final currentUserId = user?.uid ?? '';
           final storedTransactions =
               state is TransactionLoaded && state.userId == currentUserId
-              ? state.transactions
+              ? state.transactions.where((t) => t.khataEntryId == null && t.assetId == null).toList()
               : const <entity.Transaction>[];
           final transactions = storedTransactions
               .map(

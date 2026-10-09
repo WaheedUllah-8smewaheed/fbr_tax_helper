@@ -8,6 +8,9 @@ import 'package:fbr_tax_helper/features/transactions/services/category_preferenc
 import 'package:fbr_tax_helper/features/transactions/services/receipt_scanner_service.dart';
 import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:flutter/material.dart';
+// ignore: unnecessary_import
+import 'package:flutter/services.dart';
+import 'package:fbr_tax_helper/core/utils/comma_formatter.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -591,6 +594,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
             border: OutlineInputBorder(),
           ),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [CommaTextInputFormatter()],
           validator: (value) {
             final amount = double.tryParse(
               (value ?? '').trim().replaceAll(',', ''),

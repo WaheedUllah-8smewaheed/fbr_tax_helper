@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:fbr_tax_helper/core/utils/comma_formatter.dart';
+
 
 class PercentageCalculatorPage extends StatefulWidget {
   const PercentageCalculatorPage({super.key});
@@ -24,8 +25,8 @@ class _PercentageCalculatorPageState extends State<PercentageCalculatorPage> {
       return;
     }
 
-    final amount = double.tryParse(amountText);
-    final percentage = double.tryParse(percentageText);
+    final amount = double.tryParse(amountText.replaceAll(',', ''));
+    final percentage = double.tryParse(percentageText.replaceAll(',', ''));
 
     if (amount != null && percentage != null) {
       setState(() {
@@ -75,7 +76,7 @@ class _PercentageCalculatorPageState extends State<PercentageCalculatorPage> {
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                  CommaTextInputFormatter(),
                 ],
                 decoration: InputDecoration(
                   labelText: 'Amount',
@@ -94,7 +95,7 @@ class _PercentageCalculatorPageState extends State<PercentageCalculatorPage> {
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                  CommaTextInputFormatter(),
                 ],
                 decoration: InputDecoration(
                   labelText: 'Percentage (%)',

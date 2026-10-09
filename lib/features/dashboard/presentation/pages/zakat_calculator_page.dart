@@ -1,6 +1,7 @@
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:fbr_tax_helper/core/utils/comma_formatter.dart';
+
 
 class ZakatCalculatorPage extends StatefulWidget {
   const ZakatCalculatorPage({super.key});
@@ -29,8 +30,8 @@ class _ZakatCalculatorPageState extends State<ZakatCalculatorPage> {
       return;
     }
 
-    final wealth = double.tryParse(wealthText);
-    final ratePerTola = double.tryParse(rateText);
+    final wealth = double.tryParse(wealthText.replaceAll(',', ''));
+    final ratePerTola = double.tryParse(rateText.replaceAll(',', ''));
 
     if (wealth != null && ratePerTola != null) {
       // Nisab Value (PKR) = Tola Rate (PKR/Tola) x Nisab Tola Count
@@ -95,7 +96,7 @@ class _ZakatCalculatorPageState extends State<ZakatCalculatorPage> {
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                  CommaTextInputFormatter(),
                 ],
                 decoration: InputDecoration(
                   labelText: 'Enter Amount (PKR)',
@@ -145,7 +146,7 @@ class _ZakatCalculatorPageState extends State<ZakatCalculatorPage> {
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                  CommaTextInputFormatter(),
                 ],
                 decoration: InputDecoration(
                   labelText: _isGoldNisab ? 'Gold Rate per Tola (PKR)' : 'Silver Rate per Tola (PKR)',

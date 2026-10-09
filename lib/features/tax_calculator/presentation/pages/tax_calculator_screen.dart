@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:fbr_tax_helper/core/utils/comma_formatter.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -829,7 +830,7 @@ class _IncomeInputRow extends StatelessWidget {
       focusNode: focusNode,
       enabled: !isLoading,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+      inputFormatters: [CommaTextInputFormatter()],
       decoration: InputDecoration(
         labelText: metrics.isNarrow ? 'Gross income' : 'Monthly gross income',
         prefixText: 'PKR ',

@@ -9,7 +9,9 @@ import 'package:fbr_tax_helper/core/database/tax_database.dart';
 import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:fbr_tax_helper/core/utils/comma_formatter.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fbr_tax_helper/features/transactions/presentation/bloc/transaction_bloc.dart';
 import 'package:intl/intl.dart';
 
 
@@ -32,6 +34,7 @@ class AssetsPageState extends State<AssetsPage> {
     super.initState();
     final userId = context.read<AuthService>().currentUser?.uid ?? '';
     context.read<AssetBloc>().add(LoadAssets(userId: userId));
+                                    context.read<TransactionBloc>().add(LoadTransactions());
   }
 
   @override
@@ -120,8 +123,9 @@ class AssetsPageState extends State<AssetsPage> {
                           TextFormField(
                             controller: valueController,
                             keyboardType: TextInputType.number,
+                            inputFormatters: [CommaTextInputFormatter()],
                             decoration: const InputDecoration(labelText: 'Current Value (PKR)'),
-                            validator: (v) => v == null || v.trim().isEmpty || double.tryParse(v) == null ? 'Valid amount required' : null,
+                            validator: (v) => v == null || v.trim().isEmpty || double.tryParse(v.replaceAll(',', '')) == null ? 'Valid amount required' : null,
                           ),
                           const SizedBox(height: 12),
                           TextFormField(
@@ -136,7 +140,7 @@ class AssetsPageState extends State<AssetsPage> {
                                 if (!formKey.currentState!.validate()) return;
                                 final user = context.read<AuthService>().currentUser;
                                 final userId = user?.uid ?? '';
-                                final value = double.parse(valueController.text.trim());
+                                final value = double.parse(valueController.text.trim().replaceAll(',', ''));
 
                                 final assetToSave = Asset(
                                   userId: userId,
@@ -167,6 +171,7 @@ class AssetsPageState extends State<AssetsPage> {
                                 }
                                 if (mounted) {
                                   context.read<AssetBloc>().add(LoadAssets(userId: userId));
+                                    context.read<TransactionBloc>().add(LoadTransactions());
                                 }
                               },
                               style: ElevatedButton.styleFrom(
@@ -195,6 +200,7 @@ class AssetsPageState extends State<AssetsPage> {
     final changeController = TextEditingController();
     final reasonController = TextEditingController();
     bool isIncrease = true;
+    double changeAmount = 0;
     final formKey = GlobalKey<FormState>();
 
     await Navigator.of(context).push(
@@ -221,7 +227,7 @@ class AssetsPageState extends State<AssetsPage> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            'Current Value: PKR ',
+                            'Current Value: ${_formatAmount(asset.value)}',
                             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 16),
@@ -248,8 +254,35 @@ class AssetsPageState extends State<AssetsPage> {
                           TextFormField(
                             controller: changeController,
                             keyboardType: TextInputType.number,
+                            inputFormatters: [CommaTextInputFormatter()],
                             decoration: const InputDecoration(labelText: 'Amount Change (PKR)'),
-                            validator: (v) => v == null || v.trim().isEmpty || double.tryParse(v) == null ? 'Valid amount required' : null,
+                            onChanged: (value) => setModalState(
+                              () => changeAmount =
+                                  double.tryParse(value.replaceAll(',', '')) ?? 0,
+                            ),
+                            validator: (value) {
+                              final amount = double.tryParse(
+                                (value ?? '').replaceAll(',', ''),
+                              );
+                              if (amount == null || amount <= 0) {
+                                return 'Valid amount required';
+                              }
+                              if (!isIncrease && amount > asset.value) {
+                                return 'Cannot decrease more than current value';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Value after ${isIncrease ? 'increase' : 'decrease'}: '
+                            '${_formatAmount(isIncrease ? asset.value + changeAmount : asset.value - changeAmount)}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: isIncrease
+                                  ? const Color(0xFF2E7D32)
+                                  : const Color(0xFFC62828),
+                            ),
                           ),
                           const SizedBox(height: 12),
                           TextFormField(
@@ -262,7 +295,7 @@ class AssetsPageState extends State<AssetsPage> {
                             child: ElevatedButton(
                               onPressed: () async {
                                 if (!formKey.currentState!.validate()) return;
-                                final change = double.parse(changeController.text.trim());
+                                final change = double.parse(changeController.text.trim().replaceAll(',', ''));
                                 final reason = reasonController.text.trim();
                                 final newValue = isIncrease ? asset.value + change : asset.value - change;
 
@@ -275,7 +308,7 @@ class AssetsPageState extends State<AssetsPage> {
                                   'beneficiary': asset.name,
                                   'purpose': reason.isNotEmpty ? reason : 'Manual Adjustment',
                                   'amount': change,
-                                  'isExpense': 0,
+                                  'isExpense': !isIncrease ? 1 : 0,
                                   'date': DateTime.now().toIso8601String(),
                                   'category': 'Asset History',
                                   'assetId': asset.id,
@@ -286,6 +319,7 @@ class AssetsPageState extends State<AssetsPage> {
                                 }
                                 if (mounted) {
                                   context.read<AssetBloc>().add(LoadAssets(userId: context.read<AuthService>().currentUser?.uid ?? ''));
+                                    context.read<TransactionBloc>().add(LoadTransactions());
                                   messenger.showSnackBar(const SnackBar(content: Text('Asset updated and history recorded')));
                                 }
                               },
@@ -366,6 +400,8 @@ Widget _assetChoiceButton({
       await TaxDatabase.instance.deleteAsset(asset.id!);
       // ignore: use_build_context_synchronously
       context.read<AssetBloc>().add(LoadAssets(userId: context.read<AuthService>().currentUser?.uid ?? ''));
+                                    // ignore: use_build_context_synchronously
+                                    context.read<TransactionBloc>().add(LoadTransactions());
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -387,6 +423,7 @@ Widget _assetChoiceButton({
           onRefresh: () async {
             final userId = context.read<AuthService>().currentUser?.uid ?? '';
             context.read<AssetBloc>().add(LoadAssets(userId: userId));
+                                    context.read<TransactionBloc>().add(LoadTransactions());
           },
       child: ListView(
         padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPadding),

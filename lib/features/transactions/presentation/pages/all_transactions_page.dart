@@ -143,8 +143,8 @@ class AllTransactionsPageState extends State<AllTransactionsPage> {
           builder: (context, state) {
             final storedTransactions =
                 state is TransactionLoaded && state.userId == currentUserId
-                ? state.transactions
-                : const <entity.Transaction>[];
+                ? state.transactions.where((t) => t.khataEntryId == null && t.assetId == null).toList()
+                  : const <entity.Transaction>[];
             final resolvedTransactions = storedTransactions
                 .map(
                   (transaction) => transaction.copyWith(

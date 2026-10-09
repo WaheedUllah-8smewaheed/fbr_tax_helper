@@ -6,7 +6,9 @@ import 'package:fbr_tax_helper/features/khata/presentation/bloc/khata_bloc.dart'
 import 'package:fbr_tax_helper/core/database/tax_database.dart';
 import 'package:fbr_tax_helper/features/auth/services/auth_service.dart';
 import 'package:flutter/material.dart';
+import 'package:fbr_tax_helper/core/utils/comma_formatter.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fbr_tax_helper/features/transactions/presentation/bloc/transaction_bloc.dart';
 import 'package:intl/intl.dart';
 
 
@@ -33,6 +35,7 @@ class KhataPageState extends State<KhataPage> {
     super.initState();
     final userId = context.read<AuthService>().currentUser?.uid ?? '';
     context.read<KhataBloc>().add(LoadKhataEntries(userId: userId));
+                                    context.read<TransactionBloc>().add(LoadTransactions());
   }
 
   @override
@@ -195,8 +198,9 @@ class KhataPageState extends State<KhataPage> {
                           TextFormField(
                             controller: amountController,
                             keyboardType: TextInputType.number,
+                                    inputFormatters: [CommaTextInputFormatter()],
                             decoration: const InputDecoration(labelText: 'Amount (PKR)'),
-                            validator: (v) => v == null || v.trim().isEmpty || double.tryParse(v) == null ? 'Valid amount required' : null,
+                            validator: (v) => v == null || v.trim().isEmpty || double.tryParse(v.replaceAll(',', '')) == null ? 'Valid amount required' : null,
                           ),
                           const SizedBox(height: 24),
                           SizedBox(
@@ -206,9 +210,10 @@ class KhataPageState extends State<KhataPage> {
                                 if (!formKey.currentState!.validate()) return;
                                 final user = context.read<AuthService>().currentUser;
                                 final userId = user?.uid ?? '';
-                                final amount = double.parse(amountController.text.trim());
+                                final amount = double.parse(amountController.text.trim().replaceAll(',', ''));
 
                                 final entryToSave = KhataEntry(
+                                  
                                   id: existingEntry?.id,
                                   userId: userId,
                                   title: titleController.text.trim(),
@@ -257,6 +262,7 @@ class KhataPageState extends State<KhataPage> {
                                 }
                                 if (mounted) {
                                   context.read<KhataBloc>().add(LoadKhataEntries(userId: context.read<AuthService>().currentUser?.uid ?? ''));
+          context.read<TransactionBloc>().add(LoadTransactions());
                                 }
                               },
                               style: ElevatedButton.styleFrom(
@@ -301,7 +307,10 @@ class KhataPageState extends State<KhataPage> {
             const SizedBox(height: 12),
             TextField(
               controller: amountController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                const CommaTextInputFormatter(allowDecimal: false),
+              ],
               decoration: const InputDecoration(labelText: 'Amount to settle', prefixText: 'PKR '),
             ),
           ],
@@ -341,7 +350,7 @@ class KhataPageState extends State<KhataPage> {
         'beneficiary': entry.party,
         'purpose': desc.isNotEmpty ? desc : 'Settlement',
         'amount': amount,
-        'isExpense': 0,
+        'isExpense': entry.isPayable ? 1 : 0,
         'date': DateTime.now().toIso8601String(),
         'category': 'Khata History',
         'khataEntryId': entry.id,
@@ -349,6 +358,7 @@ class KhataPageState extends State<KhataPage> {
 
       if (mounted) {
         context.read<KhataBloc>().add(LoadKhataEntries(userId: context.read<AuthService>().currentUser?.uid ?? ''));
+          context.read<TransactionBloc>().add(LoadTransactions());
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(isFullySettled ? 'Fully settled!' : 'Settlement recorded.'),
@@ -388,6 +398,8 @@ class KhataPageState extends State<KhataPage> {
       await TaxDatabase.instance.deleteKhataEntry(entry.id!);
       // ignore: use_build_context_synchronously
       context.read<KhataBloc>().add(LoadKhataEntries(userId: context.read<AuthService>().currentUser?.uid ?? ''));
+          // ignore: use_build_context_synchronously
+          context.read<TransactionBloc>().add(LoadTransactions());
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -409,6 +421,7 @@ class KhataPageState extends State<KhataPage> {
           onRefresh: () async {
             final userId = context.read<AuthService>().currentUser?.uid ?? '';
             context.read<KhataBloc>().add(LoadKhataEntries(userId: userId));
+                                    context.read<TransactionBloc>().add(LoadTransactions());
           },
       child: ListView(
         padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPadding),

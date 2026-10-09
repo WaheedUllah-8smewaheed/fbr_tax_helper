@@ -1,7 +1,7 @@
 import 'package:fbr_tax_helper/features/deductions/domain/entities/deduction_values.dart';
 import 'package:fbr_tax_helper/features/deductions/presentation/bloc/deductions_bloc.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:fbr_tax_helper/core/utils/comma_formatter.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class DeductionsPage extends StatefulWidget {
@@ -189,7 +189,7 @@ class _MoneyField extends StatelessWidget {
     return TextFormField(
       controller: controller,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+      inputFormatters: [CommaTextInputFormatter()],
       validator: validator ?? _validateOptionalAmount,
       decoration: InputDecoration(
         labelText: labelText,
