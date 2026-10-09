@@ -51,6 +51,12 @@ android {
         }
     }
 
+    packaging {
+        jniLibs {
+            excludes += "**/libsqlite3.so"
+        }
+    }
+
     buildTypes {
         release {
             signingConfig = if (keystorePropertiesFile.exists()) {
