@@ -22,10 +22,11 @@ class _TermsAgreementGateState extends State<TermsAgreementGate> {
   static const _storage = FlutterSecureStorage();
   static const _termsVersion = '1';
   static const _brandGreen = Color(0xFF006B57);
+  static final Set<String> _acceptedCache = <String>{};
   final _termsScrollController = ScrollController();
 
-  bool _isLoading = true;
-  bool _hasAccepted = false;
+  late bool _isLoading;
+  late bool _hasAccepted;
   bool _isChecked = false;
   bool _isSaving = false;
   String? _error;
@@ -36,20 +37,28 @@ class _TermsAgreementGateState extends State<TermsAgreementGate> {
   @override
   void initState() {
     super.initState();
-    _loadAcceptance();
+    final cached = _acceptedCache.contains(widget.user.uid);
+    _hasAccepted = cached;
+    _isLoading = !cached;
+    if (!cached) {
+      _loadAcceptance();
+    }
   }
 
   @override
   void didUpdateWidget(covariant TermsAgreementGate oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.user.uid != widget.user.uid) {
+      final cached = _acceptedCache.contains(widget.user.uid);
       setState(() {
-        _isLoading = true;
-        _hasAccepted = false;
+        _isLoading = !cached;
+        _hasAccepted = cached;
         _isChecked = false;
         _error = null;
       });
-      _loadAcceptance();
+      if (!cached) {
+        _loadAcceptance();
+      }
     }
   }
 
@@ -62,6 +71,9 @@ class _TermsAgreementGateState extends State<TermsAgreementGate> {
   Future<void> _loadAcceptance() async {
     try {
       final accepted = await _storage.read(key: _acceptanceKey) == 'true';
+      if (accepted) {
+        _acceptedCache.add(widget.user.uid);
+      }
       if (!mounted) return;
       setState(() {
         _hasAccepted = accepted;
@@ -84,6 +96,7 @@ class _TermsAgreementGateState extends State<TermsAgreementGate> {
     });
     try {
       await _storage.write(key: _acceptanceKey, value: 'true');
+      _acceptedCache.add(widget.user.uid);
       if (!mounted) return;
       setState(() {
         _hasAccepted = true;

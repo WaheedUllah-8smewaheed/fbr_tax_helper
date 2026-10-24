@@ -1,6 +1,7 @@
 import 'package:fbr_tax_helper/core/database/tax_database.dart';
 import 'package:fbr_tax_helper/core/theme/app_theme.dart';
 import 'package:fbr_tax_helper/features/auth/presentation/pages/session_router.dart';
+import 'dart:async' show unawaited;
 import 'dart:io' show Platform;
 import 'package:fbr_tax_helper/features/splash/presentation/pages/splash_screen.dart';
 import 'package:fbr_tax_helper/features/transactions/data/datasources/transaction_local_data_source.dart';
@@ -21,6 +22,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
 void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
   if (kIsWeb) {
     // For web
     databaseFactory = databaseFactoryFfiWeb;
@@ -30,38 +33,44 @@ void main() async {
     databaseFactory = databaseFactoryFfi;
   }
 
-  WidgetsFlutterBinding.ensureInitialized();
-
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await _activateAppCheck();
-  await _initializeAds();
+  unawaited(_activateAppCheck());
+  unawaited(_initializeAds());
   runApp(MyApp());
 }
 
 Future<void> _initializeAds() async {
-  if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-    await MobileAds.instance.initialize();
+  try {
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      await MobileAds.instance.initialize();
+    }
+  } catch (e) {
+    debugPrint('AdMob initialization error: $e');
   }
 }
 
 Future<void> _activateAppCheck() async {
-  // A web app needs its own reCAPTCHA v3 site key. Do not ship a placeholder
-  // key: Firebase App Check must be configured before web enforcement is on.
-  const webSiteKey = String.fromEnvironment('FBR_HELPER_RECAPTCHA_V3_SITE_KEY');
-  if (kIsWeb) {
-    if (webSiteKey.isNotEmpty) {
+  try {
+    // A web app needs its own reCAPTCHA v3 site key. Do not ship a placeholder
+    // key: Firebase App Check must be configured before web enforcement is on.
+    const webSiteKey = String.fromEnvironment('FBR_HELPER_RECAPTCHA_V3_SITE_KEY');
+    if (kIsWeb) {
+      if (webSiteKey.isNotEmpty) {
+        await FirebaseAppCheck.instance.activate(
+          webProvider: ReCaptchaV3Provider(webSiteKey),
+        );
+      }
+      return;
+    }
+
+    if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
       await FirebaseAppCheck.instance.activate(
-        webProvider: ReCaptchaV3Provider(webSiteKey),
+        androidProvider: AndroidProvider.playIntegrity,
+        appleProvider: AppleProvider.deviceCheck,
       );
     }
-    return;
-  }
-
-  if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
-    await FirebaseAppCheck.instance.activate(
-      androidProvider: AndroidProvider.playIntegrity,
-      appleProvider: AppleProvider.deviceCheck,
-    );
+  } catch (e) {
+    debugPrint('AppCheck initialization error: $e');
   }
 }
 

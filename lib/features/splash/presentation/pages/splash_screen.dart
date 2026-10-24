@@ -10,7 +10,7 @@ class SplashScreen extends StatefulWidget {
   const SplashScreen({
     super.key,
     required this.authService,
-    this.duration = const Duration(milliseconds: 1600),
+    this.duration = const Duration(milliseconds: 750),
     this.nextScreen,
   });
 
@@ -34,8 +34,8 @@ class _SplashScreenState extends State<SplashScreen>
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 850),
-      reverseDuration: const Duration(milliseconds: 240),
+      duration: const Duration(milliseconds: 400),
+      reverseDuration: const Duration(milliseconds: 140),
       vsync: this,
     );
     final curvedAnimation = CurvedAnimation(
@@ -52,11 +52,20 @@ class _SplashScreenState extends State<SplashScreen>
     _timer = Timer(widget.duration, _openNextScreen);
   }
 
-  Future<void> _openNextScreen() async {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    precacheImage(const AssetImage('assets/app_logo_splash_gold.png'), context);
+  }
+
+  Future<void> _openNextScreen({bool immediate = false}) async {
     if (!mounted || _isNavigating) return;
     _isNavigating = true;
+    _timer?.cancel();
 
-    await _controller.reverse();
+    if (!immediate && (_controller.isAnimating || _controller.value > 0)) {
+      await _controller.reverse();
+    }
     if (!mounted) return;
 
     Navigator.of(context).pushReplacement(
@@ -64,7 +73,7 @@ class _SplashScreenState extends State<SplashScreen>
         pageBuilder: (context, animation, secondaryAnimation) {
           return widget.nextScreen ?? const TaxCalculatorScreen();
         },
-        transitionDuration: const Duration(milliseconds: 320),
+        transitionDuration: const Duration(milliseconds: 200),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
         },
@@ -87,11 +96,14 @@ class _SplashScreenState extends State<SplashScreen>
     final bottomSpacing = (size.height * 0.14).clamp(48.0, 112.0).toDouble();
 
     return Scaffold(
-      body: Stack(
-        children: [
-          const Positioned.fill(
-            child: CustomPaint(painter: _SplashBackdropPainter()),
-          ),
+      body: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _openNextScreen(immediate: true),
+        child: Stack(
+          children: [
+            const Positioned.fill(
+              child: CustomPaint(painter: _SplashBackdropPainter()),
+            ),
           SafeArea(
             child: Center(
               child: Padding(
@@ -171,8 +183,9 @@ class _SplashScreenState extends State<SplashScreen>
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _SplashBackdropPainter extends CustomPainter {

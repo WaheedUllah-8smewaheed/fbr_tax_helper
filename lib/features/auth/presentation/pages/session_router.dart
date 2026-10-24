@@ -14,11 +14,14 @@ class SessionRouter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final authService = context.read<AuthService>();
     return StreamBuilder<User?>(
-      stream: context.read<AuthService>().authStateChanges(),
+      stream: authService.authStateChanges(),
+      initialData: authService.currentUser,
       builder: (context, snapshot) {
         // While auth is initializing on startup
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
